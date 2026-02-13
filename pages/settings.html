@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Settings • MyPinkAssistant</title>
+    <meta name="format-detection" content="telephone=no">
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #111111;
+            --muted: #5a5a5a;
+            --card: #f7f7f8;
+            --border: #e6e6e6;
+            --pink: #e91e63;
+            --pinkDark: #c2185b;
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto;
+            background: var(--bg);
+            color: var(--text)
+        }
+
+        .wrap {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 22px 18px
+        }
+
+        .top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            letter-spacing: .2px
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--pink)
+        }
+
+        .inputShort {
+            max-width: 360px;
+            /* tweak: 360–520 feels good */
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            text-decoration: none;
+            color: var(--text);
+            font-weight: 600;
+            background: #fff;
+            cursor: pointer
+        }
+
+        .btnPrimary {
+            background: var(--pink);
+            border-color: var(--pink);
+            color: #fff
+        }
+
+        .btnPrimary:hover {
+            background: var(--pinkDark);
+            border-color: var(--pinkDark)
+        }
+
+        .btnGhost {
+            background: #fff;
+            border-color: var(--border);
+            color: var(--text)
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 20px;
+            /* slightly more breathing room */
+            max-width: 520px;
+            /* controls width */
+            margin: 60px auto;
+            /* centers horizontally */
+        }
+
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 18px
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.4;
+            margin-top: 8px
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 12px
+        }
+
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            margin-top: 6px;
+            font-size: 14px
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center
+        }
+
+        .toggle {
+            padding: 9px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            font-weight: 700;
+            cursor: pointer
+        }
+
+        .toggle.active {
+            border-color: var(--pink);
+            color: var(--pink);
+            box-shadow: 0 0 0 3px rgba(233, 30, 99, .10);
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px
+        }
+
+        .subtle {
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        .email {
+            font-weight: 700
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="top">
+            <div class="brand"><span class="dot"></span> MyPinkAssistant</div>
+            <div class="row">
+                <a class="btn btnGhost" href="/app">Back to chat</a>
+                <form method="post" action="/logout" style="margin:0">
+                    <button class="btn" type="submit">Log out</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <h1>Settings</h1>
+            <div class="subtle">Signed in as <span class="email">{{EMAIL}}</span></div>
+
+            <form method="post" action="/settings" id="settingsForm" autocomplete="off">
+                <!-- Language toggle -->
+                <label>Language</label>
+                <div class="row" style="margin-top:8px">
+                    <button type="button" class="toggle {{EN_ACTIVE}}" id="langEn">English</button>
+                    <button type="button" class="toggle {{ES_ACTIVE}}" id="langEs">Español</button>
+                </div>
+                <input type="hidden" name="language" id="language" value="{{LANG_VALUE}}" />
+
+                <label>InTouch username</label>
+                <input class="inputShort" name="intouch_username" value="{{INTOUCH_USERNAME}}" autocomplete="off" />
+
+                <label>InTouch password (leave blank to keep current)</label>
+                <input class="inputShort" name="intouch_password" type="password" autocomplete="new-password" />
+
+                <div class="hint">
+                    Your InTouch password is encrypted and never shared.
+                </div>
+
+                <div class="actions">
+                    <button class="btn btnPrimary" type="submit">Save</button>
+                </div>
+
+
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const enBtn = document.getElementById("langEn");
+            const esBtn = document.getElementById("langEs");
+            const lang = document.getElementById("language");
+
+            function setLang(v) {
+                lang.value = v;
+                if (v === "es") { esBtn.classList.add("active"); enBtn.classList.remove("active"); }
+                else { enBtn.classList.add("active"); esBtn.classList.remove("active"); }
+            }
+
+            enBtn.addEventListener("click", () => setLang("en"));
+            esBtn.addEventListener("click", () => setLang("es"));
+
+            // Ensure active state matches hidden input on load
+            setLang(lang.value || "en");
+        })();
+    </script>
+</body>
+
+</html>

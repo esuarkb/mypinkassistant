@@ -1,0 +1,112 @@
+# playwright_automation/orders.py
+
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+
+
+CUSTOMER_LIST_URL = "https://apps.marykayintouch.com/customer-list"
+
+
+# -------------------------
+# Readiness check
+# -------------------------
+def ensure_orders_ready(page: Page, timeout_ms: int = 20000) -> None:
+    """
+    Confirms Orders page is usable by waiting for New Order button.
+    """
+    try:
+        page.get_by_role("button", name="New Order").wait_for(timeout=timeout_ms)
+    except PlaywrightTimeoutError:
+        raise RuntimeError("Orders not ready: 'New Order' button not found.")
+
+
+def open_customer_list(page: Page) -> None:
+    """
+    Navigates to the customer list used for order placement.
+    """
+    page.goto(CUSTOMER_LIST_URL)
+    page.wait_for_timeout(2500)
+    ensure_orders_ready(page)
+
+
+# -------------------------
+# Order helpers
+# -------------------------
+def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
+    """
+    Opens a customer and starts a new order from My Inventory.
+    Safely handles duplicate customer names by selecting the first match.
+    """
+    full_name = f"{first} {last}"
+
+    open_customer_list(page)
+
+    # Search customer
+    page.wait_for_timeout(6000)
+    page.get_by_role("searchbox", name="Note Title").fill(full_name)
+    
+    # Existence check (duplicate-safe)
+    try:
+        page.get_by_text(full_name, exact=True).first.wait_for(timeout=3000)
+    except PlaywrightTimeoutError:
+        raise RuntimeError(
+            f"Customer not found: '{full_name}'. "
+            "Make sure they have been added to MyCustomers first!"
+        )
+
+    # Open customer
+
+    page.wait_for_timeout(3000)
+    page.get_by_text(full_name, exact=True).first.click()
+    page.wait_for_timeout(2500)
+
+    # Start order
+    page.get_by_role("button", name="Add Order").click()
+    page.wait_for_timeout(2500)
+
+    page.get_by_text("My Inventory", exact=True).click()
+    page.wait_for_timeout(800)
+
+
+def add_sku_to_bag(page: Page, sku: str) -> None:
+    """
+    Adds a single SKU to the order bag.
+    """
+    page.get_by_role("searchbox", name="Note Title").fill(sku)
+    page.wait_for_timeout(1500)
+
+    page.get_by_role("button", name="Add to Bag").click()
+    page.wait_for_timeout(800)
+
+
+def finalize_order(page: Page) -> None:
+    """
+    Saves and confirms the order.
+    """
+    page.get_by_role("button", name="Save and Review").click()
+    page.wait_for_timeout(6000)
+
+    page.get_by_role("button", name="Change Delivery Status Icon").click()
+    page.wait_for_timeout(1000)
+
+    page.get_by_role("button", name="Yes, Confirm").click()
+    page.wait_for_timeout(3000)
+
+
+def process_order_batch(page: Page, rows: list[dict]) -> None:
+    """
+    Processes a batch of order rows for ONE customer.
+    Each row must contain: First Name, Last Name, SKU
+    """
+    if not rows:
+        return
+
+    first = rows[0]["First Name"].strip()
+    last = rows[0]["Last Name"].strip()
+
+    open_customer_and_start_order(page, first, last)
+
+    for row in rows:
+        sku = row["SKU"].strip()
+        add_sku_to_bag(page, sku)
+
+    finalize_order(page)

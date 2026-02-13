@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MyPinkAssistant</title>
+    <link rel="stylesheet" href="/web/styles.css?v=14" />
+    <meta name="format-detection" content="telephone=no">
+</head>
+
+<body>
+    <!-- Emergency/notice banner (optional) -->
+    <div id="noticeBanner" class="notice hidden" role="status" aria-live="polite"></div>
+
+    <!-- Fixed header -->
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand"><span>MyPink</span>Assistant</div>
+
+            <div class="top-actions">
+                <a class="btn" href="/settings">Settings</a>
+
+                <form method="post" action="/logout" class="logout-form">
+                    <button class="btn btn-link" type="submit">Log out</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="layout">
+        <!-- Persistent welcome (desktop); mobile hides after first message -->
+        <section class="welcome" id="welcome">
+            <div class="welcome-inner">
+                <div class="welcome-kicker">✨ Ready when you are</div>
+                <h1 class="welcome-title" id="heroTitle">Hey there 👋 Let’s do some work.</h1>
+                <p class="welcome-sub">
+                    Add a new customer or an order. I’ll confirm details, then queue it for MyCustomers.
+                </p>
+
+                <div class="footerLine">
+                    You can say: New Customer Jane Doe, jane@gmail.com 555 5th St Anytown, AL 55555, 5551231234
+                </div>
+
+                <!-- Center composer shown only until first message -->
+                <div class="composer composer-center" id="composerCenter">
+                    <textarea id="msg" placeholder="Enter a customer or order…" rows="1"></textarea>
+                    <button id="send" class="sendBtn" type="button">Send</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chat feed (ONLY scroll area) -->
+        <section class="chatWrap" id="chatWrap">
+            <div id="chat" class="chat" aria-label="Chat messages"></div>
+        </section>
+
+        <!-- Bottom composer (after first message) -->
+        <section class="composerDock" id="composerDock">
+            <div class="composer composer-bottom"></div>
+            <div class="footerLine footerLine-bottom">Chat → Confirm → Securely sent to MyCustomers</div>
+        </section>
+    </main>
+
+    <div id="jobToast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <script src="/web/app.js?v=14"></script>
+</body>
+
+</html>

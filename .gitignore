@@ -1,0 +1,37 @@
+# Virtual environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local database
+data/
+db/
+*.db
+*.sqlite3
+
+# Environment variables
+.env
+
+# Secrets / credentials
+*.json
+customer automation.json
+
+# OS files
+.DS_Store
+
+# Old / local experiments
+old attempts/
+chatbot/
+
+# RTF / misc docs
+*.rtf
+
+# Playwright local profiles (if created)
+playwright-report/
+test-results/
+
