@@ -40,7 +40,7 @@ def _pg_conn():
         )
     url = os.environ["DATABASE_URL"]
     # autocommit=False: keep transaction control consistent with sqlite
-    return psycopg.connect(url, autocommit=False, row_factory=dict_row)
+    return psycopg.connect(url, autocommit=False)
 
 
 def now_sql() -> str:
