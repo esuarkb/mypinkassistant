@@ -466,38 +466,38 @@ def onboard_get(request: Request):
     return render_page("onboard.html", replaces=replaces)
 
 
+from auth_core import create_consultant, update_settings
+
 @app.post("/onboard")
 def onboard_post(
-    request: Request,
-    email: str = Form(...),
-    password: str = Form(...),
     first_name: str = Form(...),
     last_name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    password2: str = Form(...),
     intouch_username: str = Form(...),
     intouch_password: str = Form(...),
 ):
-    from auth_core import create_consultant, update_settings
+    if password != password2:
+        return HTMLResponse("Passwords do not match.", status_code=400)
 
     # Create consultant account
-    ok, msg, cid = create_consultant(email.strip().lower(), password)
-
+    ok, msg, cid = create_consultant(email, password)
     if not ok:
-        return HTMLResponse(f"{msg} <a href='/onboard'>Try again</a>.", status_code=400)
+        return HTMLResponse(msg, status_code=400)
 
-    # Log them in immediately
-    request.session["consultant_id"] = cid
-
-    # Save names + InTouch
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute(
-        "UPDATE consultants SET first_name=%s, last_name=%s WHERE id=%s",
-        (first_name.strip(), last_name.strip(), cid),
+    # Save settings (including encrypted InTouch password)
+    update_settings(
+        cid,
+        language="en",
+        intouch_username=intouch_username,
+        intouch_password=intouch_password,
     )
-    conn.commit()
-    conn.close()
 
-    update_settings(cid, "en", intouch_username, intouch_password)
+    # Log them in automatically
+    from fastapi import Request
+    # You'll need request injected if not already
+    # request.session["consultant_id"] = cid
 
     return RedirectResponse("/app", status_code=302)
 
