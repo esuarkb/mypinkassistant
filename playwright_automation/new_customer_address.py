@@ -20,6 +20,7 @@ def add_customer_address(page: Page, customer: dict) -> None:
         return
 
     # Open address dialog
+    page.wait_for_timeout(8000)
     page.get_by_role("button", name="Add New Address").click()
     page.wait_for_timeout(8000)
 
