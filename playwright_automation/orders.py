@@ -9,14 +9,14 @@ CUSTOMER_LIST_URL = "https://apps.marykayintouch.com/customer-list"
 # -------------------------
 # Readiness check
 # -------------------------
-def ensure_orders_ready(page: Page, timeout_ms: int = 20000) -> None:
-    """
-    Confirms Orders page is usable by waiting for New Order button.
-    """
-    try:
-        page.get_by_role("button", name="New Order").wait_for(timeout=timeout_ms)
-    except PlaywrightTimeoutError:
-        raise RuntimeError("Orders not ready: 'New Order' button not found.")
+#def ensure_orders_ready(page: Page, timeout_ms: int = 20000) -> None:
+#    """
+#    Confirms Orders page is usable by waiting for New Order button.
+#    """
+#    try:
+#        page.get_by_role("button", name="New Order").wait_for(timeout=timeout_ms)
+#    except PlaywrightTimeoutError:
+#        raise RuntimeError("Orders not ready: 'New Order' button not found.")
 
 
 def open_customer_list(page: Page) -> None:
@@ -24,7 +24,7 @@ def open_customer_list(page: Page) -> None:
     Navigates to the customer list used for order placement.
     """
     page.goto(CUSTOMER_LIST_URL)
-    page.wait_for_timeout(2500)
+    page.wait_for_timeout(8000)
     ensure_orders_ready(page)
 
 
@@ -43,7 +43,7 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     # Search customer
     page.wait_for_timeout(6000)
     page.get_by_role("searchbox", name="Note Title").fill(full_name)
-    
+    page.wait_for_timeout(3000)
     # Existence check (duplicate-safe)
     try:
         page.get_by_text(full_name, exact=True).first.wait_for(timeout=3000)

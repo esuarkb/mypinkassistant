@@ -27,7 +27,7 @@ def login_intouch(page: Page, username: str, password: str) -> None:
     page.get_by_text("Log In").click()
 
     # Allow redirects / MFA / slow loads
-    page.wait_for_timeout(7000)
+    page.wait_for_timeout(8000)
 
     # Basic sanity check: we should no longer be on the login page
     if "login" in page.url.lower():

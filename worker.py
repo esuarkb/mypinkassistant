@@ -73,7 +73,7 @@ def main():
                     continue
 
                 #browser = pw.chromium.launch(headless=False)
-                HEADLESS = os.getenv("HEADLESS", "false").lower() == "true"
+                HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 
                 browser = pw.chromium.launch(
                     headless=HEADLESS,
