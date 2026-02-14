@@ -433,29 +433,7 @@ def reset_password_post(
 # -------------------------
 # Onboarding (public; can be accessed without login)
 # -------------------------
-@app.get("/onboard", response_class=HTMLResponse)
-def onboard_get(request: Request):
-    cid = request.session.get("consultant_id")
-    c = get_consultant_full(int(cid)) if cid else None
-
-    if c and is_profile_complete(c):
-        return RedirectResponse("/app", status_code=302)
-
-    lang = ((c.get("language") if c else "en") or "en").strip().lower()
-    if lang not in ("en", "es"):
-        lang = "en"
-
-    replaces = {
-        "{{FIRST_NAME}}": (c.get("first_name") or "") if c else "",
-        "{{LAST_NAME}}": (c.get("last_name") or "") if c else "",
-        "{{EMAIL}}": (c.get("email") or "") if c else "",
-        "{{INTOUCH_USERNAME}}": (c.get("intouch_username") or "") if c else "",
-        "{{EN_SELECTED}}": "selected" if lang == "en" else "",
-        "{{ES_SELECTED}}": "selected" if lang == "es" else "",
-        "{{ERROR_BLOCK}}": "",
-    }
-    return render_page("onboard.html", replaces=replaces)
-
+from auth_core import create_consultant, update_profile_and_intouch, set_consultant_password
 
 @app.post("/onboard")
 def onboard_post(
@@ -463,29 +441,65 @@ def onboard_post(
     first_name: str = Form(...),
     last_name: str = Form(...),
     email: str = Form(...),
-    password: str = Form(...),
-    password2: str = Form(...),
+    password: str = Form(""),
+    password2: str = Form(""),
+    language: str = Form("en"),
     intouch_username: str = Form(...),
     intouch_password: str = Form(...),
-    language: str = Form("en"),
 ):
+    cid = request.session.get("consultant_id")
+
+    # -------------------------
+    # CASE A: Already logged in → UPDATE ONLY
+    # -------------------------
+    if cid:
+        # Update profile + InTouch creds
+        update_profile_and_intouch(
+            int(cid),
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            language=language,
+            intouch_username=intouch_username,
+            intouch_password=intouch_password,
+        )
+
+        # If they typed a NEW MyPinkAssistant password, update it.
+        pw = (password or "").strip()
+        pw2 = (password2 or "").strip()
+        if pw or pw2:
+            if pw != pw2:
+                return HTMLResponse("Passwords do not match.", status_code=400)
+            if len(pw) < 8:
+                return HTMLResponse("Password must be at least 8 characters.", status_code=400)
+            set_consultant_password(int(cid), pw)
+
+        return RedirectResponse("/app", status_code=302)
+
+    # -------------------------
+    # CASE B: Not logged in → CREATE NEW ACCOUNT
+    # -------------------------
     if password != password2:
         return HTMLResponse("Passwords do not match.", status_code=400)
 
-    ok, msg, cid = create_consultant(email, password, language=language)
-    if not ok or not cid:
+    if len(password) < 8:
+        return HTMLResponse("Password must be at least 8 characters.", status_code=400)
+
+    ok, msg, new_cid = create_consultant(email, password, language=language)
+    if not ok:
         return HTMLResponse(msg, status_code=400)
 
-    _update_name_fields(int(cid), first_name, last_name)
-
-    update_settings(
-        int(cid),
+    update_profile_and_intouch(
+        int(new_cid),
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
         language=language,
         intouch_username=intouch_username,
         intouch_password=intouch_password,
     )
 
-    request.session["consultant_id"] = int(cid)
+    request.session["consultant_id"] = int(new_cid)
     return RedirectResponse("/app", status_code=302)
 
 
