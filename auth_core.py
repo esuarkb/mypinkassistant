@@ -1,8 +1,11 @@
+## complete auth_core replace 9:09 am sat
+
+# auth_core.py
+from __future__ import annotations
+
 import os
 import hashlib
 import secrets
-import time
-from pathlib import Path
 from typing import Optional, Tuple
 
 from cryptography.fernet import Fernet
@@ -24,12 +27,13 @@ def _get_conn():
 
 def _row_get(row, key: str, idx: int):
     """
-    Works whether row is a tuple/list (sqlite) or dict-like (psycopg dict_row).
+    Works whether row is a tuple/list/sqlite3.Row (sqlite) or dict-like (psycopg dict_row).
     """
     if row is None:
         return None
     if isinstance(row, dict):
         return row.get(key)
+    # sqlite3.Row supports index access
     return row[idx]
 
 
@@ -134,6 +138,10 @@ def authenticate(email: str, password: str) -> Optional[int]:
 
 
 def create_consultant(email: str, password: str, language: str = "en") -> Tuple[bool, str, Optional[int]]:
+    """
+    Creates a new consultant.
+    Returns (ok, message, consultant_id)
+    """
     email = (email or "").strip().lower()
     password = password or ""
 
@@ -154,7 +162,7 @@ def create_consultant(email: str, password: str, language: str = "en") -> Tuple[
         if cur.fetchone():
             return (False, "An account with that email already exists. Try logging in.", None)
 
-        ph = pbkdf2_hash(password)
+        pw_hash = pbkdf2_hash(password)
 
         if is_postgres():
             # Postgres: RETURNING id
@@ -164,7 +172,7 @@ def create_consultant(email: str, password: str, language: str = "en") -> Tuple[
                 VALUES ({PH}, {PH}, {PH}, '', '')
                 RETURNING id
                 """,
-                (email, ph, language),
+                (email, pw_hash, language),
             )
             row = cur.fetchone()
             new_id = _row_get(row, "id", 0)
@@ -175,7 +183,7 @@ def create_consultant(email: str, password: str, language: str = "en") -> Tuple[
                 INSERT INTO consultants (email, password_hash, language, intouch_username, intouch_password_enc)
                 VALUES ({PH}, {PH}, {PH}, '', '')
                 """,
-                (email, ph, language),
+                (email, pw_hash, language),
             )
             new_id = cur.lastrowid
 
@@ -219,30 +227,44 @@ def get_consultant(cid: int) -> Optional[dict]:
         "intouch_username": _row_get(row, "intouch_username", 3) or "",
     }
 
+
 def get_consultant_full(cid: int) -> Optional[dict]:
+    """
+    Full consultant row needed for onboard/profile checks.
+    IMPORTANT: uses _row_get so it works for both sqlite + postgres dict_row.
+    """
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute(
-        f"""
-        SELECT id, email, first_name, last_name, language, intouch_username, intouch_password_enc
-        FROM consultants
-        WHERE id={PH}
-        """,
-        (cid,),
-    )
-    row = cur.fetchone()
-    conn.close()
+    try:
+        cur.execute(
+            f"""
+            SELECT id, email, first_name, last_name, language, intouch_username, intouch_password_enc
+            FROM consultants
+            WHERE id={PH}
+            """,
+            (cid,),
+        )
+        row = cur.fetchone()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
+
     if not row:
         return None
+
     return {
-        "id": row[0],
-        "email": row[1],
-        "first_name": row[2] or "",
-        "last_name": row[3] or "",
-        "language": row[4] or "en",
-        "intouch_username": row[5] or "",
-        "intouch_password_enc": row[6] or "",
+        "id": _row_get(row, "id", 0),
+        "email": _row_get(row, "email", 1),
+        "first_name": (_row_get(row, "first_name", 2) or ""),
+        "last_name": (_row_get(row, "last_name", 3) or ""),
+        "language": (_row_get(row, "language", 4) or "en"),
+        "intouch_username": (_row_get(row, "intouch_username", 5) or ""),
+        "intouch_password_enc": (_row_get(row, "intouch_password_enc", 6) or ""),
     }
+
 
 def update_profile_and_intouch(
     cid: int,
@@ -266,17 +288,24 @@ def update_profile_and_intouch(
 
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute(
-        f"""
-        UPDATE consultants
-        SET email={PH}, first_name={PH}, last_name={PH}, language={PH},
-            intouch_username={PH}, intouch_password_enc={PH}
-        WHERE id={PH}
-        """,
-        (email, first_name, last_name, language, iu, enc, cid),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        cur.execute(
+            f"""
+            UPDATE consultants
+            SET email={PH}, first_name={PH}, last_name={PH}, language={PH},
+                intouch_username={PH}, intouch_password_enc={PH}
+            WHERE id={PH}
+            """,
+            (email, first_name, last_name, language, iu, enc, cid),
+        )
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
+
 
 def get_consultant_intouch_creds(cid: int) -> Tuple[str, str]:
     conn = _get_conn()
@@ -328,6 +357,7 @@ def update_settings(cid: int, language: str, intouch_username: str, intouch_pass
                 (language, iu, enc, cid),
             )
         else:
+            # If password omitted, keep existing saved password
             cur.execute(
                 f"""
                 UPDATE consultants

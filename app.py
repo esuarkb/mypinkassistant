@@ -1,13 +1,13 @@
+## complete app.py replace 8:56 am
+
+# app.py
 import os
-import re
-#import sqlite3
-from pathlib import Path
 import time
 import secrets
 import hashlib
 import requests
+from pathlib import Path
 from urllib.parse import urlencode
-from db import connect
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -15,13 +15,21 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
-load_dotenv()
-
-from auth_core import authenticate, get_consultant, update_settings, set_consultant_password
+from db import connect, is_postgres
 from mk_chat_core import MKChatEngine, save_session_state
 
+from auth_core import (
+    authenticate,
+    get_consultant,
+    update_settings,
+    set_consultant_password,
+    create_consultant,
+    get_consultant_full,  # must return dict-like with needed fields
+)
+
+load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "data" / "mk.db"
 WEB_DIR = BASE_DIR / "web"
 PAGES_DIR = BASE_DIR / "pages"
 
@@ -35,8 +43,17 @@ if not SESSION_SECRET:
     raise RuntimeError("MK_SESSION_SECRET is not set. Export MK_SESSION_SECRET before starting the server.")
 
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
-MAIL_FROM = os.environ.get("MAIL_FROM", "").strip()  # e.g. "MyPinkAssistant <no-reply@mail.mypinkassistant.com>"
-APP_BASE_URL = os.environ.get("APP_BASE_URL", "").strip()  # e.g. "http://127.0.0.1:8000" or "https://mypinkassistant.com"
+MAIL_FROM = os.environ.get("MAIL_FROM", "").strip()
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "").strip()
+
+# OpenAI key required for MKChatEngine (set in Render env vars)
+# OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+
+# DB placeholder for sqlite vs postgres
+PH = "%s" if is_postgres() else "?"
+
+# used_at expression (sqlite vs postgres)
+USED_AT_NOW_SQL = "NOW()" if is_postgres() else "datetime('now')"
 
 # 30 days "remember me"
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=60 * 60 * 24 * 30)
@@ -49,21 +66,62 @@ app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
 # DB helpers
 # -------------------------
 def _conn():
-#    return sqlite3.connect(DB_PATH)
     return connect()
+
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _row_get(row, key, default=None):
+    """Works with dict rows (psycopg dict_row), sqlite3.Row, tuples."""
+    if row is None:
+        return default
+    try:
+        # dict_row / dict
+        return row.get(key, default)  # type: ignore
+    except Exception:
+        pass
+    try:
+        # sqlite3.Row supports mapping access
+        return row[key]  # type: ignore
+    except Exception:
+        return default
 
 
 def _find_consultant_by_email(email: str):
     email = (email or "").strip().lower()
     conn = _conn()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM consultants WHERE email=?", (email,))
+    cur.execute(f"SELECT id FROM consultants WHERE email={PH}", (email,))
     row = cur.fetchone()
     conn.close()
-    return int(row[0]) if row else None
+
+    if not row:
+        return None
+
+    # row may be dict-like or tuple-like
+    cid = _row_get(row, "id", None)
+    if cid is None:
+        try:
+            cid = row[0]
+        except Exception:
+            return None
+    return int(cid)
+
+
+def _update_name_fields(cid: int, first_name: str, last_name: str) -> None:
+    """Save first/last name in DB (kept here so you don't have to edit auth_core)."""
+    fn = (first_name or "").strip()
+    ln = (last_name or "").strip()
+    conn = _conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE consultants SET first_name={PH}, last_name={PH} WHERE id={PH}",
+        (fn, ln, int(cid)),
+    )
+    conn.commit()
+    conn.close()
 
 
 # -------------------------
@@ -91,6 +149,7 @@ def require_login(request: Request) -> int:
         raise PermissionError("Not logged in")
     return int(cid)
 
+
 def is_profile_complete(c: dict) -> bool:
     if not c:
         return False
@@ -100,6 +159,7 @@ def is_profile_complete(c: dict) -> bool:
         and bool((c.get("intouch_username") or "").strip())
         and bool((c.get("intouch_password_enc") or "").strip())
     )
+
 
 def render_page(filename: str, replaces: dict | None = None) -> HTMLResponse:
     path = PAGES_DIR / filename
@@ -125,20 +185,21 @@ def landing(request: Request):
     return render_page("landing.html")
 
 
+@app.get("/splash.html", response_class=HTMLResponse)
+def splash(request: Request):
+    return render_page("splash.html")
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_get(request: Request):
     cid = request.session.get("consultant_id")
     if cid:
-        # if onboard not complete, send to onboard; else app
-        if not is_onboard_complete(int(cid)):
+        c = get_consultant_full(int(cid))
+        if not is_profile_complete(c):
             return RedirectResponse("/onboard", status_code=302)
         return RedirectResponse("/app", status_code=302)
-
     return render_page("login.html")
 
-@app.get("/splash.html", response_class=HTMLResponse)
-def splash(request: Request):
-    return render_page("splash.html")
 
 @app.post("/login")
 def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
@@ -146,7 +207,13 @@ def login_post(request: Request, email: str = Form(...), password: str = Form(..
     if not cid:
         return HTMLResponse("Login failed. <a href='/login'>Try again</a>.", status_code=401)
 
-    request.session["consultant_id"] = cid
+    request.session["consultant_id"] = int(cid)
+
+    # If profile not complete, route to onboard
+    c = get_consultant_full(int(cid))
+    if not is_profile_complete(c):
+        return RedirectResponse("/onboard", status_code=302)
+
     return RedirectResponse("/app", status_code=302)
 
 
@@ -198,7 +265,6 @@ def forgot_get():
 
 @app.post("/forgot", response_class=HTMLResponse)
 def forgot_post(email: str = Form(...)):
-    # Always show the same success screen (don’t reveal whether an email exists)
     try:
         cid = _find_consultant_by_email(email)
         if cid and APP_BASE_URL:
@@ -211,11 +277,10 @@ def forgot_post(email: str = Form(...)):
 
             conn = _conn()
             cur = conn.cursor()
-            # Table has: consultant_id, token_hash, expires_at, used_at, created_at
-            cur.execute("""
-                INSERT INTO password_resets (consultant_id, token_hash, expires_at)
-                VALUES (?, ?, ?)
-            """, (cid, token_hash, expires_str))
+            cur.execute(
+                f"INSERT INTO password_resets (consultant_id, token_hash, expires_at) VALUES ({PH}, {PH}, {PH})",
+                (int(cid), token_hash, expires_str),
+            )
             conn.commit()
             conn.close()
 
@@ -298,9 +363,13 @@ def reset_password_get(token: str = ""):
 """)
 
 
-@app.post("/reset-password", response_class=HTMLResponse)
-def reset_password_post(request: Request, token: str = Form(...), password: str = Form(...), password2: str = Form(...)):
-
+@app.post("/reset-password")
+def reset_password_post(
+    request: Request,
+    token: str = Form(...),
+    password: str = Form(...),
+    password2: str = Form(...),
+):
     token = (token or "").strip()
     if not token:
         return HTMLResponse("Invalid reset token. <a href='/forgot'>Try again</a>.", status_code=400)
@@ -316,22 +385,27 @@ def reset_password_post(request: Request, token: str = Form(...), password: str 
 
     conn = _conn()
     cur = conn.cursor()
-    cur.execute("""
-      SELECT id, consultant_id, expires_at, used_at
-      FROM password_resets
-      WHERE token_hash=?
-      ORDER BY id DESC
-      LIMIT 1
-    """, (th,))
+    cur.execute(
+        f"""
+        SELECT id, consultant_id, expires_at, used_at
+        FROM password_resets
+        WHERE token_hash={PH}
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (th,),
+    )
     row = cur.fetchone()
 
     if not row:
         conn.close()
         return HTMLResponse("That reset link is invalid. <a href='/forgot'>Try again</a>.", status_code=400)
 
-    reset_id, cid, expires_at, used_at = row
+    reset_id = _row_get(row, "id", None) or row[0]
+    cid = _row_get(row, "consultant_id", None) or row[1]
+    expires_at = _row_get(row, "expires_at", None) or row[2]
+    used_at = _row_get(row, "used_at", None)
 
-    # expires_at stored as TEXT; we store epoch seconds as a string
     try:
         expires_i = int(str(expires_at))
     except Exception:
@@ -345,19 +419,74 @@ def reset_password_post(request: Request, token: str = Form(...), password: str 
         conn.close()
         return HTMLResponse("That reset link has expired. <a href='/forgot'>Request a new one</a>.", status_code=400)
 
-    # Mark used + update password
-    cur.execute("UPDATE password_resets SET used_at=datetime('now') WHERE id=?", (reset_id,))
+    cur.execute(f"UPDATE password_resets SET used_at={USED_AT_NOW_SQL} WHERE id={PH}", (reset_id,))
     conn.commit()
     conn.close()
 
     set_consultant_password(int(cid), password)
-    # Clear any existing login session
-    request.session.clear()
 
-    # Redirect to login page
+    # Clear any existing login session and force login again
+    request.session.clear()
     return RedirectResponse("/login", status_code=302)
 
-##
+
+# -------------------------
+# Onboarding (public; can be accessed without login)
+# -------------------------
+@app.get("/onboard", response_class=HTMLResponse)
+def onboard_get(request: Request):
+    cid = request.session.get("consultant_id")
+    c = get_consultant_full(int(cid)) if cid else None
+
+    if c and is_profile_complete(c):
+        return RedirectResponse("/app", status_code=302)
+
+    lang = ((c.get("language") if c else "en") or "en").strip().lower()
+    if lang not in ("en", "es"):
+        lang = "en"
+
+    replaces = {
+        "{{FIRST_NAME}}": (c.get("first_name") or "") if c else "",
+        "{{LAST_NAME}}": (c.get("last_name") or "") if c else "",
+        "{{EMAIL}}": (c.get("email") or "") if c else "",
+        "{{INTOUCH_USERNAME}}": (c.get("intouch_username") or "") if c else "",
+        "{{EN_SELECTED}}": "selected" if lang == "en" else "",
+        "{{ES_SELECTED}}": "selected" if lang == "es" else "",
+        "{{ERROR_BLOCK}}": "",
+    }
+    return render_page("onboard.html", replaces=replaces)
+
+
+@app.post("/onboard")
+def onboard_post(
+    request: Request,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    password2: str = Form(...),
+    intouch_username: str = Form(...),
+    intouch_password: str = Form(...),
+    language: str = Form("en"),
+):
+    if password != password2:
+        return HTMLResponse("Passwords do not match.", status_code=400)
+
+    ok, msg, cid = create_consultant(email, password, language=language)
+    if not ok or not cid:
+        return HTMLResponse(msg, status_code=400)
+
+    _update_name_fields(int(cid), first_name, last_name)
+
+    update_settings(
+        int(cid),
+        language=language,
+        intouch_username=intouch_username,
+        intouch_password=intouch_password,
+    )
+
+    request.session["consultant_id"] = int(cid)
+    return RedirectResponse("/app", status_code=302)
 
 
 # -------------------------
@@ -370,13 +499,9 @@ def app_page(request: Request):
     except PermissionError:
         return RedirectResponse("/login", status_code=302)
 
-    # 🔽 ADD THIS BLOCK
-    from auth_core import get_consultant_full  # if not already imported
-
     c = get_consultant_full(cid)
     if not c or not is_profile_complete(c):
         return RedirectResponse("/onboard", status_code=302)
-    # 🔼 END BLOCK
 
     index_path = WEB_DIR / "index.html"
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
@@ -425,7 +550,6 @@ def settings_post(
 
     pw_to_save = None if (intouch_password or "").strip() == "" else intouch_password
     update_settings(cid, language, intouch_username, pw_to_save)
-
     return RedirectResponse("/settings", status_code=302)
 
 
@@ -448,63 +572,6 @@ async def chat(request: Request):
     except Exception as e:
         return {"reply": f"❌ Server error: {e}"}
 
-@app.get("/onboard", response_class=HTMLResponse)
-def onboard_get(request: Request):
-    return render_page("onboard.html")
-
-    c = get_consultant_full(cid)  # (see note below)
-    if c and is_profile_complete(c):
-        return RedirectResponse("/app", status_code=302)
-
-    lang = (c.get("language") if c else "en") or "en"
-    lang = lang if lang in ("en", "es") else "en"
-
-    replaces = {
-        "{{FIRST_NAME}}": (c.get("first_name") or "") if c else "",
-        "{{LAST_NAME}}": (c.get("last_name") or "") if c else "",
-        "{{EMAIL}}": (c.get("email") or "") if c else "",
-        "{{INTOUCH_USERNAME}}": (c.get("intouch_username") or "") if c else "",
-        "{{EN_SELECTED}}": "selected" if lang == "en" else "",
-        "{{ES_SELECTED}}": "selected" if lang == "es" else "",
-        "{{ERROR_BLOCK}}": "",
-    }
-    return render_page("onboard.html", replaces=replaces)
-
-
-from auth_core import create_consultant, update_settings
-
-@app.post("/onboard")
-def onboard_post(
-    first_name: str = Form(...),
-    last_name: str = Form(...),
-    email: str = Form(...),
-    password: str = Form(...),
-    password2: str = Form(...),
-    intouch_username: str = Form(...),
-    intouch_password: str = Form(...),
-):
-    if password != password2:
-        return HTMLResponse("Passwords do not match.", status_code=400)
-
-    # Create consultant account
-    ok, msg, cid = create_consultant(email, password)
-    if not ok:
-        return HTMLResponse(msg, status_code=400)
-
-    # Save settings (including encrypted InTouch password)
-    update_settings(
-        cid,
-        language="en",
-        intouch_username=intouch_username,
-        intouch_password=intouch_password,
-    )
-
-    # Log them in automatically
-    from fastapi import Request
-    # You'll need request injected if not already
-    # request.session["consultant_id"] = cid
-
-    return RedirectResponse("/app", status_code=302)
 
 @app.get("/jobs")
 def jobs(request: Request):
@@ -516,10 +583,10 @@ def jobs(request: Request):
     conn = _conn()
     cur = conn.cursor()
     cur.execute(
-        """
+        f"""
         SELECT id, type, status, error, status_msg
         FROM jobs
-        WHERE consultant_id = ?
+        WHERE consultant_id = {PH}
         ORDER BY id DESC
         LIMIT 25
         """,
@@ -528,10 +595,17 @@ def jobs(request: Request):
     rows = cur.fetchall()
     conn.close()
 
-    out = [
-        {"id": r[0], "type": r[1], "status": r[2], "error": r[3] or "", "status_msg": r[4] or ""}
-        for r in rows
-    ]
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "id": _row_get(r, "id", None) if _row_get(r, "id", None) is not None else r[0],
+                "type": _row_get(r, "type", "") if _row_get(r, "type", None) is not None else r[1],
+                "status": _row_get(r, "status", "") if _row_get(r, "status", None) is not None else r[2],
+                "error": _row_get(r, "error", "") if _row_get(r, "error", None) is not None else (r[3] or ""),
+                "status_msg": _row_get(r, "status_msg", "") if _row_get(r, "status_msg", None) is not None else (r[4] or ""),
+            }
+        )
     return {"jobs": out}
 
 
