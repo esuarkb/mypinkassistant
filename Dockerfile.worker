@@ -1,0 +1,14 @@
+# Use official Playwright image (includes browsers + deps)
+FROM mcr.microsoft.com/playwright/python:v1.58.0-jammy
+
+WORKDIR /app
+
+# Copy project files
+COPY . .
+
+# Install Python dependencies for worker
+RUN pip install --upgrade pip
+RUN pip install -r requirements-worker.txt
+
+# Run worker
+CMD ["python", "worker.py"]

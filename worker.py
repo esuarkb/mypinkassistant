@@ -1,4 +1,5 @@
 # worker.py
+import os
 import json
 import time
 
@@ -71,7 +72,16 @@ def main():
                     # Release and move on
                     continue
 
-                browser = pw.chromium.launch(headless=False)
+                #browser = pw.chromium.launch(headless=False)
+                HEADLESS = os.getenv("HEADLESS", "false").lower() == "true"
+
+                browser = pw.chromium.launch(
+                    headless=HEADLESS,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                    ],
+                )
                 context = browser.new_context()
                 page = context.new_page()
 
