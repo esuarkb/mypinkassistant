@@ -48,7 +48,7 @@ def claim_next_consultant() -> Optional[int]:
     cur = conn.cursor()
 
     try:
-        cur.execute("BEGIN IMMEDIATE")
+        cur.execute("BEGIN")
 
         # Find the next consultant who has queued jobs
         cur.execute(
