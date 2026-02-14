@@ -219,6 +219,64 @@ def get_consultant(cid: int) -> Optional[dict]:
         "intouch_username": _row_get(row, "intouch_username", 3) or "",
     }
 
+def get_consultant_full(cid: int) -> Optional[dict]:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        SELECT id, email, first_name, last_name, language, intouch_username, intouch_password_enc
+        FROM consultants
+        WHERE id={PH}
+        """,
+        (cid,),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "email": row[1],
+        "first_name": row[2] or "",
+        "last_name": row[3] or "",
+        "language": row[4] or "en",
+        "intouch_username": row[5] or "",
+        "intouch_password_enc": row[6] or "",
+    }
+
+def update_profile_and_intouch(
+    cid: int,
+    email: str,
+    first_name: str,
+    last_name: str,
+    language: str,
+    intouch_username: str,
+    intouch_password: str,
+) -> None:
+    email = (email or "").strip().lower()
+    first_name = (first_name or "").strip()
+    last_name = (last_name or "").strip()
+    language = (language or "en").strip().lower()
+    if language not in ("en", "es"):
+        language = "en"
+
+    iu = (intouch_username or "").strip()
+    pw = (intouch_password or "").strip()
+    enc = encrypt_intouch_password(pw) if pw else ""
+
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        UPDATE consultants
+        SET email={PH}, first_name={PH}, last_name={PH}, language={PH},
+            intouch_username={PH}, intouch_password_enc={PH}
+        WHERE id={PH}
+        """,
+        (email, first_name, last_name, language, iu, enc, cid),
+    )
+    conn.commit()
+    conn.close()
 
 def get_consultant_intouch_creds(cid: int) -> Tuple[str, str]:
     conn = _get_conn()

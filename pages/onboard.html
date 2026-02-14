@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Welcome • MyPinkAssistant</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #111;
+            --muted: #666;
+            --card: #f7f7f8;
+            --border: #e6e6e6;
+            --pink: #e91e63;
+            --pinkDark: #c2185b;
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto;
+            background: var(--bg);
+            color: var(--text)
+        }
+
+        .wrap {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px
+        }
+
+        .card {
+            width: min(520px, 100%);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 18px
+        }
+
+        h1 {
+            margin: 0 0 6px;
+            font-size: 18px
+        }
+
+        p {
+            margin: 0 0 14px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.45
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 12px
+        }
+
+        input,
+        select {
+            width: 100%;
+            margin-top: 6px;
+            padding: 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+            background: #fff;
+            box-sizing: border-box;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px
+        }
+
+        @media (max-width:520px) {
+            .row {
+                grid-template-columns: 1fr
+            }
+        }
+
+        .hint {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 12px
+        }
+
+        .agree {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            margin-top: 14px
+        }
+
+        .agree input {
+            width: auto;
+            margin-top: 3px
+        }
+
+        .btn {
+            width: 100%;
+            margin-top: 14px;
+            padding: 12px;
+            border: 0;
+            border-radius: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--pink), var(--pinkDark));
+            color: #fff
+        }
+
+        .error {
+            margin-top: 10px;
+            color: #b00020;
+            font-size: 13px
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>Welcome — let’s get you set up 💗</h1>
+            <p>
+                Enter your details once. After this, you’ll go straight to chat.
+                Your InTouch password is encrypted and never shared.
+            </p>
+
+            <form method="post" action="/onboard">
+                <div class="row">
+                    <div>
+                        <label>First name</label>
+                        <input name="first_name" value="{{FIRST_NAME}}" required />
+                    </div>
+                    <div>
+                        <label>Last name</label>
+                        <input name="last_name" value="{{LAST_NAME}}" required />
+                    </div>
+                </div>
+
+                <label>Email</label>
+                <input name="email" type="email" value="{{EMAIL}}" required />
+
+                <div class="row">
+                    <div>
+                        <label>Language</label>
+                        <select name="language">
+                            <option value="en" {{EN_SELECTED}}>English</option>
+                            <option value="es" {{ES_SELECTED}}>Español</option>
+                        </select>
+                    </div>
+                    <div></div>
+                </div>
+
+                <div class="row">
+                    <div>
+                        <label>InTouch username</label>
+                        <input name="intouch_username" value="{{INTOUCH_USERNAME}}" required />
+                    </div>
+                    <div>
+                        <label>InTouch password</label>
+                        <input name="intouch_password" type="password" placeholder="••••••••" required />
+                    </div>
+                </div>
+                <div class="hint">Tip: paste it once here — we’ll save it securely.</div>
+
+                <div class="agree">
+                    <input id="agree" name="agree" type="checkbox" value="yes" required />
+                    <label for="agree" style="margin:0;color:var(--muted);font-size:12px">
+                        I agree to the Terms and Privacy Policy.
+                    </label>
+                </div>
+
+                <button class="btn" type="submit">Finish setup → Go to chat</button>
+
+                {{ERROR_BLOCK}}
+            </form>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -91,6 +91,15 @@ def require_login(request: Request) -> int:
         raise PermissionError("Not logged in")
     return int(cid)
 
+def is_profile_complete(c: dict) -> bool:
+    if not c:
+        return False
+    return (
+        bool((c.get("first_name") or "").strip())
+        and bool((c.get("last_name") or "").strip())
+        and bool((c.get("intouch_username") or "").strip())
+        and bool((c.get("intouch_password_enc") or "").strip())
+    )
 
 def render_page(filename: str, replaces: dict | None = None) -> HTMLResponse:
     path = PAGES_DIR / filename
@@ -352,9 +361,17 @@ def reset_password_post(request: Request, token: str = Form(...), password: str 
 @app.get("/app", response_class=HTMLResponse)
 def app_page(request: Request):
     try:
-        require_login(request)
+        cid = require_login(request)
     except PermissionError:
         return RedirectResponse("/login", status_code=302)
+
+    # 🔽 ADD THIS BLOCK
+    from auth_core import get_consultant_full  # if not already imported
+
+    c = get_consultant_full(cid)
+    if not c or not is_profile_complete(c):
+        return RedirectResponse("/onboard", status_code=302)
+    # 🔼 END BLOCK
 
     index_path = WEB_DIR / "index.html"
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
@@ -426,6 +443,66 @@ async def chat(request: Request):
     except Exception as e:
         return {"reply": f"❌ Server error: {e}"}
 
+@app.get("/onboard", response_class=HTMLResponse)
+def onboard_get(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    c = get_consultant_full(cid)  # (see note below)
+    if c and is_profile_complete(c):
+        return RedirectResponse("/app", status_code=302)
+
+    lang = (c.get("language") if c else "en") or "en"
+    lang = lang if lang in ("en", "es") else "en"
+
+    replaces = {
+        "{{FIRST_NAME}}": (c.get("first_name") or "") if c else "",
+        "{{LAST_NAME}}": (c.get("last_name") or "") if c else "",
+        "{{EMAIL}}": (c.get("email") or "") if c else "",
+        "{{INTOUCH_USERNAME}}": (c.get("intouch_username") or "") if c else "",
+        "{{EN_SELECTED}}": "selected" if lang == "en" else "",
+        "{{ES_SELECTED}}": "selected" if lang == "es" else "",
+        "{{ERROR_BLOCK}}": "",
+    }
+    return render_page("onboard.html", replaces=replaces)
+
+
+@app.post("/onboard")
+def onboard_post(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    intouch_username: str = Form(...),
+    intouch_password: str = Form(...),
+):
+    from auth_core import create_consultant, update_settings
+
+    # Create consultant account
+    ok, msg, cid = create_consultant(email.strip().lower(), password)
+
+    if not ok:
+        return HTMLResponse(f"{msg} <a href='/onboard'>Try again</a>.", status_code=400)
+
+    # Log them in immediately
+    request.session["consultant_id"] = cid
+
+    # Save names + InTouch
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE consultants SET first_name=%s, last_name=%s WHERE id=%s",
+        (first_name.strip(), last_name.strip(), cid),
+    )
+    conn.commit()
+    conn.close()
+
+    update_settings(cid, "en", intouch_username, intouch_password)
+
+    return RedirectResponse("/app", status_code=302)
 
 @app.get("/jobs")
 def jobs(request: Request):
