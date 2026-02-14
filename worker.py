@@ -24,16 +24,6 @@ from playwright_automation.orders import process_order_batch
 # How long to keep the browser open after the last job (seconds)
 IDLE_GRACE_SECONDS = 90
 
-# Max order rows we’ll batch for a single customer in one go
-MAX_ORDER_BATCH = 30
-
-
-def _same_customer(a: dict, b: dict) -> bool:
-    return (
-        str(a.get("First Name", "")).strip() == str(b.get("First Name", "")).strip()
-        and str(a.get("Last Name", "")).strip() == str(b.get("Last Name", "")).strip()
-    )
-
 
 def _missing_creds_message() -> str:
     return "Missing Intouch credentials. Please open Settings and save your Intouch username + password."
@@ -42,12 +32,18 @@ def _missing_creds_message() -> str:
 def main():
     print(f"✅ Worker starting: {WORKER_ID}")
 
+    # Default to headless on Render
+    HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
+
     with sync_playwright() as pw:
         while True:
             cid = claim_next_consultant()
             if not cid:
                 time.sleep(1)
                 continue
+
+            browser = None
+            context = None
 
             try:
                 refresh_consultant_lock(cid)
@@ -56,24 +52,21 @@ def main():
                 username = (username or "").strip()
                 password = (password or "").strip()
 
-                # ✅ NEW: if consultant has no creds, fail their queued jobs and move on
+                # If consultant has no creds, fail their queued jobs and move on
                 if not username or not password:
                     msg = _missing_creds_message()
 
-                    # Fail ALL queued jobs for this consultant so they don't block the queue
                     while True:
                         refresh_consultant_lock(cid)
                         claimed = claim_next_job_for_consultant(cid)
                         if not claimed:
                             break
-                        job_id, job_type, _payload_json = claimed
+
+                        job_id, _job_type, _payload_json = claimed
                         mark_job_failed(job_id, msg)
 
-                    # Release and move on
+                    # move on to next consultant
                     continue
-
-                #browser = pw.chromium.launch(headless=False)
-                HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 
                 browser = pw.chromium.launch(
                     headless=HEADLESS,
@@ -104,7 +97,7 @@ def main():
 
                     job_id, job_type, payload_json = claimed
                     last_job_time = time.time()
-                    
+
                     try:
                         payload = json.loads(payload_json)
 
@@ -125,7 +118,7 @@ def main():
                         # NEW_ORDER_ROW (NO batching)
                         # -------------------------
                         elif job_type == "NEW_ORDER_ROW":
-                            # ✅ Simple + safe: process ONE order row at a time
+                            # Process ONE order row at a time
                             process_order_batch(page, [payload])
 
                             customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
@@ -139,3 +132,23 @@ def main():
 
                     except Exception as e:
                         mark_job_failed(job_id, str(e))
+
+            finally:
+                # Always clean up and release the consultant lock
+                try:
+                    if context is not None:
+                        context.close()
+                except Exception:
+                    pass
+
+                try:
+                    if browser is not None:
+                        browser.close()
+                except Exception:
+                    pass
+
+                release_consultant(cid)
+
+
+if __name__ == "__main__":
+    main()
