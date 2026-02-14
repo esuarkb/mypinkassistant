@@ -246,7 +246,6 @@ def release_consultant(consultant_id: int) -> None:
             pass
         conn.close()
 
-
 ##
 
 def _claim_next_job_for_consultant_filtered(
@@ -255,7 +254,7 @@ def _claim_next_job_for_consultant_filtered(
 ) -> Optional[Tuple[int, str, str]]:
     """
     Core job claimer.
-    - Prioritizes NEW_CUSTOMER over NEW_ORDER_ROW.
+    - FIFO by id (per consultant)
     - If only_type is provided, only claims that type.
     """
     conn = _conn()
@@ -277,16 +276,14 @@ def _claim_next_job_for_consultant_filtered(
                 (int(consultant_id), only_type),
             )
         else:
-            # ✅ Priority: NEW_CUSTOMER first
+            # ✅ FIFO: oldest job first, no priority re-ordering
             cur.execute(
                 f"""
                 SELECT id, type, payload_json
                 FROM jobs
                 WHERE consultant_id={PH}
                   AND status='queued'
-                ORDER BY
-                  CASE WHEN type='NEW_CUSTOMER' THEN 0 ELSE 1 END,
-                  id
+                ORDER BY id
                 LIMIT 1
                 """,
                 (int(consultant_id),),
@@ -301,7 +298,7 @@ def _claim_next_job_for_consultant_filtered(
         job_type = str(_row_get(row, "type", 1))
         payload_json = str(_row_get(row, "payload_json", 2))
 
-                # Mark running + attempts + timestamps
+        # Mark running + attempts + timestamps
         if is_postgres():
             cur.execute(
                 f"""
