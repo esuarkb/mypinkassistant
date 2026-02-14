@@ -23,15 +23,13 @@ def _conn():
 def ensure_lock_table():
     conn = _conn()
     cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS consultant_locks (
-            consultant_id INTEGER PRIMARY KEY,
-            locked_by TEXT NOT NULL,
-            locked_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )
-        """
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS consultant_locks (
+        consultant_id INTEGER PRIMARY KEY,
+        worker_id TEXT NOT NULL,
+        locked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
+    """)
     conn.commit()
     conn.close()
 
