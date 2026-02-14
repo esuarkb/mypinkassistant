@@ -21,7 +21,7 @@ def add_customer_address(page: Page, customer: dict) -> None:
 
     # Open address dialog
     page.get_by_role("button", name="Add New Address").click()
-    page.wait_for_timeout(3000)
+    page.wait_for_timeout(8000)
 
     # Fill address fields (IDs from your known-working script)
     page.locator("#AddressFirstName-32").fill(str(customer.get("First Name", "")))
@@ -48,4 +48,4 @@ def add_customer_address(page: Page, customer: dict) -> None:
 
     # Save address (button inside dialog)
     page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
-    page.wait_for_timeout(8000)
+    page.wait_for_timeout(4000)
