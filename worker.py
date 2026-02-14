@@ -104,7 +104,7 @@ def main():
 
                     job_id, job_type, payload_json = claimed
                     last_job_time = time.time()
-
+                    
                     try:
                         payload = json.loads(payload_json)
 
@@ -121,50 +121,15 @@ def main():
                             full_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
                             mark_job_done(job_id, f"Customer {full_name} complete! ✅")
 
-
                         # -------------------------
-                        # NEW_ORDER_ROW (batch by customer)
+                        # NEW_ORDER_ROW (NO batching)
                         # -------------------------
                         elif job_type == "NEW_ORDER_ROW":
-                            batch_job_ids = [job_id]
-                            batch_rows = [payload]
+                            # ✅ Simple + safe: process ONE order row at a time
+                            process_order_batch(page, [payload])
 
-                            # Try to pull additional queued rows for SAME customer
-                            while len(batch_rows) < MAX_ORDER_BATCH:
-                                nxt = claim_next_job_for_consultant(cid)
-                                if not nxt:
-                                    break
-
-                                nxt_id, nxt_type, nxt_payload_json = nxt
-
-                                # If we accidentally claimed another type, fail it clearly and stop batching
-                                if nxt_type != "NEW_ORDER_ROW":
-                                    mark_job_failed(
-                                        nxt_id,
-                                        "Worker batching limitation: unexpected job type during order batch.",
-                                    )
-                                    break
-
-                                nxt_payload = json.loads(nxt_payload_json)
-
-                                # If it’s a different customer, stop batching and fail this one (rare in normal use)
-                                if not _same_customer(nxt_payload, batch_rows[0]):
-                                    mark_job_failed(
-                                        nxt_id,
-                                        "Worker batching limitation: mixed customers in a single batch. Try again.",
-                                    )
-                                    break
-
-                                batch_job_ids.append(nxt_id)
-                                batch_rows.append(nxt_payload)
-
-                            # Place the order for this batch
-                            process_order_batch(page, batch_rows)
-
-                            # If success, mark all rows done
-                            for jid in batch_job_ids:
-                                customer_name = f"{batch_rows[0].get('First Name','')} {batch_rows[0].get('Last Name','')}".strip()
-                                mark_job_done(jid, f"Order for {customer_name} complete! ✅")
+                            customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
+                            mark_job_done(job_id, f"Order for {customer_name} complete! ✅")
 
                         # -------------------------
                         # Unknown job type
@@ -174,14 +139,3 @@ def main():
 
                     except Exception as e:
                         mark_job_failed(job_id, str(e))
-
-                # Close consultant session browser
-                context.close()
-                browser.close()
-
-            finally:
-                release_consultant(cid)
-
-
-if __name__ == "__main__":
-    main()

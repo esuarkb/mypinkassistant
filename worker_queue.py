@@ -1,5 +1,4 @@
-## full worker_queue replacement 2-14 11:09 am
-
+# worker_queue.py
 import os
 import uuid
 from typing import Optional, Tuple
@@ -10,19 +9,28 @@ from db import connect, is_postgres
 LOCK_TTL_SECONDS = 15 * 60  # 15 minutes
 
 WORKER_ID = os.environ.get("MK_WORKER_ID") or f"worker-{uuid.uuid4().hex[:8]}"
+
+# Placeholder style differs:
+# - SQLite: ?
+# - Postgres (psycopg): %s
 PH = "%s" if is_postgres() else "?"
 
 
 def _conn():
-    # autocommit off; we use transactions explicitly in a few spots
+    # autocommit off; we use transactions
     return connect()
 
 
+def _row_get(row, key: str, idx: int):
+    """Works whether row is tuple/list (sqlite) or dict-like (psycopg dict_row)."""
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row.get(key)
+    return row[idx]
+
+
 def ensure_lock_table():
-    """
-    Ensure consultant_locks exists.
-    Keep column names consistent across DBs: locked_by, locked_at.
-    """
     conn = _conn()
     cur = conn.cursor()
     try:
@@ -55,29 +63,48 @@ def ensure_lock_table():
         conn.close()
 
 
-def _cleanup_expired_lock(cur, cid: int):
-    """
-    Delete expired lock row (if present).
-    """
+def _begin(cur):
+    # SQLite supports BEGIN IMMEDIATE, Postgres doesn't need it (BEGIN is fine)
     if is_postgres():
-        cur.execute(
-            """
-            DELETE FROM consultant_locks
-            WHERE consultant_id = %s
-              AND locked_at < (NOW() - (%s * INTERVAL '1 second'))
-            """,
-            (int(cid), int(LOCK_TTL_SECONDS)),
-        )
+        cur.execute("BEGIN")
     else:
-        # SQLite: compare text timestamps using datetime('now', '-N seconds')
-        cur.execute(
-            """
+        cur.execute("BEGIN IMMEDIATE")
+
+
+def _now_expr():
+    return "NOW()" if is_postgres() else "datetime('now')"
+
+
+def _lock_expiry_delete_sql():
+    if is_postgres():
+        # locked_at older than NOW() - interval
+        return f"""
+            DELETE FROM consultant_locks
+            WHERE consultant_id = {PH}
+              AND locked_at < (NOW() - ({PH} || ' seconds')::interval)
+        """
+    else:
+        # sqlite epoch seconds comparison
+        return """
             DELETE FROM consultant_locks
             WHERE consultant_id = ?
-              AND locked_at < datetime('now', ?)
-            """,
-            (int(cid), f"-{int(LOCK_TTL_SECONDS)} seconds"),
-        )
+              AND locked_at != ''
+              AND (strftime('%s','now') - strftime('%s', locked_at)) > ?
+        """
+
+
+def _insert_lock_sql():
+    if is_postgres():
+        return f"""
+            INSERT INTO consultant_locks (consultant_id, locked_by, locked_at)
+            VALUES ({PH}, {PH}, { _now_expr() })
+            ON CONFLICT (consultant_id) DO NOTHING
+        """
+    else:
+        return """
+            INSERT OR IGNORE INTO consultant_locks (consultant_id, locked_by, locked_at)
+            VALUES (?, ?, datetime('now'))
+        """
 
 
 def claim_next_consultant() -> Optional[int]:
@@ -90,10 +117,9 @@ def claim_next_consultant() -> Optional[int]:
     cur = conn.cursor()
 
     try:
-        # Start a transaction
-        cur.execute("BEGIN")
+        _begin(cur)
 
-        # Find the next consultant who has queued jobs
+        # Find the next consultant who has queued jobs (customer jobs effectively get priority later)
         cur.execute(
             """
             SELECT consultant_id
@@ -108,68 +134,30 @@ def claim_next_consultant() -> Optional[int]:
             conn.commit()
             return None
 
-        # psycopg dict_row returns dict-like, sqlite returns tuple
-        cid = row["consultant_id"] if isinstance(row, dict) else row[0]
+        cid = _row_get(row, "consultant_id", 0)
         if cid is None:
             conn.commit()
             return None
         cid = int(cid)
 
         # Clear expired lock (if any)
-        _cleanup_expired_lock(cur, cid)
+        cur.execute(_lock_expiry_delete_sql(), (cid, LOCK_TTL_SECONDS))
 
-        # Try to acquire the lock
-        if is_postgres():
-            cur.execute(
-                """
-                INSERT INTO consultant_locks (consultant_id, locked_by)
-                VALUES (%s, %s)
-                ON CONFLICT (consultant_id) DO NOTHING
-                RETURNING locked_by
-                """,
-                (cid, WORKER_ID),
-            )
-            got = cur.fetchone()
-            if not got:
-                conn.commit()
-                return None
-            locked_by = got["locked_by"] if isinstance(got, dict) else got[0]
-            if locked_by != WORKER_ID:
-                conn.commit()
-                return None
+        # Try to acquire lock
+        cur.execute(_insert_lock_sql(), (cid, WORKER_ID))
 
-        else:
-            # SQLite
-            try:
-                cur.execute(
-                    """
-                    INSERT OR IGNORE INTO consultant_locks (consultant_id, locked_by, locked_at)
-                    VALUES (?, ?, datetime('now'))
-                    """,
-                    (cid, WORKER_ID),
-                )
-            except Exception:
-                conn.rollback()
-                return None
+        # Did we get it?
+        cur.execute(f"SELECT locked_by FROM consultant_locks WHERE consultant_id={PH}", (cid,))
+        lock_row = cur.fetchone()
+        locked_by = _row_get(lock_row, "locked_by", 0)
 
-            cur.execute(
-                "SELECT locked_by FROM consultant_locks WHERE consultant_id=?",
-                (cid,),
-            )
-            lock_row = cur.fetchone()
-            if not lock_row or lock_row[0] != WORKER_ID:
-                conn.commit()
-                return None
+        if locked_by != WORKER_ID:
+            conn.commit()
+            return None
 
         conn.commit()
         return cid
 
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        raise
     finally:
         try:
             cur.close()
@@ -183,32 +171,16 @@ def refresh_consultant_lock(consultant_id: int) -> None:
     conn = _conn()
     cur = conn.cursor()
     try:
-        cur.execute("BEGIN")
-        if is_postgres():
-            cur.execute(
-                """
-                UPDATE consultant_locks
-                SET locked_at = NOW()
-                WHERE consultant_id = %s AND locked_by = %s
-                """,
-                (int(consultant_id), WORKER_ID),
-            )
-        else:
-            cur.execute(
-                """
-                UPDATE consultant_locks
-                SET locked_at = datetime('now')
-                WHERE consultant_id = ? AND locked_by = ?
-                """,
-                (int(consultant_id), WORKER_ID),
-            )
+        _begin(cur)
+        cur.execute(
+            f"""
+            UPDATE consultant_locks
+            SET locked_at={_now_expr()}
+            WHERE consultant_id={PH} AND locked_by={PH}
+            """,
+            (int(consultant_id), WORKER_ID),
+        )
         conn.commit()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        raise
     finally:
         try:
             cur.close()
@@ -222,18 +194,93 @@ def release_consultant(consultant_id: int) -> None:
     conn = _conn()
     cur = conn.cursor()
     try:
-        cur.execute("BEGIN")
+        _begin(cur)
         cur.execute(
             f"DELETE FROM consultant_locks WHERE consultant_id={PH} AND locked_by={PH}",
             (int(consultant_id), WORKER_ID),
         )
         conn.commit()
-    except Exception:
+    finally:
         try:
-            conn.rollback()
+            cur.close()
         except Exception:
             pass
-        raise
+        conn.close()
+
+
+def _claim_next_job_for_consultant_filtered(
+    consultant_id: int,
+    only_type: Optional[str] = None,
+) -> Optional[Tuple[int, str, str]]:
+    """
+    Core job claimer.
+    - Prioritizes NEW_CUSTOMER over NEW_ORDER_ROW.
+    - If only_type is provided, only claims that type.
+    """
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        _begin(cur)
+
+        if only_type:
+            cur.execute(
+                f"""
+                SELECT id, type, payload_json
+                FROM jobs
+                WHERE consultant_id={PH} AND status='queued' AND type={PH}
+                ORDER BY id
+                LIMIT 1
+                """,
+                (int(consultant_id), only_type),
+            )
+        else:
+            # ✅ Priority: NEW_CUSTOMER first
+            cur.execute(
+                f"""
+                SELECT id, type, payload_json
+                FROM jobs
+                WHERE consultant_id={PH} AND status='queued'
+                ORDER BY
+                  CASE WHEN type='NEW_CUSTOMER' THEN 0 ELSE 1 END,
+                  id
+                LIMIT 1
+                """,
+                (int(consultant_id),),
+            )
+
+        row = cur.fetchone()
+        if not row:
+            conn.commit()
+            return None
+
+        job_id = int(_row_get(row, "id", 0))
+        job_type = str(_row_get(row, "type", 1))
+        payload_json = str(_row_get(row, "payload_json", 2))
+
+        # Mark running + attempts + timestamps
+        # Note: COALESCE/NULLIF differs a bit; keep it simple/cross-db.
+        cur.execute(
+            f"""
+            UPDATE jobs
+            SET status='running',
+                error='',
+                status_msg='Working…',
+                attempts=attempts + 1,
+                claimed_by={PH},
+                claimed_at=COALESCE(claimed_at, {_now_expr()}),
+                started_at={_now_expr()}
+            WHERE id={PH} AND status='queued'
+            """,
+            (WORKER_ID, job_id),
+        )
+
+        if cur.rowcount != 1:
+            conn.commit()
+            return None
+
+        conn.commit()
+        return (job_id, job_type, payload_json)
+
     finally:
         try:
             cur.close()
@@ -244,138 +291,37 @@ def release_consultant(consultant_id: int) -> None:
 
 def claim_next_job_for_consultant(consultant_id: int) -> Optional[Tuple[int, str, str]]:
     """
-    Claims the next queued job for this consultant, in id order.
-    Returns (job_id, type, payload_json) or None.
+    Claims the next queued job for this consultant.
+    Prioritizes NEW_CUSTOMER over NEW_ORDER_ROW.
     """
-    conn = _conn()
-    cur = conn.cursor()
-    try:
-        if is_postgres():
-            # Atomic claim on Postgres (prevents two workers grabbing same job)
-            cur.execute("BEGIN")
-            cur.execute(
-                """
-                UPDATE jobs
-                SET status='running',
-                    error='',
-                    status_msg='Working…',
-                    attempts=attempts + 1,
-                    claimed_by=%s,
-                    claimed_at=COALESCE(claimed_at, NOW()),
-                    started_at=NOW()
-                WHERE id = (
-                    SELECT id
-                    FROM jobs
-                    WHERE consultant_id=%s AND status='queued'
-                    ORDER BY id
-                    LIMIT 1
-                    FOR UPDATE SKIP LOCKED
-                )
-                RETURNING id, type, payload_json
-                """,
-                (WORKER_ID, int(consultant_id)),
-            )
-            row = cur.fetchone()
-            conn.commit()
+    return _claim_next_job_for_consultant_filtered(consultant_id, only_type=None)
 
-            if not row:
-                return None
 
-            if isinstance(row, dict):
-                return (int(row["id"]), str(row["type"]), str(row["payload_json"]))
-            return (int(row[0]), str(row[1]), str(row[2]))
-
-        else:
-            # SQLite
-            cur.execute("BEGIN")
-            cur.execute(
-                """
-                SELECT id, type, payload_json
-                FROM jobs
-                WHERE consultant_id=? AND status='queued'
-                ORDER BY id
-                LIMIT 1
-                """,
-                (int(consultant_id),),
-            )
-            row = cur.fetchone()
-            if not row:
-                conn.commit()
-                return None
-
-            job_id, job_type, payload_json = int(row[0]), str(row[1]), str(row[2])
-
-            cur.execute(
-                """
-                UPDATE jobs
-                SET status='running',
-                    error='',
-                    status_msg='Working…',
-                    attempts=attempts + 1,
-                    claimed_by=?,
-                    claimed_at=COALESCE(NULLIF(claimed_at,''), datetime('now')),
-                    started_at=datetime('now')
-                WHERE id=? AND status='queued'
-                """,
-                (WORKER_ID, job_id),
-            )
-            if cur.rowcount != 1:
-                conn.commit()
-                return None
-
-            conn.commit()
-            return (job_id, job_type, payload_json)
-
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        raise
-    finally:
-        try:
-            cur.close()
-        except Exception:
-            pass
-        conn.close()
+def claim_next_order_row_for_consultant(consultant_id: int) -> Optional[Tuple[int, str, str]]:
+    """
+    Claims ONLY NEW_ORDER_ROW (used for batching).
+    This prevents accidentally claiming NEW_CUSTOMER and failing it.
+    """
+    return _claim_next_job_for_consultant_filtered(consultant_id, only_type="NEW_ORDER_ROW")
 
 
 def mark_job_done(job_id: int, msg: str = "Complete ✅") -> None:
     conn = _conn()
     cur = conn.cursor()
     try:
-        cur.execute("BEGIN")
-        if is_postgres():
-            cur.execute(
-                """
-                UPDATE jobs
-                SET status='done',
-                    error='',
-                    status_msg=%s,
-                    finished_at=NOW()
-                WHERE id=%s
-                """,
-                (msg, int(job_id)),
-            )
-        else:
-            cur.execute(
-                """
-                UPDATE jobs
-                SET status='done',
-                    error='',
-                    status_msg=?,
-                    finished_at=datetime('now')
-                WHERE id=?
-                """,
-                (msg, int(job_id)),
-            )
+        _begin(cur)
+        cur.execute(
+            f"""
+            UPDATE jobs
+            SET status='done',
+                error='',
+                status_msg={PH},
+                finished_at={_now_expr()}
+            WHERE id={PH}
+            """,
+            (msg, int(job_id)),
+        )
         conn.commit()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        raise
     finally:
         try:
             cur.close()
@@ -388,38 +334,19 @@ def mark_job_failed(job_id: int, error: str, msg: str = "Failed ❌") -> None:
     conn = _conn()
     cur = conn.cursor()
     try:
-        cur.execute("BEGIN")
-        if is_postgres():
-            cur.execute(
-                """
-                UPDATE jobs
-                SET status='failed',
-                    error=%s,
-                    status_msg=%s,
-                    finished_at=NOW()
-                WHERE id=%s
-                """,
-                (str(error)[:2000], msg, int(job_id)),
-            )
-        else:
-            cur.execute(
-                """
-                UPDATE jobs
-                SET status='failed',
-                    error=?,
-                    status_msg=?,
-                    finished_at=datetime('now')
-                WHERE id=?
-                """,
-                (str(error)[:2000], msg, int(job_id)),
-            )
+        _begin(cur)
+        cur.execute(
+            f"""
+            UPDATE jobs
+            SET status='failed',
+                error={PH},
+                status_msg={PH},
+                finished_at={_now_expr()}
+            WHERE id={PH}
+            """,
+            (str(error)[:2000], msg, int(job_id)),
+        )
         conn.commit()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        raise
     finally:
         try:
             cur.close()
