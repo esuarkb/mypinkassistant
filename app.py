@@ -445,10 +445,7 @@ async def chat(request: Request):
 
 @app.get("/onboard", response_class=HTMLResponse)
 def onboard_get(request: Request):
-    try:
-        cid = require_login(request)
-    except PermissionError:
-        return RedirectResponse("/login", status_code=302)
+    return render_page("onboard.html")
 
     c = get_consultant_full(cid)  # (see note below)
     if c and is_profile_complete(c):
