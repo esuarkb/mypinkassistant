@@ -503,6 +503,33 @@ def onboard_post(
     return RedirectResponse("/app", status_code=302)
 
 
+from auth_core import get_consultant_full
+
+@app.get("/onboard", response_class=HTMLResponse)
+def onboard_get(request: Request):
+    # If logged in, prefill. If not logged in, show blank onboard page.
+    cid = request.session.get("consultant_id")
+    c = get_consultant_full(int(cid)) if cid else None
+
+    # If already complete, skip onboard
+    if c and is_profile_complete(c):
+        return RedirectResponse("/app", status_code=302)
+
+    lang = (c.get("language") if c else "en") or "en"
+    if lang not in ("en", "es"):
+        lang = "en"
+
+    replaces = {
+        "{{FIRST_NAME}}": (c.get("first_name") or "") if c else "",
+        "{{LAST_NAME}}": (c.get("last_name") or "") if c else "",
+        "{{EMAIL}}": (c.get("email") or "") if c else "",
+        "{{INTOUCH_USERNAME}}": (c.get("intouch_username") or "") if c else "",
+        "{{EN_SELECTED}}": "selected" if lang == "en" else "",
+        "{{ES_SELECTED}}": "selected" if lang == "es" else "",
+        "{{ERROR_BLOCK}}": "",
+    }
+    return render_page("onboard.html", replaces=replaces)
+
 # -------------------------
 # Protected app page
 # -------------------------
