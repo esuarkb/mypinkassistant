@@ -62,6 +62,44 @@ def ensure_lock_table():
             pass
         conn.close()
 
+def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> None:
+    """
+    If a worker crashes mid-job, jobs can remain 'running' forever.
+    This reaps stale running jobs and consultant locks so the queue recovers.
+    """
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        # Fail stale running jobs
+        cur.execute(
+            """
+            UPDATE jobs
+            SET status='failed',
+                status_msg='Failed ❌',
+                error=CASE
+                    WHEN COALESCE(error,'') = '' THEN 'reset: stale running job'
+                    ELSE SUBSTR(error,1,1800) || ' | reset: stale running job'
+                END,
+                finished_at=NOW()
+            WHERE status='running'
+              AND started_at IS NOT NULL
+              AND started_at < (NOW() - (%s * INTERVAL '1 second'))
+            """,
+            (int(ttl_seconds),),
+        )
+
+        # Clear stale consultant locks
+        cur.execute(
+            """
+            DELETE FROM consultant_locks
+            WHERE locked_at < (NOW() - (%s * INTERVAL '1 second'))
+            """,
+            (int(ttl_seconds),),
+        )
+
+        conn.commit()
+    finally:
+        conn.close()
 
 def _begin(cur):
     # SQLite supports BEGIN IMMEDIATE, Postgres doesn't need it (BEGIN is fine)
@@ -168,6 +206,7 @@ def claim_next_consultant() -> Optional[int]:
 
 def refresh_consultant_lock(consultant_id: int) -> None:
     ensure_lock_table()
+    reap_stale_running_jobs_and_locks()
     conn = _conn()
     cur = conn.cursor()
     try:
@@ -208,6 +247,8 @@ def release_consultant(consultant_id: int) -> None:
         conn.close()
 
 
+##
+
 def _claim_next_job_for_consultant_filtered(
     consultant_id: int,
     only_type: Optional[str] = None,
@@ -227,7 +268,9 @@ def _claim_next_job_for_consultant_filtered(
                 f"""
                 SELECT id, type, payload_json
                 FROM jobs
-                WHERE consultant_id={PH} AND status='queued' AND type={PH}
+                WHERE consultant_id={PH}
+                  AND status='queued'
+                  AND type={PH}
                 ORDER BY id
                 LIMIT 1
                 """,
@@ -239,7 +282,8 @@ def _claim_next_job_for_consultant_filtered(
                 f"""
                 SELECT id, type, payload_json
                 FROM jobs
-                WHERE consultant_id={PH} AND status='queued'
+                WHERE consultant_id={PH}
+                  AND status='queued'
                 ORDER BY
                   CASE WHEN type='NEW_CUSTOMER' THEN 0 ELSE 1 END,
                   id
@@ -258,7 +302,6 @@ def _claim_next_job_for_consultant_filtered(
         payload_json = str(_row_get(row, "payload_json", 2))
 
         # Mark running + attempts + timestamps
-        # Note: COALESCE/NULLIF differs a bit; keep it simple/cross-db.
         cur.execute(
             f"""
             UPDATE jobs
@@ -267,13 +310,15 @@ def _claim_next_job_for_consultant_filtered(
                 status_msg='Working…',
                 attempts=attempts + 1,
                 claimed_by={PH},
-                claimed_at=COALESCE(claimed_at, {_now_expr()}),
+                claimed_at=COALESCE(NULLIF(claimed_at,''), {_now_expr()}),
                 started_at={_now_expr()}
-            WHERE id={PH} AND status='queued'
+            WHERE id={PH}
+              AND status='queued'
             """,
             (WORKER_ID, job_id),
         )
 
+        # If update didn't happen, someone else claimed it
         if cur.rowcount != 1:
             conn.commit()
             return None
