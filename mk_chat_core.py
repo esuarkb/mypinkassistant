@@ -2,10 +2,11 @@ import json
 import calendar
 import datetime
 import re
-import sqlite3
+#import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
+from db import connect
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -30,7 +31,8 @@ TOP5 = 5
 def db_connect():
     if not DB_PATH.exists():
         raise FileNotFoundError("Database not found. Run db_setup.py first.")
-    return sqlite3.connect(DB_PATH)
+    return connect()
+    #return sqlite3.connect(DB_PATH)
 
 def get_catalog_path_for_language(language: str) -> Path:
     language = (language or "en").strip().lower()

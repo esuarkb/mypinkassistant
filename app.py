@@ -1,12 +1,13 @@
 import os
 import re
-import sqlite3
+#import sqlite3
 from pathlib import Path
 import time
 import secrets
 import hashlib
 import requests
 from urllib.parse import urlencode
+from db import connect
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -48,8 +49,8 @@ app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
 # DB helpers
 # -------------------------
 def _conn():
-    return sqlite3.connect(DB_PATH)
-
+#    return sqlite3.connect(DB_PATH)
+    return connect()
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()

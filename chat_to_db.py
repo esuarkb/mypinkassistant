@@ -1,9 +1,10 @@
 import os
 import re
 import json
-import sqlite3
+#import sqlite3
 from pathlib import Path
 from typing import List, Optional, Any, Tuple
+from db import connect
 
 from dotenv import load_dotenv
 from rapidfuzz import fuzz, process
@@ -29,7 +30,8 @@ PAGE_SIZE = 5      # show this many at a time in the list UI
 def db_connect():
     if not DB_PATH.exists():
         raise FileNotFoundError("Database not found. Run db_setup.py first.")
-    return sqlite3.connect(DB_PATH)
+    return connect()
+    #return sqlite3.connect(DB_PATH)
 
 
 def insert_job(job_type: str, payload: dict) -> int:

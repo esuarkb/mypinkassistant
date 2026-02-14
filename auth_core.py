@@ -1,18 +1,20 @@
 import os
-import sqlite3
+#import sqlite3
 import hashlib
 import secrets
 from pathlib import Path
 from typing import Optional, Tuple
 
 from cryptography.fernet import Fernet
+from db import connect
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "mk.db"
 
 
 def _get_conn():
-    return sqlite3.connect(DB_PATH)
+    return connect()
+#    return sqlite3.connect(DB_PATH)
 
 
 # -------------------------

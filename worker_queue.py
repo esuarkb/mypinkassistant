@@ -1,8 +1,9 @@
 import os
-import sqlite3
+#import sqlite3
 import uuid
 from pathlib import Path
 from typing import Optional, Tuple
+from db import connect
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "mk.db"
@@ -15,7 +16,8 @@ WORKER_ID = os.environ.get("MK_WORKER_ID") or f"worker-{uuid.uuid4().hex[:8]}"
 
 def _conn():
     # autocommit off; we use transactions
-    return sqlite3.connect(str(DB_PATH), timeout=30)
+    return connect()
+    #return sqlite3.connect(str(DB_PATH), timeout=30)
 
 
 def ensure_lock_table():
