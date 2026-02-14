@@ -127,8 +127,13 @@ def landing(request: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 def login_get(request: Request):
-    if request.session.get("consultant_id"):
+    cid = request.session.get("consultant_id")
+    if cid:
+        # if onboard not complete, send to onboard; else app
+        if not is_onboard_complete(int(cid)):
+            return RedirectResponse("/onboard", status_code=302)
         return RedirectResponse("/app", status_code=302)
+
     return render_page("login.html")
 
 @app.get("/splash.html", response_class=HTMLResponse)
