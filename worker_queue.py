@@ -301,22 +301,37 @@ def _claim_next_job_for_consultant_filtered(
         job_type = str(_row_get(row, "type", 1))
         payload_json = str(_row_get(row, "payload_json", 2))
 
-        # Mark running + attempts + timestamps
-        cur.execute(
-            f"""
-            UPDATE jobs
-            SET status='running',
-                error='',
-                status_msg='Working…',
-                attempts=attempts + 1,
-                claimed_by={PH},
-                claimed_at=COALESCE(NULLIF(claimed_at,''), {_now_expr()}),
-                started_at={_now_expr()}
-            WHERE id={PH}
-              AND status='queued'
-            """,
-            (WORKER_ID, job_id),
-        )
+                # Mark running + attempts + timestamps
+        if is_postgres():
+            cur.execute(
+                f"""
+                UPDATE jobs
+                SET status='running',
+                    error='',
+                    status_msg='Working…',
+                    attempts=attempts + 1,
+                    claimed_by={PH},
+                    claimed_at=COALESCE(claimed_at, NOW()),
+                    started_at=NOW()
+                WHERE id={PH} AND status='queued'
+                """,
+                (WORKER_ID, job_id),
+            )
+        else:
+            cur.execute(
+                f"""
+                UPDATE jobs
+                SET status='running',
+                    error='',
+                    status_msg='Working…',
+                    attempts=attempts + 1,
+                    claimed_by={PH},
+                    claimed_at=COALESCE(NULLIF(claimed_at,''), datetime('now')),
+                    started_at=datetime('now')
+                WHERE id={PH} AND status='queued'
+                """,
+                (WORKER_ID, job_id),
+            )
 
         # If update didn't happen, someone else claimed it
         if cur.rowcount != 1:
