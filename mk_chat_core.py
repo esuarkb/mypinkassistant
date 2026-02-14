@@ -1,38 +1,42 @@
+## update sql placeholders 2-14 10:15am
+
+# mk_chat_core.py
 import json
 import calendar
 import datetime
 import re
-#import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
-from db import connect
 
 from dotenv import load_dotenv
 from openai import OpenAI
 from rapidfuzz import fuzz, process
 
+from db import connect, is_postgres
 
 # -------------------------
 # Paths / Settings
 # -------------------------
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "data" / "mk.db"
 CATALOG_DIR = BASE_DIR / "catalog"
 MODEL = "gpt-4.1-mini"
 
 MATCH_LIMIT = 25
 TOP5 = 5
 
+# Placeholder differs:
+# - SQLite: ?
+# - Postgres (psycopg): %s
+PH = "%s" if is_postgres() else "?"
+
 
 # -------------------------
 # DB helpers
 # -------------------------
 def db_connect():
-    if not DB_PATH.exists():
-        raise FileNotFoundError("Database not found. Run db_setup.py first.")
     return connect()
-    #return sqlite3.connect(DB_PATH)
+
 
 def get_catalog_path_for_language(language: str) -> Path:
     language = (language or "en").strip().lower()
@@ -42,63 +46,125 @@ def get_catalog_path_for_language(language: str) -> Path:
 
 
 def ensure_sessions_table():
+    """
+    Keep sessions schema compatible across SQLite + Postgres.
+    We use session_id (not id) to avoid reserved-word headaches and to match your app usage.
+    """
     conn = db_connect()
     cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS sessions (
-          id INTEGER PRIMARY KEY,
-          state_json TEXT NOT NULL,
-          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
+    try:
+        if is_postgres():
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sessions (
+                  session_id BIGINT PRIMARY KEY,
+                  state_json TEXT NOT NULL DEFAULT '{}',
+                  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+        else:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sessions (
+                  session_id INTEGER PRIMARY KEY,
+                  state_json TEXT NOT NULL DEFAULT '{}',
+                  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+            )
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
 
 def load_session_state(session_id: int = 1) -> dict:
     ensure_sessions_table()
     conn = db_connect()
     cur = conn.cursor()
-    cur.execute("SELECT state_json FROM sessions WHERE id=?", (session_id,))
-    row = cur.fetchone()
-    if not row:
-        state = {"last_customer": None, "pending": None}
-        cur.execute(
-            "INSERT INTO sessions (id, state_json) VALUES (?, ?)",
-            (session_id, json.dumps(state)),
-        )
-        conn.commit()
+    try:
+        cur.execute(f"SELECT state_json FROM sessions WHERE session_id={PH}", (session_id,))
+        row = cur.fetchone()
+
+        if not row:
+            state = {"last_customer": None, "pending": None}
+            cur.execute(
+                f"INSERT INTO sessions (session_id, state_json) VALUES ({PH}, {PH})",
+                (session_id, json.dumps(state)),
+            )
+            conn.commit()
+            return state
+
+        # row could be tuple (sqlite) or dict-like (psycopg dict_row)
+        if isinstance(row, dict):
+            return json.loads(row.get("state_json") or "{}")
+        return json.loads(row[0])
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
         conn.close()
-        return state
-    conn.close()
-    return json.loads(row[0])
 
 
 def save_session_state(state: dict, session_id: int = 1) -> None:
     ensure_sessions_table()
     conn = db_connect()
     cur = conn.cursor()
-    cur.execute(
-        "UPDATE sessions SET state_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-        (json.dumps(state), session_id),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        if is_postgres():
+            cur.execute(
+                f"UPDATE sessions SET state_json={PH}, updated_at=NOW() WHERE session_id={PH}",
+                (json.dumps(state), session_id),
+            )
+        else:
+            cur.execute(
+                f"UPDATE sessions SET state_json={PH}, updated_at=CURRENT_TIMESTAMP WHERE session_id={PH}",
+                (json.dumps(state), session_id),
+            )
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
 
 def insert_job(job_type: str, payload: dict, consultant_id: int) -> int:
     conn = db_connect()
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO jobs (type, payload_json, status, consultant_id) VALUES (?, ?, 'queued', ?)",
-        (job_type, json.dumps(payload), int(consultant_id)),
-    )
-    job_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-    return job_id
+    try:
+        if is_postgres():
+            cur.execute(
+                f"""
+                INSERT INTO jobs (type, payload_json, status, consultant_id)
+                VALUES ({PH}, {PH}, 'queued', {PH})
+                RETURNING id
+                """,
+                (job_type, json.dumps(payload), int(consultant_id)),
+            )
+            row = cur.fetchone()
+            job_id = row["id"] if isinstance(row, dict) else row[0]
+        else:
+            cur.execute(
+                f"INSERT INTO jobs (type, payload_json, status, consultant_id) VALUES ({PH}, {PH}, 'queued', {PH})",
+                (job_type, json.dumps(payload), int(consultant_id)),
+            )
+            job_id = cur.lastrowid
+
+        conn.commit()
+        return int(job_id)
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
 
 # -------------------------
@@ -114,7 +180,7 @@ def load_catalog(path: Path) -> List[dict]:
     if not path.exists():
         raise FileNotFoundError(f"Catalog not found at: {path}")
 
-    items = []
+    items: List[dict] = []
     with path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -149,9 +215,6 @@ def fmt_price(p: Any) -> str:
 
 
 def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
-    """
-    Fuzzy match + light anchor filtering to reduce drift.
-    """
     q = (query or "").lower().strip()
     q_compact = re.sub(r"\s+", " ", q)
 
@@ -192,24 +255,16 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
     names = [c["product_name"] for c in candidates]
     results = process.extract(q, names, scorer=fuzz.WRatio, limit=limit)
 
-    matches = []
+    matches: List[dict] = []
     for name, score, idx in results:
         c = candidates[idx]
         matches.append(
-            {
-                "sku": c["sku"],
-                "product_name": c["product_name"],
-                "price": c["price"],
-                "score": score,
-            }
+            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score}
         )
     return matches
 
 
 def auto_pick_match(catalog: List[dict], query: str) -> Tuple[Optional[dict], List[dict]]:
-    """
-    Tier 1: if confident, auto-pick.
-    """
     matches = best_matches(catalog, query, limit=MATCH_LIMIT)
     if not matches:
         return None, matches
@@ -224,10 +279,6 @@ def auto_pick_match(catalog: List[dict], query: str) -> Tuple[Optional[dict], Li
 
 
 def llm_pick_from_candidates(client: OpenAI, item_text: str, candidates: List[dict]) -> Optional[int]:
-    """
-    Tier 2: model chooses best candidate from a locally-retrieved list.
-    Returns 0-based index into candidates, or None.
-    """
     if not candidates:
         return None
 
@@ -290,7 +341,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) 
         '    "City": "",\n'
         '    "State": "",\n'
         '    "Postal Code": "",\n'
-        '    "Birthday": "",\n'
+        '    "Birthday": ""\n'
         "  }\n"
         "}\n\n"
         "If ORDER:\n"
@@ -335,45 +386,25 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) 
 def normalize_phone(phone: str) -> str:
     return re.sub(r"\D+", "", phone or "")
 
-def format_phone_display(phone: str) -> str:
-    """
-    Format a phone number for DISPLAY ONLY.
-    Keeps DB storage as digits (normalize_phone), but shows user-friendly formatting.
-    """
-    digits = normalize_phone(phone)
 
+def format_phone_display(phone: str) -> str:
+    digits = normalize_phone(phone)
     if not digits:
         return ""
-
-    # Handle leading country code 1 (US)
     if len(digits) == 11 and digits.startswith("1"):
         digits = digits[1:]
-
     if len(digits) == 10:
         return f"({digits[0:3]}) {digits[3:6]}-{digits[6:10]}"
-
     if len(digits) == 7:
         return f"{digits[0:3]}-{digits[3:7]}"
-
-    # Fallback: show whatever digits we have
     return digits
 
-def normalize_birthday(raw: str) -> str:
-    """
-    Normalize birthday into YYYY-MM-DD.
 
-    Accepts:
-      - YYYY-MM-DD
-      - MM/DD[/YYYY] or MM-DD[-YYYY]
-      - Month name formats like "Feb 11" or "February 11, 1990"
-    If year is missing, defaults to 2000.
-    Returns "" if it can't be parsed safely.
-    """
+def normalize_birthday(raw: str) -> str:
     s = (raw or "").strip()
     if not s:
         return ""
 
-    # Already normalized
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
         try:
             y, mo, d = map(int, s.split("-"))
@@ -382,19 +413,16 @@ def normalize_birthday(raw: str) -> str:
         except Exception:
             return ""
 
-    # Numeric formats: M/D[/Y] or M-D[-Y]
     m = re.fullmatch(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", s)
     if m:
         mo = int(m.group(1))
         d = int(m.group(2))
         y_raw = m.group(3)
-
         if y_raw is None:
             y = 2000
         else:
             y_i = int(y_raw)
             if len(y_raw) == 2:
-                # 00-29 -> 2000s, else 1900s
                 y = 2000 + y_i if y_i <= 29 else 1900 + y_i
             else:
                 y = y_i
@@ -404,8 +432,6 @@ def normalize_birthday(raw: str) -> str:
         except Exception:
             return ""
 
-    # Month name formats
-    # Examples: "Feb 11", "February 11, 1990", "11 Feb 1990"
     s2 = re.sub(r"[.,]", " ", s)
     s2 = re.sub(r"\s+", " ", s2).strip()
 
@@ -439,15 +465,12 @@ def normalize_birthday(raw: str) -> str:
         except Exception:
             return ""
 
-    # Patterns:
-    # 1) Month Day [Year]
     if len(parts) >= 2 and parts[0].lower() in month_map:
         year = parts[2] if len(parts) >= 3 else None
         out = _try(parts[0], parts[1], year)
         if out:
             return out
 
-    # 2) Day Month [Year]
     if len(parts) >= 2 and parts[1].lower() in month_map:
         year = parts[2] if len(parts) >= 3 else None
         out = _try(parts[1], parts[0], year)
@@ -458,7 +481,6 @@ def normalize_birthday(raw: str) -> str:
 
 
 def birthday_display(normalized: str) -> str:
-    """Pretty display for confirmations."""
     s = (normalized or "").strip()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
         return ""
@@ -467,6 +489,7 @@ def birthday_display(normalized: str) -> str:
     if y == 2000:
         return f"{month} {d}"
     return f"{month} {d}, {y}"
+
 
 def yes(s: str) -> bool:
     return s.strip().lower() in ("y", "yes", "yeah", "yep", "ok", "okay", "confirm", "correct", "right")
@@ -516,13 +539,6 @@ def parse_add_remove(message: str):
 
 
 def parse_qty_prefix(text: str) -> Tuple[int, str]:
-    """
-    If text starts with a qty like '2 cc cream', return (2, 'cc cream')
-    But DO NOT treat numbers that are part of product names as qty:
-      - '4 in 1 cleanser'
-      - '4-in-1 cleanser'
-      - '2-in-1 ...'
-    """
     t = (text or "").strip()
     m = re.match(r"^\s*(\d+)\s+(.+)$", t)
     if not m:
@@ -531,33 +547,19 @@ def parse_qty_prefix(text: str) -> Tuple[int, str]:
     q = int(m.group(1))
     rest = m.group(2).strip()
 
-    # If the "rest" begins with something like "in 1" or "-in-1", it's a product name, not qty.
     rest_low = rest.lower()
     if re.match(r"^(?:-?\s*in\s*-?\s*\d+)\b", rest_low):
-        return (1, t)  # keep full original text as item name
+        return (1, t)
 
-    # Normal qty prefix
     if q >= 1:
         return (q, rest)
 
     return (1, t)
 
 
-
 def parse_qty_change(msg: str) -> Optional[int]:
-    """
-    Allow changing qty during item confirmation:
-      - 2
-      - x2
-      - qty 2
-      - make that 2
-      - change it to 3
-      - change to 4
-    Returns int qty if detected, else None.
-    """
     s = (msg or "").strip().lower()
 
-    # just a number
     if s.isdigit():
         q = int(s)
         if 1 <= q <= 99:
@@ -592,12 +594,11 @@ class ChatReply:
 
 class MKChatEngine:
     """
-    Stateless per-request; state is loaded/saved to SQLite sessions table.
+    Stateless per-request; state is loaded/saved to sessions table (SQLite or Postgres).
     """
     def __init__(self):
         load_dotenv()
         self.client = OpenAI()
-        #self.catalog = load_catalog(CATALOG_PATH)
 
     def handle_message(self, message: str, consultant_id: int, session_id: Optional[int] = None) -> ChatReply:
         sid = int(session_id or consultant_id)
@@ -609,11 +610,10 @@ class MKChatEngine:
         language = consultant.get("language", "en") if consultant else "en"
 
         catalog_path = get_catalog_path_for_language(language)
-        self.catalog = load_catalog(catalog_path)
-
+        catalog = load_catalog(catalog_path)
 
         last_customer = state.get("last_customer")
-        pending = state.get("pending")  # dict or None
+        pending = state.get("pending")
         msg = (message or "").strip()
 
         if not msg:
@@ -630,31 +630,26 @@ class MKChatEngine:
         if pending:
             kind = pending.get("kind")
 
-            # CUSTOMER CONFIRM
             if kind == "customer_confirm":
                 if yes(msg):
                     customer = pending["customer"]
-                    job_id = insert_job("NEW_CUSTOMER", customer, consultant_id=consultant_id)
+                    insert_job("NEW_CUSTOMER", customer, consultant_id=consultant_id)
                     state["last_customer"] = customer
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply(
-                        f"✅ {customer['First Name']} {customer['Last Name']} confirmed. Adding to MyCustomers now."
-                    )
+                    return ChatReply(f"✅ {customer['First Name']} {customer['Last Name']} confirmed. Adding to MyCustomers now.")
                 if no(msg):
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply("No problem — Send the corrected customer info and I’ll try again.")
                 return ChatReply("Please reply yes or no.")
 
-            # ORDER LINE CONFIRM TOP (now supports qty change)
             if kind == "order_line_confirm_top":
                 order = pending["order"]
                 line_index = pending["line_index"]
                 top = pending["top"]
                 matches = pending["matches"]
 
-                # Allow qty change here
                 q_new = parse_qty_change(msg)
                 if q_new is not None:
                     order["lines"][line_index]["qty"] = q_new
@@ -671,7 +666,7 @@ class MKChatEngine:
                 if yes(msg):
                     order["lines"][line_index]["chosen"] = top
                     state["pending"] = None
-                    return self._continue_resolving_and_reply(state, order, consultant_id, sid)
+                    return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog)
 
                 if no(msg):
                     state["pending"] = {
@@ -685,7 +680,6 @@ class MKChatEngine:
 
                 return ChatReply("Reply yes/no — or type a quantity like `2` or `x2`.")
 
-            # ORDER LINE PICK: top5 OR re-search by free text
             if kind == "order_line_pick_top5_or_search":
                 order = pending["order"]
                 line_index = pending["line_index"]
@@ -697,10 +691,9 @@ class MKChatEngine:
                         picked = matches[i - 1]
                         order["lines"][line_index]["chosen"] = picked
                         state["pending"] = None
-                        return self._continue_resolving_and_reply(state, order, consultant_id, sid)
+                        return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog)
 
-                new_q = msg
-                new_matches = best_matches(self.catalog, new_q, limit=MATCH_LIMIT)
+                new_matches = best_matches(catalog, msg, limit=MATCH_LIMIT)
                 if not new_matches:
                     return ChatReply("No close matches. Try rewording the item (brand/line/shade helps).")
 
@@ -713,7 +706,6 @@ class MKChatEngine:
                 save_session_state(state, session_id=sid)
                 return ChatReply(render_top5(new_matches))
 
-            # ORDER FINAL CONFIRM (supports add/remove)
             if kind == "order_confirm":
                 order = pending["order"]
 
@@ -722,20 +714,17 @@ class MKChatEngine:
                     qty, item_text = parse_qty_prefix(rest)
                     if not item_text:
                         return ChatReply("Tell me what to add, e.g. `add satin hands`.")
-
                     order["lines"].append({"text": item_text, "qty": qty, "chosen": None})
                     state["pending"] = None
-                    return self._continue_resolving_and_reply(state, order, consultant_id, sid)
+                    return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog)
 
                 if action == "remove":
                     target = (rest or "").strip()
                     if not target:
                         return ChatReply("Tell me what to remove, e.g. `remove 2` or `remove satin lips`.")
-
                     removed = self._remove_line(order, target)
                     if not removed:
                         return ChatReply("I couldn’t find that item to remove. Try `remove 2` or part of the name.")
-
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order) + "\n\nYou can also say `add ...` or `remove ...`.")
@@ -744,7 +733,6 @@ class MKChatEngine:
                     cust_first = order["customer"]["First Name"]
                     cust_last = order["customer"]["Last Name"]
 
-                    total_rows = 0
                     for line in order["lines"]:
                         sku = line["chosen"]["sku"]
                         qty = int(line["qty"])
@@ -754,7 +742,6 @@ class MKChatEngine:
                                 {"First Name": cust_first, "Last Name": cust_last, "SKU": sku},
                                 consultant_id=consultant_id,
                             )
-                            total_rows += 1
 
                     state["pending"] = None
                     state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
@@ -776,7 +763,6 @@ class MKChatEngine:
         except Exception as e:
             return ChatReply(f"❌ Parse error: {e}")
 
-        # NEW CUSTOMER
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}
             customer["Phone"] = normalize_phone(customer.get("Phone", ""))
@@ -786,7 +772,6 @@ class MKChatEngine:
             save_session_state(state, session_id=sid)
             return ChatReply(self._format_customer_confirm(customer))
 
-        # ORDER
         if parsed.get("type") == "order":
             order = parsed.get("order") or {}
             cust_first = (order.get("customer_first") or "").strip()
@@ -808,13 +793,13 @@ class MKChatEngine:
                 return ChatReply("I didn’t catch any items — try again with the product names.")
 
             for line in order_draft["lines"]:
-                picked, _m = auto_pick_match(self.catalog, line["text"])
+                picked, _m = auto_pick_match(catalog, line["text"])
                 if picked:
                     line["chosen"] = picked
 
             nxt = self._next_unresolved_index(order_draft)
             if nxt is not None:
-                top, matches, _ = self._start_line_resolution(order_draft, nxt)
+                top, matches, _ = self._start_line_resolution(catalog, order_draft, nxt)
                 pick_idx = llm_pick_from_candidates(self.client, order_draft["lines"][nxt]["text"], matches)
                 if pick_idx is not None:
                     top = matches[pick_idx]
@@ -840,7 +825,7 @@ class MKChatEngine:
     # -------------------------
     # Internal helper methods
     # -------------------------
-    def _continue_resolving_and_reply(self, state: dict, order: dict, consultant_id: int, sid: int) -> ChatReply:
+    def _continue_resolving_and_reply(self, state: dict, order: dict, consultant_id: int, sid: int, catalog: List[dict]) -> ChatReply:
         while True:
             nxt = self._next_unresolved_index(order)
             if nxt is None:
@@ -849,12 +834,12 @@ class MKChatEngine:
                 save_session_state(state, session_id=sid)
                 return ChatReply(self._format_order_confirm(order) + "\n\nYou can also say `add ...` or `remove ...`.")
 
-            picked, _m = auto_pick_match(self.catalog, order["lines"][nxt]["text"])
+            picked, _m = auto_pick_match(catalog, order["lines"][nxt]["text"])
             if picked:
                 order["lines"][nxt]["chosen"] = picked
                 continue
 
-            top, matches, _ = self._start_line_resolution(order, nxt)
+            top, matches, _ = self._start_line_resolution(catalog, order, nxt)
             pick_idx = llm_pick_from_candidates(self.client, order["lines"][nxt]["text"], matches)
             if pick_idx is not None:
                 top = matches[pick_idx]
@@ -870,24 +855,22 @@ class MKChatEngine:
             return ChatReply(propose_top(top, current_qty=order["lines"][nxt]["qty"]))
 
     def _format_customer_confirm(self, customer: dict) -> str:
-        street = customer.get("Street", "").strip() or "(none)"
-        city = customer.get("City", "").strip()
-        state = customer.get("State", "").strip()
-        postal = customer.get("Postal Code", "").strip()
+        street = (customer.get("Street") or "").strip() or "(none)"
+        city = (customer.get("City") or "").strip()
+        st = (customer.get("State") or "").strip()
+        postal = (customer.get("Postal Code") or "").strip()
 
         addr = street
-        if any([city, state, postal]):
-            addr = f"{street}, {city}, {state} {postal}".strip()
+        if any([city, st, postal]):
+            addr = f"{street}, {city}, {st} {postal}".strip()
 
-        phone_raw = customer.get("Phone", "").strip()
-        phone_disp = format_phone_display(phone_raw)
+        phone_disp = format_phone_display(customer.get("Phone", ""))
         birthday_disp = birthday_display(customer.get("Birthday", ""))
+
         return (
             "Okay — here’s the customer I’m about to submit:\n"
             f"• Name: {customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}\n"
-            f"• Email: {customer.get('Email','').strip() or '(none)'}\n"
-        #    f"• Phone: {customer.get('Phone','').strip() or '(none)'}\n"
-        
+            f"• Email: {(customer.get('Email','') or '').strip() or '(none)'}\n"
             f"• Phone: {phone_disp or '(none)'}\n"
             f"• Address: {addr}\n"
             f"• Birthday: {birthday_disp or '(none)'}\n"
@@ -936,9 +919,9 @@ class MKChatEngine:
                 return i
         return None
 
-    def _start_line_resolution(self, order: dict, line_index: int) -> Tuple[dict, List[dict], str]:
+    def _start_line_resolution(self, catalog: List[dict], order: dict, line_index: int) -> Tuple[dict, List[dict], str]:
         text = order["lines"][line_index]["text"]
-        matches = best_matches(self.catalog, text, limit=MATCH_LIMIT)
+        matches = best_matches(catalog, text, limit=MATCH_LIMIT)
         if not matches:
             return {"sku": "", "product_name": "No close matches found", "price": None, "score": 0}, [], text
         return matches[0], matches, text
@@ -958,12 +941,8 @@ class MKChatEngine:
         low = t.lower()
         for i, line in enumerate(order["lines"]):
             chosen = line.get("chosen")
-            name = ""
-            if chosen and chosen.get("product_name"):
-                name = chosen["product_name"]
-            else:
-                name = line.get("text") or ""
-            if low in name.lower():
+            name = chosen.get("product_name") if chosen else (line.get("text") or "")
+            if low in (name or "").lower():
                 order["lines"].pop(i)
                 return True
 
