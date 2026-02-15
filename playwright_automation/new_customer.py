@@ -21,7 +21,60 @@ def ensure_mycustomers_ready(page: Page, timeout_ms: int = 20000) -> None:
 def has_address(customer: dict) -> bool:
     return bool((customer.get("Street") or "").strip())
 
+def _get_modal_content(page: Page):
+    modal = page.locator(".slds-modal__content").first
+    modal.wait_for(state="visible", timeout=30000)
+    return modal
 
+
+def _safe_fill(locator, value: str, timeout_ms: int = 25000) -> None:
+    locator.wait_for(state="visible", timeout=timeout_ms)
+    locator.click()
+    locator.fill(value or "")
+    try:
+        locator.press("Tab")
+    except Exception:
+        pass
+
+
+def _add_address_via_modal(page: Page, customer: dict) -> None:
+    # Click Add New Address
+    add_btn = page.get_by_role("button", name="Add New Address")
+    add_btn.wait_for(state="visible", timeout=20000)
+    expect(add_btn).to_be_enabled(timeout=20000)
+    add_btn.click()
+
+    # Wait for modal container
+    modal = _get_modal_content(page)
+
+    # Fill using your stable IDs
+    _safe_fill(modal.locator("#AddressFirstName-26"), str(customer.get("First Name", "")))
+    _safe_fill(modal.locator("#AddressLastName-26"), str(customer.get("Last Name", "")))
+    _safe_fill(modal.locator("#Street-26"), str(customer.get("Street", "")))
+    _safe_fill(modal.locator("#City-26"), str(customer.get("City", "")))
+    _safe_fill(modal.locator("#PostalCode-26"), str(customer.get("Postal Code", "")))
+
+    # State dropdown (dynamic ID safe version)
+    state_val = str(customer.get("State", "")).strip()
+    if state_val:
+        # find dropdown button inside modal
+        dd = modal.locator("button").filter(has_text=re.compile("select", re.I)).first
+        dd.wait_for(state="visible", timeout=20000)
+        dd.click()
+
+        option = page.get_by_role("option", name=state_val)
+        option.wait_for(state="visible", timeout=20000)
+        option.click()
+
+    # Click Add New Address inside modal
+    save_addr = modal.locator("button", has_text=re.compile("Add New Address", re.I)).first
+    save_addr.wait_for(state="visible", timeout=20000)
+    expect(save_addr).to_be_enabled(timeout=20000)
+    save_addr.click()
+
+    # Wait for modal to close
+    modal.wait_for(state="hidden", timeout=30000)
+    
 # def open_mycustomers(page: Page) -> None:
 #    # If login.py already lands here, you can stop calling this.
 #    page.goto(MYCUSTOMERS_URL, wait_until="domcontentloaded")
