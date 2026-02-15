@@ -22,7 +22,7 @@ def has_address(customer: dict) -> bool:
     return bool((customer.get("Street") or "").strip())
 
 
-#def open_mycustomers(page: Page) -> None:
+# def open_mycustomers(page: Page) -> None:
 #    # If login.py already lands here, you can stop calling this.
 #    page.goto(MYCUSTOMERS_URL, wait_until="domcontentloaded")
 #    ensure_mycustomers_ready(page)
