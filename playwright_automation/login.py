@@ -5,7 +5,7 @@ from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 # go straight to customer list page, which will redirect to login if not authenticated
 MYCUSTOMERS_URL = "https://apps.marykayintouch.com/customer-list"
 
-def wait_for_pycustomers_ready(page: Page, timeout_ms: int = 30000) -> None:
+def wait_for_mycustomers_ready(page: Page, timeout_ms: int = 30000) -> None:
     """
     When logged in + MyCustomer is usable, this button exists.
     """
