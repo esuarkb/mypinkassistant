@@ -90,8 +90,8 @@ def create_customer_basic(page: Page, customer: dict) -> None:
         add_addr_btn.click()
 
         # Wait for dialog
-        dlg = page.get_by_role("dialog")
-        dlg.wait_for(state="visible", timeout=20000)
+        #dlg = page.get_by_role("dialog")
+        #dlg.wait_for(state="visible", timeout=20000)
 
         # Your known-working IDs (but guarded)
         _safe_fill(page.locator("#AddressFirstName-26"), str(customer.get("First Name", "")))
@@ -112,16 +112,16 @@ def create_customer_basic(page: Page, customer: dict) -> None:
             opt.click()
 
         # Save address inside dialog
-        save_addr = dlg.get_by_role("button", name="Add New Address")
+        save_addr = page.get_by_role("button", name="Add New Address")
         expect(save_addr).to_be_enabled(timeout=20000)
         save_addr.click()
 
         # Wait for dialog to close (replaces the 4s sleep)
-        try:
-            dlg.wait_for(state="hidden", timeout=20000)
-        except PlaywrightTimeoutError:
-            # If it doesn't fully hide, at least ensure we're out of the modal state
-            pass
+        #try:
+        #    dlg.wait_for(state="hidden", timeout=20000)
+        #except PlaywrightTimeoutError:
+        #    # If it doesn't fully hide, at least ensure we're out of the modal state
+        #    pass
 
     # 5) Save customer
     save_btn = page.get_by_role("button", name="Save New Customer")
