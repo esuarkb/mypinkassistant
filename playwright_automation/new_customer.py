@@ -98,3 +98,4 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     # Save customer (goes to customer detail page)
     page.get_by_role("button", name="Save New Customer").click()
     page.wait_for_timeout(3000)
+    ensure_mycustomers_ready(page,timeout_ms=30000)
