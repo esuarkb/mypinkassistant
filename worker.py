@@ -17,7 +17,7 @@ from worker_queue import (
 )
 
 from playwright_automation.login import login_intouch
-from playwright_automation.new_customer import open_mycustomers, create_customer_basic
+from playwright_automation.new_customer import create_customer_basic
 #from playwright_automation.new_customer_address import add_customer_address
 from playwright_automation.orders import process_order_batch
 
