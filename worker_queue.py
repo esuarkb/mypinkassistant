@@ -62,6 +62,7 @@ def ensure_lock_table():
             pass
         conn.close()
 
+
 def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> None:
     """
     If a worker crashes mid-job, jobs can remain 'running' forever.
@@ -70,36 +71,69 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
     conn = _conn()
     cur = conn.cursor()
     try:
-        # Fail stale running jobs
-        cur.execute(
-            """
-            UPDATE jobs
-            SET status='failed',
-                status_msg='Failed ❌',
-                error=CASE
-                    WHEN COALESCE(error,'') = '' THEN 'reset: stale running job'
-                    ELSE SUBSTR(error,1,1800) || ' | reset: stale running job'
-                END,
-                finished_at=NOW()
-            WHERE status='running'
-              AND started_at IS NOT NULL
-              AND started_at < (NOW() - (%s * INTERVAL '1 second'))
-            """,
-            (int(ttl_seconds),),
-        )
+        if is_postgres():
+            # Fail stale running jobs
+            cur.execute(
+                """
+                UPDATE jobs
+                SET status='failed',
+                    status_msg='Failed ❌',
+                    error=CASE
+                        WHEN COALESCE(error,'') = '' THEN 'reset: stale running job'
+                        ELSE LEFT(error,1800) || ' | reset: stale running job'
+                    END,
+                    finished_at=NOW()
+                WHERE status='running'
+                  AND started_at IS NOT NULL
+                  AND started_at < (NOW() - (%s * INTERVAL '1 second'))
+                """,
+                (int(ttl_seconds),),
+            )
 
-        # Clear stale consultant locks
-        cur.execute(
-            """
-            DELETE FROM consultant_locks
-            WHERE locked_at < (NOW() - (%s * INTERVAL '1 second'))
-            """,
-            (int(ttl_seconds),),
-        )
+            # Clear stale consultant locks
+            cur.execute(
+                """
+                DELETE FROM consultant_locks
+                WHERE locked_at < (NOW() - (%s * INTERVAL '1 second'))
+                """,
+                (int(ttl_seconds),),
+            )
+        else:
+            # SQLite (timestamps stored as TEXT, compare via epoch seconds)
+            cur.execute(
+                """
+                UPDATE jobs
+                SET status='failed',
+                    status_msg='Failed ❌',
+                    error=CASE
+                        WHEN IFNULL(error,'') = '' THEN 'reset: stale running job'
+                        ELSE SUBSTR(error,1,1800) || ' | reset: stale running job'
+                    END,
+                    finished_at=datetime('now')
+                WHERE status='running'
+                  AND started_at IS NOT NULL
+                  AND (strftime('%s','now') - strftime('%s', started_at)) > ?
+                """,
+                (int(ttl_seconds),),
+            )
+
+            cur.execute(
+                """
+                DELETE FROM consultant_locks
+                WHERE locked_at IS NOT NULL
+                  AND (strftime('%s','now') - strftime('%s', locked_at)) > ?
+                """,
+                (int(ttl_seconds),),
+            )
 
         conn.commit()
     finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
         conn.close()
+
 
 def _begin(cur):
     # SQLite supports BEGIN IMMEDIATE, Postgres doesn't need it (BEGIN is fine)
@@ -157,7 +191,7 @@ def claim_next_consultant() -> Optional[int]:
     try:
         _begin(cur)
 
-        # Find the next consultant who has queued jobs (customer jobs effectively get priority later)
+        # Find the next consultant who has queued jobs
         cur.execute(
             """
             SELECT consultant_id
@@ -246,7 +280,10 @@ def release_consultant(consultant_id: int) -> None:
             pass
         conn.close()
 
-##
+
+# -------------------------
+# Job claiming (simple + safe)
+# -------------------------
 
 def _claim_next_job_for_consultant_filtered(
     consultant_id: int,
@@ -255,12 +292,29 @@ def _claim_next_job_for_consultant_filtered(
     """
     Core job claimer.
     - FIFO by id (per consultant)
+    - SIMPLE + SAFE barrier:
+        If a NEW_CUSTOMER is currently running for this consultant,
+        we will not start NEW_ORDER_ROW yet. (Prevents "Customer not found".)
     - If only_type is provided, only claims that type.
     """
     conn = _conn()
     cur = conn.cursor()
     try:
         _begin(cur)
+
+        # 🚧 Customer barrier: if NEW_CUSTOMER is running, only claim queued NEW_CUSTOMER
+        cur.execute(
+            f"""
+            SELECT 1
+            FROM jobs
+            WHERE consultant_id={PH}
+              AND status='running'
+              AND type='NEW_CUSTOMER'
+            LIMIT 1
+            """,
+            (int(consultant_id),),
+        )
+        customer_running = cur.fetchone() is not None
 
         if only_type:
             cur.execute(
@@ -276,18 +330,33 @@ def _claim_next_job_for_consultant_filtered(
                 (int(consultant_id), only_type),
             )
         else:
-            # ✅ FIFO: oldest job first, no priority re-ordering
-            cur.execute(
-                f"""
-                SELECT id, type, payload_json
-                FROM jobs
-                WHERE consultant_id={PH}
-                  AND status='queued'
-                ORDER BY id
-                LIMIT 1
-                """,
-                (int(consultant_id),),
-            )
+            if customer_running:
+                # While customer is running, only allow queued NEW_CUSTOMER (if any)
+                cur.execute(
+                    f"""
+                    SELECT id, type, payload_json
+                    FROM jobs
+                    WHERE consultant_id={PH}
+                      AND status='queued'
+                      AND type='NEW_CUSTOMER'
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    (int(consultant_id),),
+                )
+            else:
+                # ✅ FIFO: oldest job first
+                cur.execute(
+                    f"""
+                    SELECT id, type, payload_json
+                    FROM jobs
+                    WHERE consultant_id={PH}
+                      AND status='queued'
+                    ORDER BY id
+                    LIMIT 1
+                    """,
+                    (int(consultant_id),),
+                )
 
         row = cur.fetchone()
         if not row:
@@ -348,16 +417,15 @@ def _claim_next_job_for_consultant_filtered(
 
 def claim_next_job_for_consultant(consultant_id: int) -> Optional[Tuple[int, str, str]]:
     """
-    Claims the next queued job for this consultant.
-    Prioritizes NEW_CUSTOMER over NEW_ORDER_ROW.
+    Claims the next queued job for this consultant (respects FIFO + customer barrier).
     """
     return _claim_next_job_for_consultant_filtered(consultant_id, only_type=None)
 
 
 def claim_next_order_row_for_consultant(consultant_id: int) -> Optional[Tuple[int, str, str]]:
     """
-    Claims ONLY NEW_ORDER_ROW (used for batching).
-    This prevents accidentally claiming NEW_CUSTOMER and failing it.
+    Claims ONLY NEW_ORDER_ROW (if you ever re-add batching).
+    Note: This bypasses the "customer barrier" ONLY if you call it directly.
     """
     return _claim_next_job_for_consultant_filtered(consultant_id, only_type="NEW_ORDER_ROW")
 
