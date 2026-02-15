@@ -18,7 +18,7 @@ from worker_queue import (
 
 from playwright_automation.login import login_intouch
 from playwright_automation.new_customer import open_mycustomers, create_customer_basic
-from playwright_automation.new_customer_address import add_customer_address
+#from playwright_automation.new_customer_address import add_customer_address
 from playwright_automation.orders import process_order_batch
 
 # How long to keep the browser open after the last job (seconds)
@@ -109,7 +109,7 @@ def main():
                             create_customer_basic(page, payload)
 
                             # Address entry should be safe/no-op if missing
-                            add_customer_address(page, payload)
+                            #add_customer_address(page, payload)
 
                             full_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
                             mark_job_done(job_id, f"Customer {full_name} complete! ✅")
