@@ -9,6 +9,8 @@ def _wait_for_mycustomers_ready(page: Page, timeout_ms: int = 30000) -> None:
     """
     When logged in + MyCustomer is usable, this button exists.
     """
+    page.get_by_role("button", name="New Customer").wait_for(timeout=timeout_ms)
+    
 def _is_mycustomers_ready(page: Page) -> bool:
     try:
         _wait_for_mycustomers_ready(page, timeout_ms=1500)
