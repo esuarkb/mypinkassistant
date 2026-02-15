@@ -105,7 +105,7 @@ def main():
                         # NEW_CUSTOMER
                         # -------------------------
                         if job_type == "NEW_CUSTOMER":
-                            open_mycustomers(page)
+                            #open_mycustomers(page)
                             create_customer_basic(page, payload)
 
                             # Address entry should be safe/no-op if missing
