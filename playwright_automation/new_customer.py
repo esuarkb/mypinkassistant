@@ -39,21 +39,35 @@ def create_customer_basic(page: Page, customer: dict) -> None:
         
         #click add new address button
         page.get_by_role("button", name="Add New Address").click()
-        page.wait_for_timeout(500)
         page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").press("Tab")
         page.get_by_role("button", name="Close Cancel").press("Tab")
-
-        # Fill address fields (IDs from your known-working script)
-        page.locator("#AddressFirstName-26").fill(str(customer.get("First Name", "")))
-    
-        page.locator("#AddressLastName-26").fill(str(customer.get("Last Name", "")))
-    
-        page.locator("#Street-26").fill(str(customer.get("Street", "")))
-    
-        page.locator("#City-26").fill(str(customer.get("City", "")))
-        page.locator("#City-26").press("Tab")
+        #enter address information
+        page.keyboard.type(str(customer.get("First Name", "")))
+        page.keyboard.press("Tab")
+        page.keyboard.type(str(customer.get("Last Name", "")))
+        page.keyboard.press("Tab")
+        page.keyboard.type(str(customer.get("Street", "")))
+        page.keyboard.press("Tab")
+        page.keyboard.type(str(customer.get("City", "")))
+        page.keyboard.press("Tab")
         page.get_by_role("option", name=str(customer.get("State", ""))).click()
-        page.locator("#PostalCode-26").fill(str(customer.get("Postal Code", "")))
+        page.keyboard.press("Tab")
+        page.keyboard.type(str(customer.get("Postal Code", "")))
+        page.keyboard.press("Tab")
+        page.keyboard.press("Tab")
+        page.keyboard.press("Tab")
+        page.keyboard.press("Enter")
+        # Fill address fields (IDs from your known-working script)
+        #page.locator("#AddressFirstName-26").fill(str(customer.get("First Name", "")))
+    
+        #page.locator("#AddressLastName-26").fill(str(customer.get("Last Name", "")))
+    
+        #page.locator("#Street-26").fill(str(customer.get("Street", "")))
+    
+        #page.locator("#City-26").fill(str(customer.get("City", "")))
+        #page.locator("#City-26").press("Tab")
+        #page.get_by_role("option", name=str(customer.get("State", ""))).click()
+        #page.locator("#PostalCode-26").fill(str(customer.get("Postal Code", "")))
     
         # Select state from dropdown
         #page.get_by_role("button", name="Select an option").click()
@@ -68,7 +82,7 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     #    page.wait_for_timeout(3000)
     #else
     #save address (button inside dialog)
-        page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
+        #page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
         
     # Save customer (goes to customer detail page)
     page.get_by_role("button", name="Save New Customer").click()
