@@ -7,84 +7,57 @@ MYCUSTOMERS_URL = "https://apps.marykayintouch.com/customer-list"
 
 
 def ensure_mycustomers_ready(page: Page, timeout_ms: int = 20000) -> None:
-    """
-    Confirms MyCustomers page is usable by waiting for the New Customer button.
-    """
+    # When MyCustomers is ready, this button exists. If it doesn't appear in time, something is wrong.
     try:
         page.get_by_role("button", name="New Customer").wait_for(timeout=timeout_ms)
     except PlaywrightTimeoutError:
         raise RuntimeError("MyCustomers not ready: 'New Customer' button not found.")
 
 def has_address(customer: dict) -> bool:
-    """
-    Only attempt address entry if Street is present.
-    This prevents opening the dialog and hanging on blank addresses.
-    """
+    # Simple check: if Street is present and non-empty, assume we have an address to enter.
     return bool((customer.get("Street") or "").strip())
 
-def open_mycustomers(page: Page) -> None:
-    """
-    Navigates to MyCustomers and confirms it is ready.
-    """
-    page.goto(MYCUSTOMERS_URL)
-    page.wait_for_timeout(6000)
-    ensure_mycustomers_ready(page)
-
-
 def create_customer_basic(page: Page, customer: dict) -> None:
-    """
-    Creates ONE customer (name/email/phone) and clicks Save New Customer.
-    Does NOT enter address.
-    """
-    # Add customer
+    # Create a new customer with basic info (name, email, phone, birthday) and optionally address if provided.
+    
+    # Click "New Customer" to start
     page.get_by_role("button", name="New Customer").click()
-    page.wait_for_timeout(3000)
-
+    
     # Fill in customer info
     page.get_by_role("textbox", name="First Name").fill(str(customer.get("First Name", "")))
-    page.wait_for_timeout(500)
 
     page.get_by_role("textbox", name="Last Name").fill(str(customer.get("Last Name", "")))
-    page.wait_for_timeout(500)
 
     page.get_by_role("textbox", name="Email Address (Optional)").fill(str(customer.get("Email", "")))
-    page.wait_for_timeout(500)
 
     page.get_by_role("textbox", name="Mobile Phone Number (Optional)").fill(str(customer.get("Phone", "")))
-    page.wait_for_timeout(500)
 
     page.get_by_role("textbox", name="Birthday (Optional)").fill(str(customer.get("Birthday", "")))
-    page.wait_for_timeout(500)
 
+    # If we have address info, fill that in too
     if has_address(customer):
         
         #click add new address button
         page.get_by_role("button", name="Add New Address").click()
-        page.wait_for_timeout(3000)
 
-    # Fill address fields (IDs from your known-working script)
+        # Fill address fields (IDs from your known-working script)
         page.locator("#AddressFirstName-26").fill(str(customer.get("First Name", "")))
-        page.wait_for_timeout(500)
-
+    
         page.locator("#AddressLastName-26").fill(str(customer.get("Last Name", "")))
-        page.wait_for_timeout(500)
-
+    
         page.locator("#Street-26").fill(str(customer.get("Street", "")))
-        page.wait_for_timeout(500)
-
+    
         page.locator("#City-26").fill(str(customer.get("City", "")))
-        page.wait_for_timeout(500)
-
-        page.locator("#PostalCode-26").fill(str(customer.get("Postal Code", "")))
-        page.wait_for_timeout(500)
-
-    # Select state from dropdown
-    #page.get_by_role("button", name="Select an option").click()
-        page.locator("#dropdown-button-197").click()
-        page.wait_for_timeout(500)
-
+        page.locator("#City-26").press("Tab")
         page.get_by_role("option", name=str(customer.get("State", ""))).click()
-        page.wait_for_timeout(500)
+        page.locator("#PostalCode-26").fill(str(customer.get("Postal Code", "")))
+    
+        # Select state from dropdown
+        #page.get_by_role("button", name="Select an option").click()
+        #page.locator("#dropdown-button-197").click()
+        
+        #page.get_by_role("option", name=str(customer.get("State", ""))).click()
+        #page.wait_for_timeout(500)
 
     #if not has_address(customer):
     #    # Save customer (goes to customer detail page)
@@ -93,9 +66,7 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     #else
     #save address (button inside dialog)
         page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
-        page.wait_for_timeout(4000)
         
     # Save customer (goes to customer detail page)
     page.get_by_role("button", name="Save New Customer").click()
-    page.wait_for_timeout(3000)
     ensure_mycustomers_ready(page,timeout_ms=30000)
