@@ -22,8 +22,9 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
 
 
     # Open address dialog
-    page.get_by_role("button", name="Add New Address").click()
-    page.get_by_role("button", name="Add New Address").click()
+    page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
+    #page.get_by_role("button", name="Add New Address").click()
+    #page.get_by_role("button", name="Add New Address").click()
     page.wait_for_timeout(2500)
 
     # Fill address fields (IDs from your known-working script)
