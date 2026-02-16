@@ -33,7 +33,7 @@ def main():
     print(f"✅ Worker starting: {WORKER_ID}")
 
     # Default to headless on Render
-    HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
+    HEADLESS = os.getenv("HEADLESS", "false").lower() == "true"
 
     with sync_playwright() as pw:
         while True:
@@ -67,6 +67,12 @@ def main():
 
                     # move on to next consultant
                     continue
+
+                ## adding headless clarification
+                # Headless only if explicitly set to true
+                HEADLESS = os.getenv("HEADLESS", "").lower() == "true"
+                print("HEADLESS env:", os.getenv("HEADLESS"))
+                print("HEADLESS resolved:", HEADLESS)
 
                 browser = pw.chromium.launch(
                     headless=HEADLESS,
