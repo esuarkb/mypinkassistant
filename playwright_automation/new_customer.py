@@ -39,6 +39,9 @@ def create_customer_basic(page: Page, customer: dict) -> None:
         
         #click add new address button
         page.get_by_role("button", name="Add New Address").click()
+        page.wait_for_timeout(500)
+    #    page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").press("Tab")
+    #    page.get_by_role("button", name="Close Cancel").press("Tab")
 
         # Fill address fields (IDs from your known-working script)
         page.locator("#AddressFirstName-26").fill(str(customer.get("First Name", "")))
