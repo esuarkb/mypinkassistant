@@ -60,7 +60,7 @@ def login_intouch(page: Page, username: str, password: str) -> None:
 
     # 5) Wait until we are *actually* back on MyCustomers and ready
     try:
-        _wait_for_mycustomers_ready(page, timeout_ms=4500)
+        _wait_for_mycustomers_ready(page, timeout_ms=45000)
     except PlaywrightTimeoutError:
         # Helpful debug info without being too noisy
         raise RuntimeError(
