@@ -52,8 +52,35 @@ def create_customer_basic(page: Page, customer: dict) -> None:
         page.keyboard.type(str(customer.get("City", "")))
         page.keyboard.press("Tab")
         page.keyboard.press("Enter")
-        #
-        page.get_by_role("option", name=str(customer.get("State", ""))).click()
+        #let's get crazy and arrow down to the correct state
+        states = [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+    "Connecticut", "Delaware", "Florida", "Georgia", "Guam", "Hawaii",
+    "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
+    "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan",
+    "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska",
+    "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York",
+    "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+    "Pennsylvania", "Puerto Rico", "Rhode Island", "South Carolina",
+    "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
+    "Virgin Islands", "Virginia", "Washington", "Washington, D.C.",
+    "West Virginia", "Wisconsin", "Wyoming"
+]
+
+        target_state = str(customer.get("State", ""))
+
+# Make sure we're starting from the top of the list
+#page.keyboard.press("Home")
+
+# Arrow down to the correct position
+        index = states.index(target_state)
+
+        for _ in range(index):
+            page.keyboard.press("ArrowDown")
+
+        # Select it
+        page.keyboard.press("Enter")
+        #page.get_by_role("option", name=str(customer.get("State", ""))).click()
         
         page.keyboard.press("Tab")
         page.keyboard.type(str(customer.get("Postal Code", "")))
