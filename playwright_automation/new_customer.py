@@ -39,8 +39,8 @@ def create_customer_basic(page: Page, customer: dict) -> None:
         
         #click add new address button
         page.get_by_role("button", name="Add New Address").click()
-        page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").press("Tab")
-        page.get_by_role("button", name="Close Cancel").press("Tab")
+        page.keyboard.press("Tab")
+        page.keyboard.press("Tab")
         #enter address information
         page.keyboard.type(str(customer.get("First Name", "")))
         page.keyboard.press("Tab")
