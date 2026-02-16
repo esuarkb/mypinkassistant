@@ -292,9 +292,11 @@ def _claim_next_job_for_consultant_filtered(
     """
     Core job claimer.
     - FIFO by id (per consultant)
-    - SIMPLE + SAFE barrier:
-        If a NEW_CUSTOMER is currently running for this consultant,
-        we will not start NEW_ORDER_ROW yet. (Prevents "Customer not found".)
+    - Strong "customer barrier":
+        If there exists ANY NEW_CUSTOMER job (queued OR running) whose id is
+        LESS than the next queued NEW_ORDER_ROW id, we will ONLY claim NEW_CUSTOMER
+        jobs until they are finished. This prevents orders from running before the
+        customer exists in MyCustomers.
     - If only_type is provided, only claims that type.
     """
     conn = _conn()
@@ -302,21 +304,54 @@ def _claim_next_job_for_consultant_filtered(
     try:
         _begin(cur)
 
-        # 🚧 Customer barrier: if NEW_CUSTOMER is running, only claim queued NEW_CUSTOMER
-        cur.execute(
-            f"""
-            SELECT 1
-            FROM jobs
-            WHERE consultant_id={PH}
-              AND status='running'
-              AND type='NEW_CUSTOMER'
-            LIMIT 1
-            """,
-            (int(consultant_id),),
-        )
-        customer_running = cur.fetchone() is not None
+        cid = int(consultant_id)
 
+        # ---------------------------------------------------------
+        # 🚧 Strong customer barrier (works even if customer is queued)
+        #
+        # If:
+        #   min_customer_id (queued/running NEW_CUSTOMER) < min_order_id (queued NEW_ORDER_ROW)
+        # Then:
+        #   only claim NEW_CUSTOMER until the barrier is gone.
+        # ---------------------------------------------------------
+        customer_barrier_active = False
+        if not only_type:
+            # Oldest NEW_CUSTOMER that is queued OR running
+            cur.execute(
+                f"""
+                SELECT MIN(id)
+                FROM jobs
+                WHERE consultant_id={PH}
+                  AND status IN ('queued','running')
+                  AND type='NEW_CUSTOMER'
+                """,
+                (cid,),
+            )
+            row = cur.fetchone()
+            min_customer_id = row[0] if row else None
+
+            # Oldest queued NEW_ORDER_ROW
+            cur.execute(
+                f"""
+                SELECT MIN(id)
+                FROM jobs
+                WHERE consultant_id={PH}
+                  AND status='queued'
+                  AND type='NEW_ORDER_ROW'
+                """,
+                (cid,),
+            )
+            row = cur.fetchone()
+            min_order_id = row[0] if row else None
+
+            if min_customer_id is not None and min_order_id is not None:
+                customer_barrier_active = int(min_customer_id) < int(min_order_id)
+
+        # ---------------------------------------------------------
+        # Pick the next job to claim
+        # ---------------------------------------------------------
         if only_type:
+            # Explicitly restricted to one type
             cur.execute(
                 f"""
                 SELECT id, type, payload_json
@@ -327,11 +362,11 @@ def _claim_next_job_for_consultant_filtered(
                 ORDER BY id
                 LIMIT 1
                 """,
-                (int(consultant_id), only_type),
+                (cid, only_type),
             )
         else:
-            if customer_running:
-                # While customer is running, only allow queued NEW_CUSTOMER (if any)
+            if customer_barrier_active:
+                # While barrier is active, ONLY pull queued NEW_CUSTOMER jobs
                 cur.execute(
                     f"""
                     SELECT id, type, payload_json
@@ -342,10 +377,10 @@ def _claim_next_job_for_consultant_filtered(
                     ORDER BY id
                     LIMIT 1
                     """,
-                    (int(consultant_id),),
+                    (cid,),
                 )
             else:
-                # ✅ FIFO: oldest job first
+                # Normal FIFO: oldest queued job first (customer or order)
                 cur.execute(
                     f"""
                     SELECT id, type, payload_json
@@ -355,7 +390,7 @@ def _claim_next_job_for_consultant_filtered(
                     ORDER BY id
                     LIMIT 1
                     """,
-                    (int(consultant_id),),
+                    (cid,),
                 )
 
         row = cur.fetchone()
@@ -367,7 +402,9 @@ def _claim_next_job_for_consultant_filtered(
         job_type = str(_row_get(row, "type", 1))
         payload_json = str(_row_get(row, "payload_json", 2))
 
+        # ---------------------------------------------------------
         # Mark running + attempts + timestamps
+        # ---------------------------------------------------------
         if is_postgres():
             cur.execute(
                 f"""
@@ -379,7 +416,8 @@ def _claim_next_job_for_consultant_filtered(
                     claimed_by={PH},
                     claimed_at=COALESCE(claimed_at, NOW()),
                     started_at=NOW()
-                WHERE id={PH} AND status='queued'
+                WHERE id={PH}
+                  AND status='queued'
                 """,
                 (WORKER_ID, job_id),
             )
@@ -394,7 +432,8 @@ def _claim_next_job_for_consultant_filtered(
                     claimed_by={PH},
                     claimed_at=COALESCE(NULLIF(claimed_at,''), datetime('now')),
                     started_at=datetime('now')
-                WHERE id={PH} AND status='queued'
+                WHERE id={PH}
+                  AND status='queued'
                 """,
                 (WORKER_ID, job_id),
             )
