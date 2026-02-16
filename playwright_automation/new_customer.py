@@ -52,7 +52,9 @@ def create_customer_basic(page: Page, customer: dict) -> None:
         page.keyboard.type(str(customer.get("City", "")))
         page.keyboard.press("Tab")
         page.keyboard.press("Enter")
-        dialog.get_by_role("option", name=str(customer.get("State", ""))).click()
+        #
+        page.get_by_role("option", name=str(customer.get("State", ""))).click()
+        
         page.keyboard.press("Tab")
         page.keyboard.type(str(customer.get("Postal Code", "")))
         page.keyboard.press("Tab")
