@@ -189,6 +189,26 @@ def require_login(request: Request) -> int:
         raise PermissionError("Not logged in")
     return int(cid)
 
+def require_admin(request: Request) -> int:
+    """
+    Admin gate (simple): allowlist by email in MK_ADMIN_EMAILS.
+    Example: MK_ADMIN_EMAILS="you@email.com,partner@email.com"
+    """
+    cid = require_login(request)
+    c = get_consultant_full(cid) or {}
+    email = (c.get("email") or "").strip().lower()
+
+    allowed = os.environ.get("MK_ADMIN_EMAILS", "")
+    allowed_set = {e.strip().lower() for e in allowed.split(",") if e.strip()}
+
+    if not allowed_set:
+        # If you forget to set the env var, fail closed (safer)
+        raise PermissionError("Admin access not configured")
+
+    if email not in allowed_set:
+        raise PermissionError("Not authorized")
+
+    return cid
 
 def is_profile_complete(c: dict) -> bool:
     if not c:
@@ -696,6 +716,182 @@ def jobs(request: Request):
         )
     return {"jobs": out}
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin_diagnostics(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    conn = _conn()
+    cur = conn.cursor()
+
+    # 1) Job counts
+    cur.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")
+    counts = cur.fetchall()
+
+    counts_map = {}
+    for r in counts:
+        status = _row_get(r, "status", None) if _row_get(r, "status", None) is not None else r[0]
+        n = _row_get(r, "n", None) if _row_get(r, "n", None) is not None else r[1]
+        counts_map[str(status)] = int(n)
+
+    # 2) Oldest queued / running timestamps (helps diagnose backlog)
+    if is_postgres():
+        cur.execute("SELECT MIN(created_at) FROM jobs WHERE status='queued'")
+        oldest_queued = cur.fetchone()
+        cur.execute("SELECT MIN(started_at) FROM jobs WHERE status='running'")
+        oldest_running = cur.fetchone()
+    else:
+        cur.execute("SELECT MIN(created_at) FROM jobs WHERE status='queued'")
+        oldest_queued = cur.fetchone()
+        cur.execute("SELECT MIN(started_at) FROM jobs WHERE status='running'")
+        oldest_running = cur.fetchone()
+
+    oldest_queued_val = _row_get(oldest_queued, "min", None) if oldest_queued else None
+    if oldest_queued_val is None and oldest_queued:
+        oldest_queued_val = oldest_queued[0]
+
+    oldest_running_val = _row_get(oldest_running, "min", None) if oldest_running else None
+    if oldest_running_val is None and oldest_running:
+        oldest_running_val = oldest_running[0]
+
+    # 3) Running jobs
+    cur.execute(
+        """
+        SELECT id, consultant_id, type, attempts, claimed_by, claimed_at, started_at
+        FROM jobs
+        WHERE status='running'
+        ORDER BY started_at ASC NULLS LAST, id ASC
+        LIMIT 50
+        """
+        if is_postgres()
+        else """
+        SELECT id, consultant_id, type, attempts, claimed_by, claimed_at, started_at
+        FROM jobs
+        WHERE status='running'
+        ORDER BY started_at ASC, id ASC
+        LIMIT 50
+        """
+    )
+    running = cur.fetchall()
+
+    # 4) Recent failed jobs
+    cur.execute(
+        """
+        SELECT id, consultant_id, type, error, finished_at
+        FROM jobs
+        WHERE status='failed'
+        ORDER BY id DESC
+        LIMIT 30
+        """
+    )
+    failed = cur.fetchall()
+
+    # 5) Locks
+    try:
+        cur.execute("SELECT consultant_id, locked_by, locked_at FROM consultant_locks ORDER BY locked_at DESC")
+        locks = cur.fetchall()
+    except Exception:
+        locks = []
+
+    conn.close()
+
+    def fmt_row(row, keys):
+        out = {}
+        for i, k in enumerate(keys):
+            v = _row_get(row, k, None)
+            if v is None:
+                try:
+                    v = row[i]
+                except Exception:
+                    v = None
+            out[k] = v
+        return out
+
+    running_rows = [fmt_row(r, ["id","consultant_id","type","attempts","claimed_by","claimed_at","started_at"]) for r in running]
+    failed_rows = [fmt_row(r, ["id","consultant_id","type","error","finished_at"]) for r in failed]
+    lock_rows = [fmt_row(r, ["consultant_id","locked_by","locked_at"]) for r in locks]
+
+    html = f"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin • Diagnostics</title>
+  <style>
+    body{{font-family:system-ui,-apple-system,Segoe UI,Roboto;background:#fff;color:#111;margin:0}}
+    .wrap{{max-width:1100px;margin:0 auto;padding:22px 18px}}
+    h1{{margin:0 0 6px;font-size:20px}}
+    .muted{{color:#666;font-size:13px}}
+    .cards{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}}
+    .card{{border:1px solid #e8e8ee;border-radius:14px;padding:12px;background:#fafafa}}
+    .k{{font-size:12px;color:#666}}
+    .v{{font-size:20px;font-weight:800;margin-top:4px}}
+    table{{width:100%;border-collapse:collapse;margin-top:12px}}
+    th,td{{border-bottom:1px solid #eee;padding:8px 6px;font-size:13px;vertical-align:top}}
+    th{{text-align:left;color:#666;font-weight:700}}
+    code{{font-size:12px}}
+    .pill{{display:inline-block;padding:2px 8px;border-radius:999px;background:#f1f1f1;font-size:12px;color:#555}}
+    .row{{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}}
+    a{{color:#e91e63;text-decoration:none;font-weight:700}}
+    @media (max-width:900px){{.cards{{grid-template-columns:repeat(2,1fr)}}}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Admin Diagnostics</h1>
+    <div class="muted">Jobs + locks overview for troubleshooting. (Private)</div>
+
+    <div class="row">
+      <span class="pill">Oldest queued: {oldest_queued_val}</span>
+      <span class="pill">Oldest running: {oldest_running_val}</span>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="k">Queued</div><div class="v">{counts_map.get("queued",0)}</div></div>
+      <div class="card"><div class="k">Running</div><div class="v">{counts_map.get("running",0)}</div></div>
+      <div class="card"><div class="k">Failed</div><div class="v">{counts_map.get("failed",0)}</div></div>
+      <div class="card"><div class="k">Done</div><div class="v">{counts_map.get("done",0)}</div></div>
+    </div>
+
+    <h2 style="margin:16px 0 6px;font-size:16px">Running jobs</h2>
+    <table>
+      <tr>
+        <th>id</th><th>consultant</th><th>type</th><th>attempts</th><th>claimed_by</th><th>started</th>
+      </tr>
+      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td>{r['attempts']}</td><td>{r['claimed_by']}</td><td>{r['started_at']}</td></tr>" for r in running_rows]) or "<tr><td colspan='6' class='muted'>No running jobs.</td></tr>"}
+    </table>
+
+    <h2 style="margin:16px 0 6px;font-size:16px">Recent failed (last 30)</h2>
+    <table>
+      <tr>
+        <th>id</th><th>consultant</th><th>type</th><th>error</th><th>finished</th>
+      </tr>
+      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td><code>{(r['error'] or '')[:300]}</code></td><td>{r['finished_at']}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
+    </table>
+
+    <h2 style="margin:16px 0 6px;font-size:16px">Consultant locks</h2>
+    <table>
+      <tr>
+        <th>consultant</th><th>locked_by</th><th>locked_at</th>
+      </tr>
+      {''.join([f"<tr><td>{r['consultant_id']}</td><td>{r['locked_by']}</td><td>{r['locked_at']}</td></tr>" for r in lock_rows]) or "<tr><td colspan='3' class='muted'>No locks.</td></tr>"}
+    </table>
+
+    <div style="margin-top:16px" class="muted">
+      Tip: if you ever see “running” jobs older than ~15 minutes, the worker likely crashed mid-run.
+    </div>
+
+    <div style="margin-top:10px">
+      <a href="/app">← Back to app</a>
+    </div>
+  </div>
+</body>
+</html>
+"""
+    return HTMLResponse(html)
 
 @app.post("/reset")
 def reset(request: Request):
