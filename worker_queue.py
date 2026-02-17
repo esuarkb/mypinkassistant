@@ -468,6 +468,53 @@ def claim_next_order_row_for_consultant(consultant_id: int) -> Optional[Tuple[in
     """
     return _claim_next_job_for_consultant_filtered(consultant_id, only_type="NEW_ORDER_ROW")
 
+def requeue_job(job_id: int, msg: str = "Queued") -> None:
+    """
+    Put a job back into the queue.
+    Used when we accidentally claimed an order row that we decided not to process yet
+    (e.g., batching rows and the next row is for a different customer).
+    """
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        _begin(cur)
+
+        if is_postgres():
+            cur.execute(
+                f"""
+                UPDATE jobs
+                SET status='queued',
+                    status_msg={PH},
+                    error='',
+                    claimed_by=NULL,
+                    claimed_at=NULL,
+                    started_at=NULL
+                WHERE id={PH}
+                """,
+                (msg, int(job_id)),
+            )
+        else:
+            cur.execute(
+                f"""
+                UPDATE jobs
+                SET status='queued',
+                    status_msg={PH},
+                    error='',
+                    claimed_by='',
+                    claimed_at='',
+                    started_at=''
+                WHERE id={PH}
+                """,
+                (msg, int(job_id)),
+            )
+
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
 def mark_job_done(job_id: int, msg: str = "Complete ✅") -> None:
     conn = _conn()
