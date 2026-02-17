@@ -37,12 +37,14 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     """
     full_name = f"{first} {last}"
 
+    #go to customer list and wait for load
     open_customer_list(page)
-
-    # Search customer
     page.wait_for_timeout(3000)
+    
+    # Search customer, small wait for search results to populate
     page.get_by_role("searchbox", name="Note Title").fill(full_name)
     page.wait_for_timeout(300)
+    
     # Existence check (duplicate-safe)
     try:
         page.get_by_text(full_name, exact=True).first.wait_for(timeout=3000)
@@ -52,34 +54,32 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
             "Make sure they have been added to MyCustomers first!"
         )
 
-    # Select customer
+    # Select customer from search results (first match if duplicates), loads customer page
     page.get_by_text(full_name, exact=True).first.click()
     page.wait_for_timeout(1000)
 
-    # Click Add Order Button and load page
+    # Click New Order Button and load order page
     page.get_by_role("button", name="Add Order").click()
-    page.wait_for_timeout(2500)
+    page.wait_for_timeout(3000)
 
-    #Select from my Inventory
+    #Select from my Inventory instead of CDS
     page.get_by_text("My Inventory", exact=True).click()
     page.wait_for_timeout(100)
 
 
 def add_sku_to_bag(page: Page, sku: str) -> None:
-    """
-    Adds a single SKU to the order bag.
-    """
+    
+    #search for SKU, small wait for search results to populate
     page.get_by_role("searchbox", name="Note Title").fill(sku)
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(500)
 
+    #click add to Bag
     page.get_by_role("button", name="Add to Bag").click()
-    page.wait_for_timeout(300)
+    page.wait_for_timeout(100)
 
 
 def finalize_order(page: Page) -> None:
-    """
-    Saves and confirms the order.
-    """
+    #save and review order, then confirm delivery status change
     page.get_by_role("button", name="Save and Review").click()
     page.wait_for_timeout(3000)
 
