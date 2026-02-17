@@ -71,7 +71,7 @@ def add_sku_to_bag(page: Page, sku: str) -> None:
     
     #search for SKU, small wait for search results to populate
     page.get_by_role("searchbox", name="Note Title").fill(sku)
-    page.wait_for_timeout(800)
+    page.wait_for_timeout(1000)
 
     #click add to Bag
     page.get_by_role("button", name="Add to Bag").click()
