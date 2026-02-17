@@ -47,9 +47,18 @@
             font-weight: 600
         }
 
+        a:hover {
+            text-decoration: underline;
+        }
+
         .back {
             display: inline-block;
             margin-top: 24px
+        }
+
+        /* Optional nice touch */
+        html {
+            scroll-behavior: smooth;
         }
     </style>
 </head>
@@ -59,7 +68,8 @@
         <h1>Legal Information</h1>
         <p>Last updated: 2026</p>
 
-        <h2>1. Overview</h2>
+        <!-- TERMS: We'll treat the "Overview" section as where Terms starts -->
+        <h2 id="terms">1. Overview</h2>
         <p>
             MyPinkAssistant is a subscription-based software tool designed to help independent beauty consultants
             automate customer and order entry into Mary Kay® InTouch/MyCustomers.
@@ -72,15 +82,18 @@
             of their respective owners.
         </p>
 
-        <h2>3. Privacy Policy</h2>
+        <!-- PRIVACY -->
+        <h2 id="privacy">3. Privacy Policy</h2>
         <p>
             We collect only the information necessary to provide our service, including:
         </p>
         <ul>
             <li>Your email address and account credentials</li>
             <li>Your InTouch username and password (encrypted)</li>
-            <li>Customer data you enter into the system. This customer data is permanently deleted from our server after
-                it has been entered into MyCustomers.</li>
+            <li>
+                Customer data you enter into the system. This customer data is permanently deleted from our server after
+                it has been entered into MyCustomers.
+            </li>
         </ul>
         <p>
             We do not sell or share your data with third parties.
@@ -123,7 +136,8 @@
             or changes to third-party systems such as InTouch.
         </p>
 
-        <h2>9. Contact Support</h2>
+        <!-- SUPPORT -->
+        <h2 id="support">9. Contact Support</h2>
         <p>
             For questions, support, or feature requests, please contact:
             <br><strong>support@mypinkassistant.com</strong>

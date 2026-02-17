@@ -317,6 +317,15 @@ def forgot_post(email: str = Form(...)):
 </body>
 </html>
 """)
+# -------------------------
+# Legal
+# -------------------------
+
+@app.get("/legal", response_class=HTMLResponse)
+def legal_get(request: Request):
+    return render_page("legal.html")
+
+
 
 
 # -------------------------

@@ -24,7 +24,6 @@ def open_customer_list(page: Page) -> None:
     Navigates to the customer list used for order placement.
     """
     page.goto(CUSTOMER_LIST_URL)
-    page.wait_for_timeout(8000)
     ensure_orders_ready(page)
 
 
@@ -41,7 +40,7 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     open_customer_list(page)
 
     # Search customer
-    page.wait_for_timeout(6000)
+    #page.wait_for_timeout(6000)
     page.get_by_role("searchbox", name="Note Title").fill(full_name)
     page.wait_for_timeout(3000)
     # Existence check (duplicate-safe)
@@ -64,7 +63,7 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     page.wait_for_timeout(2500)
 
     page.get_by_text("My Inventory", exact=True).click()
-    page.wait_for_timeout(800)
+    page.wait_for_timeout(100)
 
 
 def add_sku_to_bag(page: Page, sku: str) -> None:
@@ -72,10 +71,10 @@ def add_sku_to_bag(page: Page, sku: str) -> None:
     Adds a single SKU to the order bag.
     """
     page.get_by_role("searchbox", name="Note Title").fill(sku)
-    page.wait_for_timeout(1500)
+    page.wait_for_timeout(1000)
 
     page.get_by_role("button", name="Add to Bag").click()
-    page.wait_for_timeout(800)
+    page.wait_for_timeout(100)
 
 
 def finalize_order(page: Page) -> None:
@@ -83,13 +82,13 @@ def finalize_order(page: Page) -> None:
     Saves and confirms the order.
     """
     page.get_by_role("button", name="Save and Review").click()
-    page.wait_for_timeout(6000)
+    page.wait_for_timeout(3000)
 
     page.get_by_role("button", name="Change Delivery Status Icon").click()
     page.wait_for_timeout(1000)
 
     page.get_by_role("button", name="Yes, Confirm").click()
-    page.wait_for_timeout(3000)
+    ensure_orders_ready(page)
 
 
 def process_order_batch(page: Page, rows: list[dict]) -> None:

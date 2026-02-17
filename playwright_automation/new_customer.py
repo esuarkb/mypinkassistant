@@ -52,25 +52,9 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     page.get_by_role("option", name=str(customer.get("State", ""))).click()
     page.wait_for_timeout(700)
 
-    # Save address (button inside dialog)
+    # Complete and Save address (button inside dialog)
     page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
     page.wait_for_timeout(2000)
-
-
- #   page.get_by_role("button", name="Add New Address").click()
- #   page.get_by_role("button", name="Add New Address").click()
-    #page.get_by_role("button", name="Add New Address").click()
-    #add_addr = page.get_by_role("button", name="Add New Address", exact=False)
- #   page.keyboard.press("Tab")
- #   page.keyboard.press("Tab")
-    
-    
-    
-#    page.get_by_role("textbox", name="First Name", exact=False).fill(str(customer.get("First Name", "")))
-
-    
-
-    page.wait_for_timeout(10000)
     
 
 def create_customer_basic(page: Page, customer: dict) -> None:
@@ -92,6 +76,7 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     page.get_by_role("textbox", name="Birthday (Optional)").fill(str(customer.get("Birthday", "")))
     page.wait_for_timeout(100)
     page.get_by_role("button", name="Save New Customer").click()
+    
     # If we have address info, fill that in too
     if has_address(customer):
         add_address_on_detail_page(page, customer)
