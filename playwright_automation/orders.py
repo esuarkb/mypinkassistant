@@ -40,9 +40,9 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     open_customer_list(page)
 
     # Search customer
-    #page.wait_for_timeout(6000)
-    page.get_by_role("searchbox", name="Note Title").fill(full_name)
     page.wait_for_timeout(3000)
+    page.get_by_role("searchbox", name="Note Title").fill(full_name)
+    page.wait_for_timeout(300)
     # Existence check (duplicate-safe)
     try:
         page.get_by_text(full_name, exact=True).first.wait_for(timeout=3000)
@@ -52,16 +52,15 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
             "Make sure they have been added to MyCustomers first!"
         )
 
-    # Open customer
-
-    page.wait_for_timeout(3000)
+    # Select customer
     page.get_by_text(full_name, exact=True).first.click()
-    page.wait_for_timeout(2500)
+    page.wait_for_timeout(1000)
 
-    # Start order
+    # Click Add Order Button and load page
     page.get_by_role("button", name="Add Order").click()
     page.wait_for_timeout(2500)
 
+    #Select from my Inventory
     page.get_by_text("My Inventory", exact=True).click()
     page.wait_for_timeout(100)
 
@@ -74,7 +73,7 @@ def add_sku_to_bag(page: Page, sku: str) -> None:
     page.wait_for_timeout(1000)
 
     page.get_by_role("button", name="Add to Bag").click()
-    page.wait_for_timeout(100)
+    page.wait_for_timeout(300)
 
 
 def finalize_order(page: Page) -> None:
