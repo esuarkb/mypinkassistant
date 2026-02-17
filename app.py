@@ -49,17 +49,57 @@ APP_BASE_URL = os.environ.get("APP_BASE_URL", "").strip()
 # OpenAI key required for MKChatEngine (set in Render env vars)
 # OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 
+# Treat Render as production by default (you can also set ENV=prod in Render env vars)
+IS_PROD = bool(os.environ.get("RENDER")) or os.environ.get("ENV", "").strip().lower() in ("prod", "production")
+
 # DB placeholder for sqlite vs postgres
 PH = "%s" if is_postgres() else "?"
 
 # used_at expression (sqlite vs postgres)
 USED_AT_NOW_SQL = "NOW()" if is_postgres() else "datetime('now')"
 
-# 30 days "remember me"
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=60 * 60 * 24 * 30)
+# 30 days "remember me" + production cookie hardening
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET,
+    max_age=60 * 60 * 24 * 30,
+    same_site="lax",
+    https_only=IS_PROD,  # Secure cookies in prod; keep working on http://localhost
+)
 
 # Public static assets ONLY
 app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
+
+
+# -------------------------
+# Security headers (simple + production-friendly)
+# -------------------------
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    resp = await call_next(request)
+
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    resp.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+    # CSP: allow inline styles because your pages use <style> blocks and some inline style=""
+    resp.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'"
+    )
+
+    # HSTS only makes sense over HTTPS
+    if IS_PROD:
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    return resp
 
 
 # -------------------------
@@ -317,15 +357,13 @@ def forgot_post(email: str = Form(...)):
 </body>
 </html>
 """)
+
 # -------------------------
 # Legal
 # -------------------------
-
 @app.get("/legal", response_class=HTMLResponse)
 def legal_get(request: Request):
     return render_page("legal.html")
-
-
 
 
 # -------------------------
