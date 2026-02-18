@@ -76,6 +76,7 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     page.get_by_role("textbox", name="Birthday (Optional)").fill(str(customer.get("Birthday", "")))
     page.wait_for_timeout(100)
     page.get_by_role("button", name="Save New Customer").click()
+    page.wait_for_timeout(1000)
     
     # If we have address info, fill that in too
     if has_address(customer):

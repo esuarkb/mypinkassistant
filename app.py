@@ -1,4 +1,4 @@
-## complete app.py replace 8:56 am
+##update app.py for admin page
 
 # app.py
 import os
@@ -8,6 +8,8 @@ import hashlib
 import requests
 from pathlib import Path
 from urllib.parse import urlencode
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -25,6 +27,7 @@ from auth_core import (
     set_consultant_password,
     create_consultant,
     get_consultant_full,  # must return dict-like with needed fields
+    update_profile_and_intouch,
 )
 
 load_dotenv()
@@ -40,17 +43,19 @@ app = FastAPI()
 # -------------------------
 SESSION_SECRET = os.environ.get("MK_SESSION_SECRET", "").strip()
 if not SESSION_SECRET:
-    raise RuntimeError("MK_SESSION_SECRET is not set. Export MK_SESSION_SECRET before starting the server.")
+    raise RuntimeError(
+        "MK_SESSION_SECRET is not set. Export MK_SESSION_SECRET before starting the server."
+    )
 
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 MAIL_FROM = os.environ.get("MAIL_FROM", "").strip()
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "").strip()
 
-# OpenAI key required for MKChatEngine (set in Render env vars)
-# OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
-
-# Treat Render as production by default (you can also set ENV=prod in Render env vars)
-IS_PROD = bool(os.environ.get("RENDER")) or os.environ.get("ENV", "").strip().lower() in ("prod", "production")
+# Treat Render as production by default
+IS_PROD = bool(os.environ.get("RENDER")) or os.environ.get("ENV", "").strip().lower() in (
+    "prod",
+    "production",
+)
 
 # DB placeholder for sqlite vs postgres
 PH = "%s" if is_postgres() else "?"
@@ -118,12 +123,10 @@ def _row_get(row, key, default=None):
     if row is None:
         return default
     try:
-        # dict_row / dict
         return row.get(key, default)  # type: ignore
     except Exception:
         pass
     try:
-        # sqlite3.Row supports mapping access
         return row[key]  # type: ignore
     except Exception:
         return default
@@ -140,7 +143,6 @@ def _find_consultant_by_email(email: str):
     if not row:
         return None
 
-    # row may be dict-like or tuple-like
     cid = _row_get(row, "id", None)
     if cid is None:
         try:
@@ -189,10 +191,12 @@ def require_login(request: Request) -> int:
         raise PermissionError("Not logged in")
     return int(cid)
 
+
 def require_admin(request: Request) -> int:
     """
     Admin gate (simple): allowlist by email in MK_ADMIN_EMAILS.
     Example: MK_ADMIN_EMAILS="you@email.com,partner@email.com"
+    Fail-closed if not configured.
     """
     cid = require_login(request)
     c = get_consultant_full(cid) or {}
@@ -202,13 +206,13 @@ def require_admin(request: Request) -> int:
     allowed_set = {e.strip().lower() for e in allowed.split(",") if e.strip()}
 
     if not allowed_set:
-        # If you forget to set the env var, fail closed (safer)
-        raise PermissionError("Admin access not configured")
+        raise PermissionError("Admin access not configured (set MK_ADMIN_EMAILS)")
 
     if email not in allowed_set:
         raise PermissionError("Not authorized")
 
     return cid
+
 
 def is_profile_complete(c: dict) -> bool:
     if not c:
@@ -269,7 +273,6 @@ def login_post(request: Request, email: str = Form(...), password: str = Form(..
 
     request.session["consultant_id"] = int(cid)
 
-    # If profile not complete, route to onboard
     c = get_consultant_full(int(cid))
     if not is_profile_complete(c):
         return RedirectResponse("/onboard", status_code=302)
@@ -288,7 +291,8 @@ def logout(request: Request):
 # -------------------------
 @app.get("/forgot", response_class=HTMLResponse)
 def forgot_get():
-    return HTMLResponse("""
+    return HTMLResponse(
+        """
 <!doctype html>
 <html>
 <head>
@@ -320,7 +324,8 @@ def forgot_get():
   </div>
 </body>
 </html>
-""")
+"""
+    )
 
 
 @app.post("/forgot", response_class=HTMLResponse)
@@ -356,7 +361,8 @@ def forgot_post(email: str = Form(...)):
     except Exception as e:
         print("Forgot password send error:", e)
 
-    return HTMLResponse("""
+    return HTMLResponse(
+        """
 <!doctype html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Check your email</title>
@@ -376,7 +382,9 @@ def forgot_post(email: str = Form(...)):
   </div>
 </body>
 </html>
-""")
+"""
+    )
+
 
 # -------------------------
 # Legal
@@ -395,7 +403,8 @@ def reset_password_get(token: str = ""):
     if not token:
         return RedirectResponse("/login", status_code=302)
 
-    return HTMLResponse(f"""
+    return HTMLResponse(
+        f"""
 <!doctype html>
 <html>
 <head>
@@ -427,7 +436,8 @@ def reset_password_get(token: str = ""):
   </div>
 </body>
 </html>
-""")
+"""
+    )
 
 
 @app.post("/reset-password")
@@ -442,10 +452,16 @@ def reset_password_post(
         return HTMLResponse("Invalid reset token. <a href='/forgot'>Try again</a>.", status_code=400)
 
     if (password or "") != (password2 or ""):
-        return HTMLResponse("Passwords did not match. <a href='javascript:history.back()'>Go back</a>.", status_code=400)
+        return HTMLResponse(
+            "Passwords did not match. <a href='javascript:history.back()'>Go back</a>.",
+            status_code=400,
+        )
 
     if len(password) < 8:
-        return HTMLResponse("Password must be at least 8 characters. <a href='javascript:history.back()'>Go back</a>.", status_code=400)
+        return HTMLResponse(
+            "Password must be at least 8 characters. <a href='javascript:history.back()'>Go back</a>.",
+            status_code=400,
+        )
 
     th = _hash_token(token)
     now = int(time.time())
@@ -480,11 +496,17 @@ def reset_password_post(
 
     if used_at is not None:
         conn.close()
-        return HTMLResponse("That reset link has already been used. <a href='/forgot'>Request a new one</a>.", status_code=400)
+        return HTMLResponse(
+            "That reset link has already been used. <a href='/forgot'>Request a new one</a>.",
+            status_code=400,
+        )
 
     if now > expires_i:
         conn.close()
-        return HTMLResponse("That reset link has expired. <a href='/forgot'>Request a new one</a>.", status_code=400)
+        return HTMLResponse(
+            "That reset link has expired. <a href='/forgot'>Request a new one</a>.",
+            status_code=400,
+        )
 
     cur.execute(f"UPDATE password_resets SET used_at={USED_AT_NOW_SQL} WHERE id={PH}", (reset_id,))
     conn.commit()
@@ -492,7 +514,6 @@ def reset_password_post(
 
     set_consultant_password(int(cid), password)
 
-    # Clear any existing login session and force login again
     request.session.clear()
     return RedirectResponse("/login", status_code=302)
 
@@ -500,8 +521,6 @@ def reset_password_post(
 # -------------------------
 # Onboarding (public; can be accessed without login)
 # -------------------------
-from auth_core import create_consultant, update_profile_and_intouch, set_consultant_password
-
 @app.post("/onboard")
 def onboard_post(
     request: Request,
@@ -516,11 +535,8 @@ def onboard_post(
 ):
     cid = request.session.get("consultant_id")
 
-    # -------------------------
     # CASE A: Already logged in → UPDATE ONLY
-    # -------------------------
     if cid:
-        # Update profile + InTouch creds
         update_profile_and_intouch(
             int(cid),
             email=email,
@@ -531,7 +547,6 @@ def onboard_post(
             intouch_password=intouch_password,
         )
 
-        # If they typed a NEW MyPinkAssistant password, update it.
         pw = (password or "").strip()
         pw2 = (password2 or "").strip()
         if pw or pw2:
@@ -543,9 +558,7 @@ def onboard_post(
 
         return RedirectResponse("/app", status_code=302)
 
-    # -------------------------
     # CASE B: Not logged in → CREATE NEW ACCOUNT
-    # -------------------------
     if password != password2:
         return HTMLResponse("Passwords do not match.", status_code=400)
 
@@ -570,15 +583,11 @@ def onboard_post(
     return RedirectResponse("/app", status_code=302)
 
 
-from auth_core import get_consultant_full
-
 @app.get("/onboard", response_class=HTMLResponse)
 def onboard_get(request: Request):
-    # If logged in, prefill. If not logged in, show blank onboard page.
     cid = request.session.get("consultant_id")
     c = get_consultant_full(int(cid)) if cid else None
 
-    # If already complete, skip onboard
     if c and is_profile_complete(c):
         return RedirectResponse("/app", status_code=302)
 
@@ -596,6 +605,7 @@ def onboard_get(request: Request):
         "{{ERROR_BLOCK}}": "",
     }
     return render_page("onboard.html", replaces=replaces)
+
 
 # -------------------------
 # Protected app page
@@ -716,12 +726,69 @@ def jobs(request: Request):
         )
     return {"jobs": out}
 
+
+# -------------------------
+# Admin diagnostics (protected)
+# -------------------------
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin_diagnostics(request: Request):
     try:
         _ = require_admin(request)
     except PermissionError:
         return RedirectResponse("/login", status_code=302)
+
+    CT = ZoneInfo("America/Chicago")
+
+    def _to_ct(val):
+        """
+        Convert DB timestamp to America/Chicago for display.
+        Handles:
+          - datetime (aware or naive)
+          - sqlite strings: "YYYY-MM-DD HH:MM:SS"
+          - iso strings with 'T' or 'Z'
+        Returns None if not parseable.
+        """
+        if val is None:
+            return None
+
+        # Postgres often gives datetime directly
+        if isinstance(val, datetime):
+            dt = val
+            # If naive, assume UTC (best-effort)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(CT)
+
+        # Otherwise try parsing string
+        s = str(val).strip()
+        if not s:
+            return None
+
+        try:
+            # normalize "Z" to "+00:00"
+            s2 = s.replace("Z", "+00:00")
+
+            # sqlite style "YYYY-MM-DD HH:MM:SS" -> iso-like
+            if " " in s2 and "T" not in s2 and "+" not in s2:
+                # treat as UTC
+                dt = datetime.fromisoformat(s2.replace(" ", "T"))
+                dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(CT)
+
+            dt = datetime.fromisoformat(s2)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(CT)
+        except Exception:
+            return None
+
+    def _fmt_ct(val):
+        dt = _to_ct(val)
+        if not dt:
+            return ""
+        # Example: 2026-02-17 7:10:03 PM CT
+        return dt.strftime("%Y-%m-%d %-I:%M:%S %p CT")
 
     conn = _conn()
     cur = conn.cursor()
@@ -736,25 +803,14 @@ def admin_diagnostics(request: Request):
         n = _row_get(r, "n", None) if _row_get(r, "n", None) is not None else r[1]
         counts_map[str(status)] = int(n)
 
-    # 2) Oldest queued / running timestamps (helps diagnose backlog)
-    if is_postgres():
-        cur.execute("SELECT MIN(created_at) FROM jobs WHERE status='queued'")
-        oldest_queued = cur.fetchone()
-        cur.execute("SELECT MIN(started_at) FROM jobs WHERE status='running'")
-        oldest_running = cur.fetchone()
-    else:
-        cur.execute("SELECT MIN(created_at) FROM jobs WHERE status='queued'")
-        oldest_queued = cur.fetchone()
-        cur.execute("SELECT MIN(started_at) FROM jobs WHERE status='running'")
-        oldest_running = cur.fetchone()
+    # 2) Oldest queued / running timestamps
+    cur.execute("SELECT MIN(created_at) FROM jobs WHERE status='queued'")
+    oldest_queued = cur.fetchone()
+    cur.execute("SELECT MIN(started_at) FROM jobs WHERE status='running'")
+    oldest_running = cur.fetchone()
 
-    oldest_queued_val = _row_get(oldest_queued, "min", None) if oldest_queued else None
-    if oldest_queued_val is None and oldest_queued:
-        oldest_queued_val = oldest_queued[0]
-
-    oldest_running_val = _row_get(oldest_running, "min", None) if oldest_running else None
-    if oldest_running_val is None and oldest_running:
-        oldest_running_val = oldest_running[0]
+    oldest_queued_val = oldest_queued[0] if oldest_queued else None
+    oldest_running_val = oldest_running[0] if oldest_running else None
 
     # 3) Running jobs
     cur.execute(
@@ -766,7 +822,8 @@ def admin_diagnostics(request: Request):
         LIMIT 50
         """
         if is_postgres()
-        else """
+        else
+        """
         SELECT id, consultant_id, type, attempts, claimed_by, claimed_at, started_at
         FROM jobs
         WHERE status='running'
@@ -776,7 +833,19 @@ def admin_diagnostics(request: Request):
     )
     running = cur.fetchall()
 
-    # 4) Recent failed jobs
+    # 4) Recent DONE jobs (last 30)  ✅ NEW
+    cur.execute(
+        """
+        SELECT id, consultant_id, type, status_msg, finished_at
+        FROM jobs
+        WHERE status='done'
+        ORDER BY id DESC
+        LIMIT 30
+        """
+    )
+    done = cur.fetchall()
+
+    # 5) Recent FAILED jobs (last 30)
     cur.execute(
         """
         SELECT id, consultant_id, type, error, finished_at
@@ -788,7 +857,7 @@ def admin_diagnostics(request: Request):
     )
     failed = cur.fetchall()
 
-    # 5) Locks
+    # 6) Locks
     try:
         cur.execute("SELECT consultant_id, locked_by, locked_at FROM consultant_locks ORDER BY locked_at DESC")
         locks = cur.fetchall()
@@ -810,6 +879,7 @@ def admin_diagnostics(request: Request):
         return out
 
     running_rows = [fmt_row(r, ["id","consultant_id","type","attempts","claimed_by","claimed_at","started_at"]) for r in running]
+    done_rows = [fmt_row(r, ["id","consultant_id","type","status_msg","finished_at"]) for r in done]
     failed_rows = [fmt_row(r, ["id","consultant_id","type","error","finished_at"]) for r in failed]
     lock_rows = [fmt_row(r, ["consultant_id","locked_by","locked_at"]) for r in locks]
 
@@ -845,8 +915,8 @@ def admin_diagnostics(request: Request):
     <div class="muted">Jobs + locks overview for troubleshooting. (Private)</div>
 
     <div class="row">
-      <span class="pill">Oldest queued: {oldest_queued_val}</span>
-      <span class="pill">Oldest running: {oldest_running_val}</span>
+      <span class="pill">Oldest queued (CT): {_fmt_ct(oldest_queued_val) or ""}</span>
+      <span class="pill">Oldest running (CT): {_fmt_ct(oldest_running_val) or ""}</span>
     </div>
 
     <div class="cards">
@@ -859,25 +929,34 @@ def admin_diagnostics(request: Request):
     <h2 style="margin:16px 0 6px;font-size:16px">Running jobs</h2>
     <table>
       <tr>
-        <th>id</th><th>consultant</th><th>type</th><th>attempts</th><th>claimed_by</th><th>started</th>
+        <th>id</th><th>consultant</th><th>type</th><th>attempts</th><th>claimed_by</th><th>started (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td>{r['attempts']}</td><td>{r['claimed_by']}</td><td>{r['started_at']}</td></tr>" for r in running_rows]) or "<tr><td colspan='6' class='muted'>No running jobs.</td></tr>"}
+      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td>{r['attempts']}</td><td>{r['claimed_by']}</td><td>{_fmt_ct(r['started_at'])}</td></tr>" for r in running_rows]) or "<tr><td colspan='6' class='muted'>No running jobs.</td></tr>"}
+    </table>
+
+    <!-- ✅ Completed above Failed -->
+    <h2 style="margin:16px 0 6px;font-size:16px">Completed (last 30)</h2>
+    <table>
+      <tr>
+        <th>id</th><th>consultant</th><th>type</th><th>message</th><th>finished (CT)</th>
+      </tr>
+      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td>{(r['status_msg'] or '')}</td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in done_rows]) or "<tr><td colspan='5' class='muted'>No completed jobs.</td></tr>"}
     </table>
 
     <h2 style="margin:16px 0 6px;font-size:16px">Recent failed (last 30)</h2>
     <table>
       <tr>
-        <th>id</th><th>consultant</th><th>type</th><th>error</th><th>finished</th>
+        <th>id</th><th>consultant</th><th>type</th><th>error</th><th>finished (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td><code>{(r['error'] or '')[:300]}</code></td><td>{r['finished_at']}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
+      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td><code>{(r['error'] or '')[:300]}</code></td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
     </table>
 
     <h2 style="margin:16px 0 6px;font-size:16px">Consultant locks</h2>
     <table>
       <tr>
-        <th>consultant</th><th>locked_by</th><th>locked_at</th>
+        <th>consultant</th><th>locked_by</th><th>locked_at (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['consultant_id']}</td><td>{r['locked_by']}</td><td>{r['locked_at']}</td></tr>" for r in lock_rows]) or "<tr><td colspan='3' class='muted'>No locks.</td></tr>"}
+      {''.join([f"<tr><td>{r['consultant_id']}</td><td>{r['locked_by']}</td><td>{_fmt_ct(r['locked_at'])}</td></tr>" for r in lock_rows]) or "<tr><td colspan='3' class='muted'>No locks.</td></tr>"}
     </table>
 
     <div style="margin-top:16px" class="muted">
@@ -893,6 +972,9 @@ def admin_diagnostics(request: Request):
 """
     return HTMLResponse(html)
 
+# -------------------------
+# Reset chat memory (protected)
+# -------------------------
 @app.post("/reset")
 def reset(request: Request):
     """
