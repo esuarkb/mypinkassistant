@@ -29,7 +29,7 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     page.wait_for_timeout(5000)
 
     # Fill address fields (IDs from your known-working script)
-    page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name", "")))
+    page.locator('[id^="#AddressFirstName-"]').fill(str(customer.get("First Name", "")))
     #page.locator('[id^="AddressFirstName-"]')
     page.wait_for_timeout(100)
 
