@@ -146,6 +146,10 @@ def main():
                 )
                 page = context.new_page()
                 
+                #add path tracing for debugging
+                trace_path = f"trace_{WORKER_ID}_{cid}.zip"
+                context.tracing.start(screenshots=True, snapshots=True, sources=True)
+                
 
                 # Login once for this consultant session
                 login_intouch(page, username, password)
@@ -208,6 +212,11 @@ def main():
                 # Always clean up and release the consultant lock
                 try:
                     if context is not None:
+                        try:
+                            context.tracing.stop(path=trace_path)
+                        except Exception:
+                            pass
+
                         context.close()
                 except Exception:
                     pass
@@ -219,7 +228,6 @@ def main():
                     pass
 
                 release_consultant(cid)
-
 
 if __name__ == "__main__":
     main()
