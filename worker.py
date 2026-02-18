@@ -139,11 +139,12 @@ def main():
                     ],
                 )
                 context = browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                locale="en-US",
-                timezone_id="America/Chicago",
-)
-
+                    viewport={"width": 1280, "height": 800},
+                    locale="en-US",
+                    timezone_id="America/Chicago",
+                )
+                page = context.new_page()
+                
 
                 # Login once for this consultant session
                 login_intouch(page, username, password)
