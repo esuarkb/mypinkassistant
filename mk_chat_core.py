@@ -391,9 +391,9 @@ def format_phone_display(phone: str) -> str:
     digits = normalize_phone(phone)
     if not digits:
         return ""
-    if len(digits) == 11 and digits.startswith("1"):
+    if len(digits) >= 11 and digits.startswith("1"):
         digits = digits[1:]
-    if len(digits) == 10:
+    if len(digits) >= 10:
         return f"({digits[0:3]}) {digits[3:6]}-{digits[6:10]}"
     if len(digits) == 7:
         return f"{digits[0:3]}-{digits[3:7]}"
