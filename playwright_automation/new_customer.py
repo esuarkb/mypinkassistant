@@ -20,29 +20,40 @@ def has_address(customer: dict) -> bool:
 def add_address_on_detail_page(page: Page, customer: dict) -> None:
     # Click the Add New Address button that appears AFTER saving
     
+##new test
+
+    add_address_btn = page.locator("c-cmt-no-info-available").get_by_role(
+        "button", name="Add New Address"
+    )
+
+    first_name_field = page.locator('[id^="AddressFirstName-"]')
+
+    # 1) Click once
+    add_address_btn.click()
+    page.wait_for_timeout(300)
+    # 2) Try to detect the First Name field quickly
+    try:
+        first_name_field.wait_for(state="visible", timeout=800)  # fast check
+    except PlaywrightTimeoutError:
+        # 3) If not visible, click Add New Address again
+        add_address_btn.click()
+        # 4) Now wait normally (give it a bit more time)
+        first_name_field.wait_for(state="visible", timeout=5000)
+
+    # 5) Fill once it's truly ready
+    first_name_field.fill(str(customer.get("First Name", "")))
+
 
 
     # Open address dialog
-    page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
-    page.wait_for_timeout(300)    
-    page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
-    page.wait_for_timeout(1000)
+#    page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
+#   page.wait_for_timeout(300)    
+#    page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
+#    page.wait_for_timeout(500)
 
-    #_insert_firstname_modal()
-    # Fill address fields (IDs from your known-working script)
     
-#    first_name_field = page.locator('[id^="AddressFirstName-"]').first
-#    first_name_field.wait_for(state="visible")
-#    first_name_field.fill(str(customer.get("First Name", "")))
-
-    #page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name", "")))
-    #page.locator('[id^="AddressFirstName-"]')
-    page.keyboard.press("Tab")
-    page.keyboard.press("Tab")
-    page.keyboard.type(str(customer.get("First Name", "")))
-    
-    #page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name", "")))
-    #page.wait_for_timeout(100)
+#    page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name", "")))
+    page.wait_for_timeout(100)
 
     page.locator('[id^="AddressLastName-"]').fill(str(customer.get("Last Name", "")))
     page.wait_for_timeout(100)
