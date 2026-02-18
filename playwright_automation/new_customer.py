@@ -19,20 +19,38 @@ def has_address(customer: dict) -> bool:
 
 def add_address_on_detail_page(page: Page, customer: dict) -> None:
     # Click the Add New Address button that appears AFTER saving
+    
+    def _insert_firstname_modal(max_attempts: int = 3, timeout_ms: int = 45000):
+            addr_first = page.locator('[id^="AddressFirstName-"]:visible').first
+            add_firstname = page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name", "")))
 
+            last_err = None
+            for _ in range(max_attempts):
+                try:
+                    # Click without waiting for it to be "visible" (sometimes it is, but Playwright misses state)
+                    add_firstname
+                    # Wait for the visible address input to show up
+                    addr_first.wait_for(state="visible", timeout=timeout_ms)
+                    return
+                except Exception as e:
+                    last_err = e
+                    # tiny pause then try clicking again
+                    page.wait_for_timeout(300)
+            raise RuntimeError(f"Address modal did not open after {max_attempts} tries: {last_err}")
 
     # Open address dialog
     page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
     page.wait_for_timeout(300)    
     page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
 
-    page.wait_for_timeout(8000)
+    page.wait_for_timeout(1000)
 
+    _insert_firstname_modal()
     # Fill address fields (IDs from your known-working script)
-    first_name_field = page.locator('[id^="AddressFirstName-"]').first
-
-    first_name_field.wait_for(state="visible")
-    first_name_field.fill(str(customer.get("First Name", "")))
+    
+#    first_name_field = page.locator('[id^="AddressFirstName-"]').first
+#    first_name_field.wait_for(state="visible")
+#    first_name_field.fill(str(customer.get("First Name", "")))
 
     #page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name", "")))
     #page.locator('[id^="AddressFirstName-"]')
