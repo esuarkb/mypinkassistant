@@ -907,6 +907,22 @@ def admin_diagnostics(request: Request):
     .row{{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}}
     a{{color:#e91e63;text-decoration:none;font-weight:700}}
     @media (max-width:900px){{.cards{{grid-template-columns:repeat(2,1fr)}}}}
+
+    /* ✅ Admin buttons */
+    .adminBtn{{
+      padding:8px 14px;
+      border-radius:10px;
+      border:1px solid #ddd;
+      background:#fff;
+      font-weight:600;
+      cursor:pointer;
+    }}
+    .adminBtn:hover{{ background:#f5f5f5; }}
+    .adminBtn.danger{{
+      border-color:#f5c2c2;
+      background:#fff5f5;
+      color:#b91c1c;
+    }}
   </style>
 </head>
 <body>
@@ -917,6 +933,17 @@ def admin_diagnostics(request: Request):
     <div class="row">
       <span class="pill">Oldest queued (CT): {_fmt_ct(oldest_queued_val) or ""}</span>
       <span class="pill">Oldest running (CT): {_fmt_ct(oldest_running_val) or ""}</span>
+    </div>
+
+    <!-- ✅ Admin action buttons go HERE (right under the pills) -->
+    <div class="row" style="margin-top:14px">
+      <form method="post" action="/admin/clear-locks">
+        <button type="submit" class="adminBtn">Clear All Locks</button>
+      </form>
+
+      <form method="post" action="/admin/fail-running">
+        <button type="submit" class="adminBtn danger">Fail All Running Jobs</button>
+      </form>
     </div>
 
     <div class="cards">
@@ -971,6 +998,57 @@ def admin_diagnostics(request: Request):
 </html>
 """
     return HTMLResponse(html)
+
+@app.post("/admin/clear-locks")
+def admin_clear_locks(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM consultant_locks")
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse("/admin", status_code=302)
+
+@app.post("/admin/fail-running")
+def admin_fail_running(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        if is_postgres():
+            cur.execute("""
+                UPDATE jobs
+                SET status='failed',
+                    status_msg='Failed ❌ (manually reset)',
+                    error=COALESCE(error,'') || ' | admin reset',
+                    finished_at=NOW()
+                WHERE status='running'
+            """)
+        else:
+            cur.execute("""
+                UPDATE jobs
+                SET status='failed',
+                    status_msg='Failed ❌ (manually reset)',
+                    error=IFNULL(error,'') || ' | admin reset',
+                    finished_at=datetime('now')
+                WHERE status='running'
+            """)
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse("/admin", status_code=302)
 
 # -------------------------
 # Reset chat memory (protected)
