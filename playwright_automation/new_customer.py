@@ -26,10 +26,10 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
     #page.get_by_role("button", name="Add New Address").click()
     #page.get_by_role("button", name="Add New Address").click()
-    page.wait_for_timeout(5000)
+    page.wait_for_timeout(1000)
 
     # Fill address fields (IDs from your known-working script)
-    page.locator('[id^="#AddressFirstName-"]').fill(str(customer.get("First Name", "")))
+    page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name", "")))
     #page.locator('[id^="AddressFirstName-"]')
     page.wait_for_timeout(100)
 

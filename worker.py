@@ -138,8 +138,12 @@ def main():
                         "--disable-dev-shm-usage",
                     ],
                 )
-                context = browser.new_context()
-                page = context.new_page()
+                context = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                locale="en-US",
+                timezone_id="America/Chicago",
+)
+
 
                 # Login once for this consultant session
                 login_intouch(page, username, password)
