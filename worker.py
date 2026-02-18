@@ -140,6 +140,7 @@ def main():
                 )
                 context = browser.new_context(
                     viewport={"width": 1280, "height": 800},
+                    reduced_motion="reduce",
                     locale="en-US",
                     timezone_id="America/Chicago",
                 )
