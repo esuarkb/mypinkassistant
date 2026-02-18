@@ -43,7 +43,7 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     page.wait_for_timeout(300)    
     page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
 
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(10000)
 
     _insert_firstname_modal()
     # Fill address fields (IDs from your known-working script)
