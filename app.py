@@ -833,26 +833,26 @@ def admin_diagnostics(request: Request):
     )
     running = cur.fetchall()
 
-    # 4) Recent DONE jobs (last 30)  ✅ NEW
+    # 4) Recent DONE jobs (last 15)  ✅ NEW
     cur.execute(
         """
         SELECT id, consultant_id, type, status_msg, finished_at
         FROM jobs
         WHERE status='done'
         ORDER BY id DESC
-        LIMIT 30
+        LIMIT 15
         """
     )
     done = cur.fetchall()
 
-    # 5) Recent FAILED jobs (last 30)
+    # 5) Recent FAILED jobs (last 15)
     cur.execute(
         """
         SELECT id, consultant_id, type, error, finished_at
         FROM jobs
         WHERE status='failed'
         ORDER BY id DESC
-        LIMIT 30
+        LIMIT 15
         """
     )
     failed = cur.fetchall()
@@ -998,6 +998,8 @@ def admin_diagnostics(request: Request):
 </html>
 """
     return HTMLResponse(html)
+
+
 
 @app.post("/admin/clear-locks")
 def admin_clear_locks(request: Request):
