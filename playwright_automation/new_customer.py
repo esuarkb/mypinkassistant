@@ -1,7 +1,16 @@
 # playwright_automation/new_customer.py
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+import logging
+import sys
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+
+logger = logging.getLogger(__name__)
 
 MYCUSTOMERS_URL = "https://apps.marykayintouch.com/customer-list"
 
@@ -43,7 +52,7 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
             success = True
             break  # if found, break out of the loop
         except PlaywrightTimeoutError:
-            print(f"Attempt {attempt + 1} failed. Retrying...")
+            logger.error(f"Attempt {attempt + 1} failed. Retrying...")
     
     if not success:
         raise Exception("Add Address dialog failed to open after 3 attempts.")
