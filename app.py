@@ -5,6 +5,7 @@ import os
 import time
 import secrets
 import hashlib
+#from turtle import color
 import requests
 from pathlib import Path
 from urllib.parse import urlencode
@@ -726,13 +727,15 @@ def jobs(request: Request):
         )
     return {"jobs": out}
 
-
 # -------------------------
 # Admin diagnostics (protected)
 # -------------------------
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_diagnostics(request: Request):
+    # ✅ Admin gate
     try:
         _ = require_admin(request)
     except PermissionError:
@@ -752,26 +755,21 @@ def admin_diagnostics(request: Request):
         if val is None:
             return None
 
-        # Postgres often gives datetime directly
         if isinstance(val, datetime):
             dt = val
-            # If naive, assume UTC (best-effort)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(CT)
 
-        # Otherwise try parsing string
         s = str(val).strip()
         if not s:
             return None
 
         try:
-            # normalize "Z" to "+00:00"
             s2 = s.replace("Z", "+00:00")
 
-            # sqlite style "YYYY-MM-DD HH:MM:SS" -> iso-like
+            # sqlite "YYYY-MM-DD HH:MM:SS" (assume UTC)
             if " " in s2 and "T" not in s2 and "+" not in s2:
-                # treat as UTC
                 dt = datetime.fromisoformat(s2.replace(" ", "T"))
                 dt = dt.replace(tzinfo=timezone.utc)
                 return dt.astimezone(CT)
@@ -787,8 +785,9 @@ def admin_diagnostics(request: Request):
         dt = _to_ct(val)
         if not dt:
             return ""
-        # Example: 2026-02-17 7:10:03 PM CT
-        return dt.strftime("%Y-%m-%d %-I:%M:%S %p CT")
+        # Cross-platform: avoid %-I (not supported everywhere)
+        s = dt.strftime("%Y-%m-%d %I:%M:%S %p CT")
+        return s.replace(" 0", " ")  # remove leading zero in hour
 
     conn = _conn()
     cur = conn.cursor()
@@ -833,26 +832,26 @@ def admin_diagnostics(request: Request):
     )
     running = cur.fetchall()
 
-    # 4) Recent DONE jobs (last 15)  ✅ NEW
+    # 4) DONE jobs (last 30)
     cur.execute(
         """
         SELECT id, consultant_id, type, status_msg, finished_at
         FROM jobs
         WHERE status='done'
         ORDER BY id DESC
-        LIMIT 15
+        LIMIT 30
         """
     )
     done = cur.fetchall()
 
-    # 5) Recent FAILED jobs (last 15)
+    # 5) FAILED jobs (last 30)
     cur.execute(
         """
         SELECT id, consultant_id, type, error, finished_at
         FROM jobs
         WHERE status='failed'
         ORDER BY id DESC
-        LIMIT 15
+        LIMIT 30
         """
     )
     failed = cur.fetchall()
@@ -883,6 +882,33 @@ def admin_diagnostics(request: Request):
     failed_rows = [fmt_row(r, ["id","consultant_id","type","error","finished_at"]) for r in failed]
     lock_rows = [fmt_row(r, ["consultant_id","locked_by","locked_at"]) for r in locks]
 
+    # -------------------------
+    # Consultant display lookup (ID -> "First Last" + muted email)
+    # -------------------------
+    conn2 = _conn()
+    cur2 = conn2.cursor()
+    cur2.execute("SELECT id, first_name, last_name, email FROM consultants")
+    consultant_rows = cur2.fetchall()
+    conn2.close()
+
+    consultants_html = {}
+    for r in consultant_rows:
+        cid = _row_get(r, "id", None) if _row_get(r, "id", None) is not None else r[0]
+        fn = (_row_get(r, "first_name", "") if _row_get(r, "first_name", None) is not None else (r[1] or "")).strip()
+        ln = (_row_get(r, "last_name", "") if _row_get(r, "last_name", None) is not None else (r[2] or "")).strip()
+        em = (_row_get(r, "email", "") if _row_get(r, "email", None) is not None else (r[3] or "")).strip()
+
+        name = f"{fn} {ln}".strip() or "Unknown"
+        email_html = f"<div class='consultant-email'>{em}</div>" if em else ""
+        consultants_html[int(cid)] = f"<div class='consultant-name'>{name}</div>{email_html}"
+
+    def consultant_cell(cid_val):
+        try:
+            cid_int = int(cid_val)
+        except Exception:
+            return "<div class='consultant-name'>Unknown</div>"
+        return consultants_html.get(cid_int, "<div class='consultant-name'>Unknown</div>")
+
     html = f"""
 <!doctype html>
 <html>
@@ -908,7 +934,11 @@ def admin_diagnostics(request: Request):
     a{{color:#e91e63;text-decoration:none;font-weight:700}}
     @media (max-width:900px){{.cards{{grid-template-columns:repeat(2,1fr)}}}}
 
-    /* ✅ Admin buttons */
+    /* Consultant cell */
+    .consultant-name{{font-weight:700}}
+    .consultant-email{{color:#666;font-size:12px}}
+
+    /* Admin buttons */
     .adminBtn{{
       padding:8px 14px;
       border-radius:10px;
@@ -935,7 +965,7 @@ def admin_diagnostics(request: Request):
       <span class="pill">Oldest running (CT): {_fmt_ct(oldest_running_val) or ""}</span>
     </div>
 
-    <!-- ✅ Admin action buttons go HERE (right under the pills) -->
+    <!-- Admin action buttons -->
     <div class="row" style="margin-top:14px">
       <form method="post" action="/admin/clear-locks">
         <button type="submit" class="adminBtn">Clear All Locks</button>
@@ -958,7 +988,16 @@ def admin_diagnostics(request: Request):
       <tr>
         <th>id</th><th>consultant</th><th>type</th><th>attempts</th><th>claimed_by</th><th>started (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td>{r['attempts']}</td><td>{r['claimed_by']}</td><td>{_fmt_ct(r['started_at'])}</td></tr>" for r in running_rows]) or "<tr><td colspan='6' class='muted'>No running jobs.</td></tr>"}
+      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td>{r['attempts']}</td><td>{r['claimed_by']}</td><td>{_fmt_ct(r['started_at'])}</td></tr>" for r in running_rows]) or "<tr><td colspan='6' class='muted'>No running jobs.</td></tr>"}
+    </table>
+
+    <!-- ✅ Locks moved here: under Running, above Completed -->
+    <h2 style="margin:16px 0 6px;font-size:16px">Consultant locks</h2>
+    <table>
+      <tr>
+        <th>consultant</th><th>locked_by</th><th>locked_at (CT)</th>
+      </tr>
+      {''.join([f"<tr><td>{consultant_cell(r['consultant_id'])}</td><td>{r['locked_by']}</td><td>{_fmt_ct(r['locked_at'])}</td></tr>" for r in lock_rows]) or "<tr><td colspan='3' class='muted'>No locks.</td></tr>"}
     </table>
 
     <!-- ✅ Completed above Failed -->
@@ -967,7 +1006,7 @@ def admin_diagnostics(request: Request):
       <tr>
         <th>id</th><th>consultant</th><th>type</th><th>message</th><th>finished (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td>{(r['status_msg'] or '')}</td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in done_rows]) or "<tr><td colspan='5' class='muted'>No completed jobs.</td></tr>"}
+      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td>{(r['status_msg'] or '')}</td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in done_rows]) or "<tr><td colspan='5' class='muted'>No completed jobs.</td></tr>"}
     </table>
 
     <h2 style="margin:16px 0 6px;font-size:16px">Recent failed (last 30)</h2>
@@ -975,15 +1014,7 @@ def admin_diagnostics(request: Request):
       <tr>
         <th>id</th><th>consultant</th><th>type</th><th>error</th><th>finished (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['id']}</td><td>{r['consultant_id']}</td><td>{r['type']}</td><td><code>{(r['error'] or '')[:300]}</code></td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
-    </table>
-
-    <h2 style="margin:16px 0 6px;font-size:16px">Consultant locks</h2>
-    <table>
-      <tr>
-        <th>consultant</th><th>locked_by</th><th>locked_at (CT)</th>
-      </tr>
-      {''.join([f"<tr><td>{r['consultant_id']}</td><td>{r['locked_by']}</td><td>{_fmt_ct(r['locked_at'])}</td></tr>" for r in lock_rows]) or "<tr><td colspan='3' class='muted'>No locks.</td></tr>"}
+      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td><code>{(r['error'] or '')[:300]}</code></td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
     </table>
 
     <div style="margin-top:16px" class="muted">
@@ -998,6 +1029,73 @@ def admin_diagnostics(request: Request):
 </html>
 """
     return HTMLResponse(html)
+
+
+# -------------------------
+# Admin actions (protected)
+# -------------------------
+@app.post("/admin/clear-locks")
+def admin_clear_locks(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM consultant_locks")
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/fail-running")
+def admin_fail_all_running(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        if is_postgres():
+            cur.execute(
+                """
+                UPDATE jobs
+                SET status='failed',
+                    status_msg='Failed ❌',
+                    error=CASE
+                        WHEN COALESCE(error,'') = '' THEN 'admin: failed running jobs'
+                        ELSE LEFT(error,1800) || ' | admin: failed running jobs'
+                    END,
+                    finished_at=NOW()
+                WHERE status='running'
+                """
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE jobs
+                SET status='failed',
+                    status_msg='Failed ❌',
+                    error=CASE
+                        WHEN IFNULL(error,'') = '' THEN 'admin: failed running jobs'
+                        ELSE SUBSTR(error,1,1800) || ' | admin: failed running jobs'
+                    END,
+                    finished_at=datetime('now')
+                WHERE status='running'
+                """
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse("/admin", status_code=302)
+
 
 
 
