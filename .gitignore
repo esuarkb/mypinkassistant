@@ -19,6 +19,7 @@ db/
 
 # Secrets / credentials
 *.json
+!web/ui_messages.json
 customer automation.json
 
 # OS files

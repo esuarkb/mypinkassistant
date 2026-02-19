@@ -1,0 +1,21 @@
+{
+    "hero_headlines": [
+        "Hey there 👋 Let’s do some work.",
+        "Let's get down to business ✨",
+        "You've got new customers? Great job, let's get them in."
+    ],
+    "hero_subheads": [
+        "Add a new customer or an order. I’ll confirm details, then queue it for MyCustomers."
+    ],
+    "you_can_say": [
+        "New customer Jane Doe, jane@gmail.com, 555 5th St Anytown, AL 12345, 5551231234",
+        "Order for Jane Doe: 4 in 1 cleanser and 2 charcoal masks",
+        "Add customer Mary Jones 333 3rd St Arab, Alabama 12345 2565551212 maryjones@gmail.com",
+        "New order for Jane Doe: Satin Hands, Satin Lips, Foundation Primer"
+    ],
+    "emergency": {
+        "enabled": false,
+        "title": "Service Notice",
+        "message": "AWS is currently down. Customers and orders will be submitted when service resumes."
+    }
+}
