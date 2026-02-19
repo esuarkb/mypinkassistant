@@ -832,26 +832,26 @@ def admin_diagnostics(request: Request):
     )
     running = cur.fetchall()
 
-    # 4) DONE jobs (last 30)
+    # 4) DONE jobs (last 15)
     cur.execute(
         """
         SELECT id, consultant_id, type, status_msg, finished_at
         FROM jobs
         WHERE status='done'
         ORDER BY id DESC
-        LIMIT 30
+        LIMIT 15
         """
     )
     done = cur.fetchall()
 
-    # 5) FAILED jobs (last 30)
+    # 5) FAILED jobs (last 15)
     cur.execute(
         """
         SELECT id, consultant_id, type, error, finished_at
         FROM jobs
         WHERE status='failed'
         ORDER BY id DESC
-        LIMIT 30
+        LIMIT 15
         """
     )
     failed = cur.fetchall()
@@ -1001,7 +1001,7 @@ def admin_diagnostics(request: Request):
     </table>
 
     <!-- ✅ Completed above Failed -->
-    <h2 style="margin:16px 0 6px;font-size:16px">Completed (last 30)</h2>
+    <h2 style="margin:16px 0 6px;font-size:16px">Completed (last 15)</h2>
     <table>
       <tr>
         <th>id</th><th>consultant</th><th>type</th><th>message</th><th>finished (CT)</th>
@@ -1009,7 +1009,7 @@ def admin_diagnostics(request: Request):
       {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td>{(r['status_msg'] or '')}</td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in done_rows]) or "<tr><td colspan='5' class='muted'>No completed jobs.</td></tr>"}
     </table>
 
-    <h2 style="margin:16px 0 6px;font-size:16px">Recent failed (last 30)</h2>
+    <h2 style="margin:16px 0 6px;font-size:16px">Recent failed (last 15)</h2>
     <table>
       <tr>
         <th>id</th><th>consultant</th><th>type</th><th>error</th><th>finished (CT)</th>
