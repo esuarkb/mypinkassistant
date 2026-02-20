@@ -39,7 +39,7 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
 
     first_name_field = page.locator('[id^="AddressFirstName-"]')
 
-    max_attempts = 3
+    max_attempts = 4
     success = False
 
     for attempt in range (max_attempts):

@@ -399,6 +399,150 @@ def format_phone_display(phone: str) -> str:
         return f"{digits[0:3]}-{digits[3:7]}"
     return digits
 
+STATE_MAP = {
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "CA": "California",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "HI": "Hawaii",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Louisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Michigan",
+    "MN": "Minnesota",
+    "MS": "Mississippi",
+    "MO": "Missouri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "New Hampshire",
+    "NJ": "New Jersey",
+    "NM": "New Mexico",
+    "NY": "New York",
+    "NC": "North Carolina",
+    "ND": "North Dakota",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregon",
+    "PA": "Pennsylvania",
+    "RI": "Rhode Island",
+    "SC": "South Carolina",
+    "SD": "South Dakota",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VA": "Virginia",
+    "WA": "Washington",
+    "WV": "West Virginia",
+    "WI": "Wisconsin",
+    "WY": "Wyoming",
+}
+
+def normalize_state(state: str) -> str:
+    s = (state or "").strip()
+    if not s:
+        return ""
+    if len(s) == 2:
+        return STATE_MAP.get(s.upper(), s)
+    return s
+
+import re
+from typing import Optional, Dict
+
+STREET_SUFFIXES = (
+    "st", "street", "rd", "road", "ave", "avenue", "blvd", "boulevard",
+    "dr", "drive", "ln", "lane", "ct", "court", "cir", "circle",
+    "pkwy", "parkway", "hwy", "highway", "pl", "place", "way"
+)
+
+def parse_address_line(s: str) -> Optional[Dict[str, str]]:
+    """
+    Best-effort parse of an address line into:
+      Street, City, State, Postal Code
+
+    Supports:
+      - "444 4th St Arab, AL 35976"
+      - "444 4th St, Arab, AL 35976"
+      - "333 3rd st" (street-only)
+    """
+    raw = (s or "").strip()
+    if not raw:
+        return None
+
+    # Normalize whitespace
+    txt = re.sub(r"\s+", " ", raw).strip()
+
+    # Pull ZIP first (required for full parse)
+    mzip = re.search(r"\b(\d{5})(?:-\d{4})?\b", txt)
+    zip5 = mzip.group(1) if mzip else ""
+
+    # ---------- Pattern A: "street city, ST ZIP"
+    # Example: "444 4th St Arab, AL 35976"
+    m = re.match(
+        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?$",
+        txt
+    )
+    if m:
+        return {
+            "Street": m.group("street").strip(),
+            "City": m.group("city").strip(),
+            "State": m.group("state").strip(),
+            "Postal Code": m.group("zip").strip(),
+        }
+
+    # ---------- Pattern B: "street, city, ST ZIP"
+    # Example: "444 4th St, Arab, AL 35976"
+    m = re.match(
+        r"^(?P<street>.+?)\s*,\s*(?P<city>.+?)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?$",
+        txt
+    )
+    if m:
+        return {
+            "Street": m.group("street").strip(),
+            "City": m.group("city").strip(),
+            "State": m.group("state").strip(),
+            "Postal Code": m.group("zip").strip(),
+        }
+
+    # ---------- Pattern D: "street city ST ZIP" (no commas)
+    # Example: "333 3rd st arab al 35976"
+    m = re.match(
+        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?$",
+        txt
+    )
+    if m:
+        return {
+            "Street": m.group("street").strip(),
+            "City": m.group("city").strip(),
+            "State": m.group("state").strip(),
+            "Postal Code": m.group("zip").strip(),
+        }
+
+    # ---------- Pattern C: street-only
+    # Only accept street-only if it looks like a street line (has a number + suffix)
+    low = txt.lower()
+    has_number = bool(re.search(r"\d", low))
+    has_suffix = any(re.search(rf"\b{re.escape(suf)}\b", low) for suf in STREET_SUFFIXES)
+
+    if has_number and has_suffix and not zip5:
+        return {"Street": txt}
+
+    # If it has a zip but didn't match full patterns, don't guess (avoid bad splits)
+    return None
 
 def normalize_birthday(raw: str) -> str:
     s = (raw or "").strip()
@@ -537,6 +681,198 @@ def parse_add_remove(message: str):
 
     return (None, None)
 
+def split_edit_parts(message: str) -> List[str]:
+    """
+    Splits a user edit message into chunks.
+    IMPORTANT: do NOT split on commas, because addresses use commas.
+    """
+    s = (message or "").strip()
+    if not s:
+        return []
+
+    # Split on semicolons OR the word "and" used as a separator OR newlines
+    parts = re.split(r"\s*;\s*|\s+\band\b\s+|\n+", s, flags=re.IGNORECASE)
+
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _looks_like_email(s: str) -> bool:
+    return bool(re.search(r"[^\s]+@[^\s]+\.[^\s]+", s or ""))
+
+
+def _extract_email(s: str) -> str:
+    m = re.search(r"([^\s]+@[^\s]+\.[^\s]+)", s or "")
+    return (m.group(1).strip() if m else "").strip()
+
+
+def _extract_zip(s: str) -> str:
+    m = re.search(r"\b(\d{5})\b", s or "")
+    return (m.group(1) if m else "").strip()
+
+
+def _extract_phone_candidate(s: str) -> str:
+    # Keep digits; if 7/10/11 digits it's likely a phone
+    digits = normalize_phone(s)
+    if len(digits) in (7, 10, 11):
+        return digits
+    # Sometimes they paste "256-xxx-xxxx ext 2" -> still ok
+    if len(digits) >= 10:
+        return digits
+    return ""
+
+
+def _looks_like_birthday(s: str) -> bool:
+    s2 = (s or "").strip()
+    if not s2:
+        return False
+    # MM/DD, M-D, MM/DD/YYYY, YYYY-MM-DD, "Oct 14"
+    if re.search(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", s2):
+        return True
+    if re.search(r"\b\d{4}-\d{2}-\d{2}\b", s2):
+        return True
+    # month name + day
+    if re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2}\b", s2, re.IGNORECASE):
+        return True
+    return False
+
+
+def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]:
+    """
+    Applies 'add/edit' instructions to a pending customer dict.
+    Returns: (updated_customer, notes[])
+    """
+    c = dict(customer or {})
+    notes: List[str] = []
+
+    parts = split_edit_parts(message)
+
+    for raw in parts:
+        txt = raw.strip()
+        low = txt.lower()
+
+        # strip leading verbs
+        for prefix in ("edit ", "edit:", "add ", "add:", "update ", "update:"):
+            if low.startswith(prefix):
+                txt = txt[len(prefix):].strip()
+                low = txt.lower()
+                break
+
+        if not txt:
+            continue
+
+        # --- Explicit field targets first ---
+        # email:
+        if low.startswith("email"):
+            email = _extract_email(txt)
+            if email:
+                c["Email"] = email
+                notes.append("Email updated")
+            continue
+
+        # phone:
+        if low.startswith("phone") or low.startswith("cell") or low.startswith("mobile"):
+            ph = _extract_phone_candidate(txt)
+            if ph:
+                c["Phone"] = ph
+                notes.append("Phone updated")
+            continue
+
+        # birthday:
+        if low.startswith("birthday") or low.startswith("bday") or low.startswith("dob"):
+            b = normalize_birthday(txt.replace("birthday", "").replace("bday", "").replace("dob", "").strip())
+            if b:
+                c["Birthday"] = b
+                notes.append("Birthday updated")
+            continue
+
+        # address:
+        if low.startswith("address"):
+            # super simple parse: just store the full thing into Street if you want,
+            # but better is to accept "street, city, state zip" patterns.
+            addr = txt.replace("address", "", 1).strip(": ").strip()
+                    # address:
+        if low.startswith("address"):
+            addr = txt.replace("address", "", 1).strip(": ").strip()
+            if addr:
+                # ✅ Try smart parse first
+                parsed = parse_address_line(addr)
+                if parsed:
+                    c.update(parsed)
+                    notes.append("Address updated")
+                    continue
+
+                # Fallback: your existing comma split
+                if "," in addr:
+                    chunks = [x.strip().strip(",") for x in addr.split(",") if x.strip()]
+                    if len(chunks) >= 2:
+                        c["Street"] = chunks[0]
+                        c["City"] = chunks[1]
+                        if len(chunks) >= 3:
+                            stzip = chunks[2]
+                            z = _extract_zip(stzip)
+                            if z:
+                                c["Postal Code"] = z
+                            st_only = re.sub(r"\b\d{5}\b", "", stzip).strip()
+                            if st_only:
+                                c["State"] = st_only
+                        notes.append("Address updated")
+                        continue
+
+                # Final fallback: at least save it
+                c["Street"] = addr
+                notes.append("Address updated (street)")
+            continue
+
+        # --- Guess by format ---
+        # Email guess
+        if _looks_like_email(txt):
+            c["Email"] = _extract_email(txt)
+            notes.append("Email updated")
+            continue
+
+        # Birthday guess
+        if _looks_like_birthday(txt):
+            b = normalize_birthday(txt)
+            if b:
+                c["Birthday"] = b
+                notes.append("Birthday updated")
+                continue
+
+        # Phone guess
+        ph = _extract_phone_candidate(txt)
+        if ph:
+            c["Phone"] = ph
+            notes.append("Phone updated")
+            continue
+
+        # ✅ Address guess (must be BEFORE zip guess)
+        parsed = parse_address_line(txt)
+        if parsed:
+            c.update(parsed)
+            notes.append("Address updated")
+            continue
+
+        # Zip guess
+        z = _extract_zip(txt)
+        if z:
+            c["Postal Code"] = z
+            notes.append("Postal code updated")
+            continue
+
+        # Fallback: if they typed something else, ignore but keep a note
+        notes.append(f"Couldn’t apply: “{raw}”")
+
+    # Clean punctuation that causes "Street," to get saved to JSON
+    for k in ("Street", "City", "State"):
+        if k in c and isinstance(c[k], str):
+            c[k] = c[k].strip().rstrip(",")
+
+    # Re-normalize (important!)
+    c["Phone"] = normalize_phone(c.get("Phone", ""))
+    c["Birthday"] = normalize_birthday(c.get("Birthday", ""))
+    c["State"] = normalize_state(c.get("State", ""))
+
+    return c, notes
 
 def parse_qty_prefix(text: str) -> Tuple[int, str]:
     t = (text or "").strip()
@@ -631,6 +967,7 @@ class MKChatEngine:
             kind = pending.get("kind")
 
             if kind == "customer_confirm":
+                # ✅ Confirm
                 if yes(msg):
                     customer = pending["customer"]
                     insert_job("NEW_CUSTOMER", customer, consultant_id=consultant_id)
@@ -638,11 +975,29 @@ class MKChatEngine:
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply(f"✅ {customer['First Name']} {customer['Last Name']} confirmed. Adding to MyCustomers now.")
+
+                # ❌ Reject
                 if no(msg):
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply("No problem — Send the corrected customer info and I’ll try again.")
-                return ChatReply("Please reply yes or no.")
+
+                # ✏️ Edit / add support
+                updated, notes = apply_customer_edits(pending["customer"], msg)
+                pending["customer"] = updated
+                state["pending"] = pending
+                save_session_state(state, session_id=sid)
+
+                note_line = ""
+                if notes:
+                    # keep it short
+                    note_line = "Updated: " + ", ".join(notes[:3]) + ("…" if len(notes) > 3 else "") + "\n\n"
+
+                return ChatReply(
+                    note_line
+                    + self._format_customer_confirm(updated)
+                #    + "\n\nTip: You can say things like `edit email ...`, `edit phone ...`, `add birthday ...`, or `edit address ...`."
+                )
 
             if kind == "order_line_confirm_top":
                 order = pending["order"]
@@ -765,6 +1120,7 @@ class MKChatEngine:
 
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}
+            customer["State"] = normalize_state(customer.get("State", ""))
             customer["Phone"] = normalize_phone(customer.get("Phone", ""))
             customer["Birthday"] = normalize_birthday(customer.get("Birthday", ""))
 
@@ -855,14 +1211,23 @@ class MKChatEngine:
             return ChatReply(propose_top(top, current_qty=order["lines"][nxt]["qty"]))
 
     def _format_customer_confirm(self, customer: dict) -> str:
-        street = (customer.get("Street") or "").strip() or "(none)"
+        street = (customer.get("Street") or "").strip()
         city = (customer.get("City") or "").strip()
         st = (customer.get("State") or "").strip()
         postal = (customer.get("Postal Code") or "").strip()
 
-        addr = street
-        if any([city, st, postal]):
-            addr = f"{street}, {city}, {st} {postal}".strip()
+        # Build address safely (no double commas)
+        parts = []
+        if street:
+            parts.append(street.rstrip(","))
+        if city:
+            parts.append(city.rstrip(","))
+
+        line2 = " ".join([p for p in [st, postal] if p]).strip()
+        if line2:
+            parts.append(line2)
+
+        addr = ", ".join(parts) if parts else "(none)"
 
         phone_disp = format_phone_display(customer.get("Phone", ""))
         birthday_disp = birthday_display(customer.get("Birthday", ""))
@@ -874,7 +1239,8 @@ class MKChatEngine:
             f"• Phone: {phone_disp or '(none)'}\n"
             f"• Address: {addr}\n"
             f"• Birthday: {birthday_disp or '(none)'}\n"
-            "Does that look right? (yes/no)"
+            "Does that look right? (yes/no)\n"
+            "You can also say 'add...' or 'edit...'"
         )
 
     def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict]) -> dict:
