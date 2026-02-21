@@ -386,6 +386,16 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) 
 def normalize_phone(phone: str) -> str:
     return re.sub(r"\D+", "", phone or "")
 
+def yes(s: str) -> bool:
+    return (s or "").strip().lower() in (
+        "y", "yes", "yeah", "yep", "ok", "okay", "confirm", "correct", "right",
+        "si", "sí",  # optional Spanish
+    )
+
+def no(s: str) -> bool:
+    return (s or "").strip().lower() in (
+        "n", "no", "nope", "nah", "wrong", "incorrect",
+    )
 
 def format_phone_display(phone: str) -> str:
     digits = normalize_phone(phone)
@@ -460,8 +470,6 @@ def normalize_state(state: str) -> str:
         return STATE_MAP.get(s.upper(), s)
     return s
 
-import re
-from typing import Optional, Dict
 
 STREET_SUFFIXES = (
     "st", "street", "rd", "road", "ave", "avenue", "blvd", "boulevard",
@@ -634,13 +642,76 @@ def birthday_display(normalized: str) -> str:
         return f"{month} {d}"
     return f"{month} {d}, {y}"
 
+UI_EN = {
+    "empty_prompt": "Say something like: “new customer Jane Doe …” or “order for Jane Doe: …”",
+    "canceled": "Okay — canceled. Ready for your new customer or order.",
 
-def yes(s: str) -> bool:
-    return s.strip().lower() in ("y", "yes", "yeah", "yep", "ok", "okay", "confirm", "correct", "right")
+    "cust_submit_intro": "Okay — here’s the customer I’m about to submit:",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "address": "Address",
+    "birthday": "Birthday",
+    "none": "(none)",
+    "cust_confirm_q": "Does that look right? (yes/no)",
+    "cust_edit_hint": "You can also say 'add...' or 'edit...'",
 
+    "order_intro": "Okay — I have this order for {first} {last}:",
+    "estimated_total": "Estimated retail total: {total}",
+    "order_confirm_q": "Does that sound right? (yes/no)",
 
-def no(s: str) -> bool:
-    return s.strip().lower() in ("n", "no", "nope", "nah", "wrong", "incorrect")
+    "need_customer_for_order": "Who is this order for? Please tell me the customer name and paste the order again.",
+    "need_items": "What items should I add to the order?",
+    "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
+    "reply_yes_no_qty": "Reply yes/no — or type a quantity like `2` or `x2`.",
+    "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
+}
+
+UI_ES = {
+    "empty_prompt": "Di algo como: “nuevo cliente Jane Doe …” o “pedido para Jane Doe: …”",
+    "canceled": "Listo — cancelado. Estoy listo para tu nuevo cliente o pedido.",
+
+    "cust_submit_intro": "Perfecto — este es el cliente que estoy por enviar:",
+    "name": "Nombre",
+    "email": "Correo",
+    "phone": "Teléfono",
+    "address": "Dirección",
+    "birthday": "Cumpleaños",
+    "none": "(ninguno)",
+    "cust_confirm_q": "¿Se ve correcto? (sí/no)",
+    "cust_edit_hint": "También puedes decir 'add...' o 'edit...'",  # keep your add/edit commands in English if you want
+
+    "order_intro": "Perfecto — tengo este pedido para {first} {last}:",
+    "estimated_total": "Total estimado (precio): {total}",
+    "order_confirm_q": "¿Suena bien? (sí/no)",
+
+    "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y vuelve a pegar el pedido.",
+    "need_items": "¿Qué artículos debo agregar al pedido?",
+    "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
+    "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
+    "order_adjust_hint": "También puedes decir `add ...` o `remove ...`.",
+}
+
+def parse_add_remove(message: str):
+    m = (message or "").strip()
+    low = m.lower().strip()
+
+    # ADD keywords (EN + ES)
+    for kw in ("add ", "add:", "agrega ", "agrega:", "añade ", "añade:", "anade ", "anade:"):
+        if low.startswith(kw):
+            rest = m[len(kw):].strip()
+            return ("add", rest)
+
+    # REMOVE keywords (EN + ES)
+    for kw in (
+        "remove ", "remove:", "delete ", "delete:",
+        "quita ", "quita:", "quitar ", "quitar:", "elimina ", "elimina:", "borrar ", "borrar:"
+    ):
+        if low.startswith(kw):
+            rest = m[len(kw):].strip()
+            return ("remove", rest)
+
+    return (None, None)
 
 
 def fix_qty_if_number_is_part_of_name(text: str, qty: int) -> int:
@@ -654,7 +725,16 @@ def fix_qty_if_number_is_part_of_name(text: str, qty: int) -> int:
 def propose_top(top: dict, current_qty: int) -> str:
     q = int(current_qty or 1)
     qtxt = f" x{q}" if q != 1 else ""
-    return f"I think you mean: {top['product_name']} {fmt_price(top.get('price'))}{qtxt}. Is that right? (yes/no)"
+
+    price_txt = fmt_price(top.get("price"))
+    parts = [top["product_name"]]
+
+    if price_txt:
+        parts.append(price_txt)
+
+    line = " ".join(parts) + qtxt
+
+    return f"I think you mean: {line}. Is that right? (yes/no)"
 
 
 def render_top5(matches: List[dict]) -> str:
@@ -663,23 +743,6 @@ def render_top5(matches: List[dict]) -> str:
     for i, m in enumerate(top, start=1):
         lines.append(f"{i}) {m['product_name']} {fmt_price(m.get('price'))}".strip())
     return "\n".join(lines)
-
-
-def parse_add_remove(message: str):
-    m = (message or "").strip()
-    low = m.lower()
-
-    for kw in ("add ", "add:"):
-        if low.startswith(kw):
-            rest = m[len(kw):].strip()
-            return ("add", rest)
-
-    for kw in ("remove ", "remove:", "delete ", "delete:"):
-        if low.startswith(kw):
-            rest = m[len(kw):].strip()
-            return ("remove", rest)
-
-    return (None, None)
 
 def split_edit_parts(message: str) -> List[str]:
     """
@@ -786,11 +849,6 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             continue
 
         # address:
-        if low.startswith("address"):
-            # super simple parse: just store the full thing into Street if you want,
-            # but better is to accept "street, city, state zip" patterns.
-            addr = txt.replace("address", "", 1).strip(": ").strip()
-                    # address:
         if low.startswith("address"):
             addr = txt.replace("address", "", 1).strip(": ").strip()
             if addr:
@@ -936,6 +994,7 @@ class MKChatEngine:
         load_dotenv()
         self.client = OpenAI()
 
+    ##
     def handle_message(self, message: str, consultant_id: int, session_id: Optional[int] = None) -> ChatReply:
         sid = int(session_id or consultant_id)
         state = load_session_state(session_id=sid)
@@ -943,7 +1002,76 @@ class MKChatEngine:
         from auth_core import get_consultant
 
         consultant = get_consultant(consultant_id)
-        language = consultant.get("language", "en") if consultant else "en"
+        language = (consultant.get("language", "en") if consultant else "en") or "en"
+        language = language.strip().lower()
+
+        # -------------------------
+        # UI copy (EN/ES)
+        # -------------------------
+        UI_EN = {
+            "empty_prompt": "Say something like: “new customer Jane Doe …” or “order for Jane Doe: …”",
+            "canceled": "Okay — canceled. Ready for your new customer or order.",
+
+            "cust_submit_intro": "Okay — here’s the customer I’m about to submit:",
+            "name": "Name",
+            "email": "Email",
+            "phone": "Phone",
+            "address": "Address",
+            "birthday": "Birthday",
+            "none": "(none)",
+            "cust_confirm_q": "Does that look right? (yes/no)",
+            "cust_edit_hint": "You can also say 'add...' or 'edit...'",
+
+            "order_intro": "Okay — I have this order for {first} {last}:",
+            "estimated_total": "Estimated retail total: {total}",
+            "order_confirm_q": "Does that sound right? (yes/no)",
+
+            "need_customer_for_order": "Who is this order for? Please tell me the customer name and paste the order again.",
+            "need_items": "What items should I add to the order?",
+            "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
+            "reply_yes_no_qty": "Reply yes/no — or type a quantity like `2` or `x2`.",
+            "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
+            "parse_error": "❌ Parse error: {err}",
+            "cant_tell": "I couldn’t tell if that was a new customer or an order. Try rephrasing.",
+            "cust_confirmed": "✅ {first} {last} confirmed. Adding to MyCustomers now.",
+            "cust_reject": "No problem — Send the corrected customer info and I’ll try again.",
+            "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
+            "order_reject": "Okay — paste the corrected order and I’ll rebuild the summary.",
+        }
+
+        UI_ES = {
+            "empty_prompt": "Di algo como: “nuevo cliente Jane Doe …” o “pedido para Jane Doe: …”",
+            "canceled": "Listo — cancelado. Estoy listo para tu nuevo cliente o pedido.",
+
+            "cust_submit_intro": "Perfecto — este es el cliente que estoy por enviar:",
+            "name": "Nombre",
+            "email": "Correo",
+            "phone": "Teléfono",
+            "address": "Dirección",
+            "birthday": "Cumpleaños",
+            "none": "(ninguno)",
+            "cust_confirm_q": "¿Se ve correcto? (sí/no)",
+            # Keep add/edit commands in English so your parser doesn't change
+            "cust_edit_hint": "You can also say 'add...' or 'edit...'",
+
+            "order_intro": "Perfecto — tengo este pedido para {first} {last}:",
+            "estimated_total": "Total estimado (precio): {total}",
+            "order_confirm_q": "¿Suena bien? (sí/no)",
+
+            "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y vuelve a pegar el pedido.",
+            "need_items": "¿Qué artículos debo agregar al pedido?",
+            "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
+            "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
+            "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
+            "parse_error": "❌ Error al interpretar: {err}",
+            "cant_tell": "No pude determinar si era un cliente nuevo o un pedido. Intenta reformularlo.",
+            "cust_confirmed": "✅ {first} {last} confirmado. Agregando a MyCustomers ahora.",
+            "cust_reject": "No hay problema — envíame la info corregida del cliente y lo intento de nuevo.",
+            "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",
+            "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
+        }
+
+        ui = UI_ES if language == "es" else UI_EN
 
         catalog_path = get_catalog_path_for_language(language)
         catalog = load_catalog(catalog_path)
@@ -953,12 +1081,12 @@ class MKChatEngine:
         msg = (message or "").strip()
 
         if not msg:
-            return ChatReply("Say something like: “new customer Jane Doe …” or “order for Jane Doe: …”")
+            return ChatReply(ui["empty_prompt"])
 
         if msg.lower() in ("cancel", "stop", "nevermind", "never mind"):
             state["pending"] = None
             save_session_state(state, session_id=sid)
-            return ChatReply("Okay — canceled. Ready for your new customer or order.")
+            return ChatReply(ui["canceled"])
 
         # -------------------------
         # Pending flows
@@ -974,13 +1102,18 @@ class MKChatEngine:
                     state["last_customer"] = customer
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply(f"✅ {customer['First Name']} {customer['Last Name']} confirmed. Adding to MyCustomers now.")
+                    return ChatReply(
+                        ui["cust_confirmed"].format(
+                            first=customer.get("First Name", "").strip(),
+                            last=customer.get("Last Name", "").strip(),
+                        )
+                    )
 
                 # ❌ Reject
                 if no(msg):
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply("No problem — Send the corrected customer info and I’ll try again.")
+                    return ChatReply(ui["cust_reject"])
 
                 # ✏️ Edit / add support
                 updated, notes = apply_customer_edits(pending["customer"], msg)
@@ -990,14 +1123,9 @@ class MKChatEngine:
 
                 note_line = ""
                 if notes:
-                    # keep it short
                     note_line = "Updated: " + ", ".join(notes[:3]) + ("…" if len(notes) > 3 else "") + "\n\n"
 
-                return ChatReply(
-                    note_line
-                    + self._format_customer_confirm(updated)
-                #    + "\n\nTip: You can say things like `edit email ...`, `edit phone ...`, `add birthday ...`, or `edit address ...`."
-                )
+                return ChatReply(note_line + self._format_customer_confirm(updated, ui))
 
             if kind == "order_line_confirm_top":
                 order = pending["order"]
@@ -1021,7 +1149,7 @@ class MKChatEngine:
                 if yes(msg):
                     order["lines"][line_index]["chosen"] = top
                     state["pending"] = None
-                    return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog)
+                    return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
 
                 if no(msg):
                     state["pending"] = {
@@ -1033,7 +1161,7 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     return ChatReply(render_top5(matches))
 
-                return ChatReply("Reply yes/no — or type a quantity like `2` or `x2`.")
+                return ChatReply(ui["reply_yes_no_qty"])
 
             if kind == "order_line_pick_top5_or_search":
                 order = pending["order"]
@@ -1046,11 +1174,11 @@ class MKChatEngine:
                         picked = matches[i - 1]
                         order["lines"][line_index]["chosen"] = picked
                         state["pending"] = None
-                        return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog)
+                        return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
 
                 new_matches = best_matches(catalog, msg, limit=MATCH_LIMIT)
                 if not new_matches:
-                    return ChatReply("No close matches. Try rewording the item (brand/line/shade helps).")
+                    return ChatReply(ui["no_matches"])
 
                 state["pending"] = {
                     "kind": "order_line_pick_top5_or_search",
@@ -1071,7 +1199,7 @@ class MKChatEngine:
                         return ChatReply("Tell me what to add, e.g. `add satin hands`.")
                     order["lines"].append({"text": item_text, "qty": qty, "chosen": None})
                     state["pending"] = None
-                    return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog)
+                    return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
 
                 if action == "remove":
                     target = (rest or "").strip()
@@ -1082,7 +1210,7 @@ class MKChatEngine:
                         return ChatReply("I couldn’t find that item to remove. Try `remove 2` or part of the name.")
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
-                    return ChatReply(self._format_order_confirm(order) + "\n\nYou can also say `add ...` or `remove ...`.")
+                    return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
 
                 if yes(msg):
                     cust_first = order["customer"]["First Name"]
@@ -1101,12 +1229,12 @@ class MKChatEngine:
                     state["pending"] = None
                     state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
                     save_session_state(state, session_id=sid)
-                    return ChatReply(f"✅ Order for {cust_first} {cust_last} confirmed. Sending to MyCustomers now.")
+                    return ChatReply(ui["order_confirmed"].format(first=cust_first, last=cust_last))
 
                 if no(msg):
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply("Okay — paste the corrected order and I’ll rebuild the summary.")
+                    return ChatReply(ui["order_reject"])
 
                 return ChatReply("Reply yes/no — or say `add ...` / `remove ...` to adjust the order.")
 
@@ -1116,7 +1244,7 @@ class MKChatEngine:
         try:
             parsed = parse_with_openai(self.client, msg, last_customer)
         except Exception as e:
-            return ChatReply(f"❌ Parse error: {e}")
+            return ChatReply(ui["parse_error"].format(err=str(e)))
 
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}
@@ -1126,7 +1254,7 @@ class MKChatEngine:
 
             state["pending"] = {"kind": "customer_confirm", "customer": customer}
             save_session_state(state, session_id=sid)
-            return ChatReply(self._format_customer_confirm(customer))
+            return ChatReply(self._format_customer_confirm(customer, ui))
 
         if parsed.get("type") == "order":
             order = parsed.get("order") or {}
@@ -1138,11 +1266,11 @@ class MKChatEngine:
                 cust_last = (last_customer.get("Last Name") or "").strip()
 
             if not cust_first or not cust_last:
-                return ChatReply("Who is this order for? Please include first and last name.")
+                return ChatReply(ui["need_customer_for_order"])
 
             items = order.get("items") or []
             if not items:
-                return ChatReply("What items should I add to the order?")
+                return ChatReply(ui["need_items"])
 
             order_draft = self._make_order_draft(cust_first, cust_last, items)
             if not order_draft["lines"]:
@@ -1174,21 +1302,40 @@ class MKChatEngine:
             state["pending"] = {"kind": "order_confirm", "order": order_draft}
             state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
             save_session_state(state, session_id=sid)
-            return ChatReply(self._format_order_confirm(order_draft) + "\n\nYou can also say `add ...` or `remove ...`.")
+            return ChatReply(self._format_order_confirm(order_draft, ui) + "\n\n" + ui["order_adjust_hint"])
 
-        return ChatReply("I couldn’t tell if that was a new customer or an order. Try rephrasing.")
+        return ChatReply(ui["cant_tell"])
+
 
     # -------------------------
     # Internal helper methods
     # -------------------------
-    def _continue_resolving_and_reply(self, state: dict, order: dict, consultant_id: int, sid: int, catalog: List[dict]) -> ChatReply:
+    # -------------------------
+# Internal helper methods
+# -------------------------
+    def _continue_resolving_and_reply(
+        self,
+        state: dict,
+        order: dict,
+        consultant_id: int,
+        sid: int,
+        catalog: List[dict],
+        ui: dict,  # 👈 ADD THIS
+    ) -> ChatReply:
+
         while True:
             nxt = self._next_unresolved_index(order)
+
             if nxt is None:
                 state["pending"] = {"kind": "order_confirm", "order": order}
                 state["last_customer"] = order["customer"]
                 save_session_state(state, session_id=sid)
-                return ChatReply(self._format_order_confirm(order) + "\n\nYou can also say `add ...` or `remove ...`.")
+
+                return ChatReply(
+                    self._format_order_confirm(order, ui)
+                    + "\n\n"
+                    + ui["order_adjust_hint"]
+                )
 
             picked, _m = auto_pick_match(catalog, order["lines"][nxt]["text"])
             if picked:
@@ -1196,7 +1343,12 @@ class MKChatEngine:
                 continue
 
             top, matches, _ = self._start_line_resolution(catalog, order, nxt)
-            pick_idx = llm_pick_from_candidates(self.client, order["lines"][nxt]["text"], matches)
+            pick_idx = llm_pick_from_candidates(
+                self.client,
+                order["lines"][nxt]["text"],
+                matches,
+            )
+
             if pick_idx is not None:
                 top = matches[pick_idx]
 
@@ -1207,10 +1359,12 @@ class MKChatEngine:
                 "top": top,
                 "matches": matches,
             }
+
             save_session_state(state, session_id=sid)
             return ChatReply(propose_top(top, current_qty=order["lines"][nxt]["qty"]))
 
-    def _format_customer_confirm(self, customer: dict) -> str:
+    ## format_customer_confirm
+    def _format_customer_confirm(self, customer: dict, ui: dict) -> str:
         street = (customer.get("Street") or "").strip()
         city = (customer.get("City") or "").strip()
         st = (customer.get("State") or "").strip()
@@ -1227,21 +1381,22 @@ class MKChatEngine:
         if line2:
             parts.append(line2)
 
-        addr = ", ".join(parts) if parts else "(none)"
+        addr = ", ".join(parts) if parts else ui["none"]
 
         phone_disp = format_phone_display(customer.get("Phone", ""))
         birthday_disp = birthday_display(customer.get("Birthday", ""))
 
         return (
-            "Okay — here’s the customer I’m about to submit:\n"
-            f"• Name: {customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}\n"
-            f"• Email: {(customer.get('Email','') or '').strip() or '(none)'}\n"
-            f"• Phone: {phone_disp or '(none)'}\n"
-            f"• Address: {addr}\n"
-            f"• Birthday: {birthday_disp or '(none)'}\n"
-            "Does that look right? (yes/no)\n"
-            "You can also say 'add...' or 'edit...'"
+            f"{ui['cust_submit_intro']}\n"
+            f"• {ui['name']}: {customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}\n"
+            f"• {ui['email']}: {(customer.get('Email','') or '').strip() or ui['none']}\n"
+            f"• {ui['phone']}: {phone_disp or ui['none']}\n"
+            f"• {ui['address']}: {addr}\n"
+            f"• {ui['birthday']}: {birthday_disp or ui['none']}\n"
+            f"{ui['cust_confirm_q']}\n"
+            f"{ui['cust_edit_hint']}"
         )
+
 
     def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict]) -> dict:
         lines = []
@@ -1256,9 +1411,10 @@ class MKChatEngine:
             lines.append({"text": text, "qty": qty, "chosen": None})
         return {"customer": {"First Name": cust_first, "Last Name": cust_last}, "lines": lines}
 
-    def _format_order_confirm(self, order: dict) -> str:
+    def _format_order_confirm(self, order: dict, ui: dict) -> str:
         cust = order["customer"]
-        out = [f"Okay — I have this order for {cust['First Name']} {cust['Last Name']}:"]
+        out = [ui["order_intro"].format(first=cust["First Name"], last=cust["Last Name"])]
+
         total = 0.0
         any_prices = False
 
@@ -1274,10 +1430,11 @@ class MKChatEngine:
             out.append(f"• {i}) {chosen['product_name']} {fmt_price(price)} x{qty}")
 
         if any_prices:
-            out.append(f"Estimated retail total: ${total:.2f}")
+            out.append(ui["estimated_total"].format(total=f"${total:.2f}"))
 
-        out.append("Does that sound right? (yes/no)")
+        out.append(ui["order_confirm_q"])
         return "\n".join(out)
+
 
     def _next_unresolved_index(self, order: dict) -> Optional[int]:
         for i, line in enumerate(order["lines"]):
