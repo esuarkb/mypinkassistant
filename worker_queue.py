@@ -3,7 +3,7 @@ import os
 import uuid
 from typing import Optional, Tuple
 
-from db import connect, is_postgres
+from db import connect, is_postgres, paramify
 
 # How long a consultant lock is valid (seconds) in case a worker crashes.
 LOCK_TTL_SECONDS = 15 * 60  # 15 minutes
@@ -127,6 +127,12 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
             )
 
         conn.commit()
+        
+        # Run retention cleanup while we're at it
+        try:
+            retention_cleanup()
+        except Exception as e:
+            print(f"[Retention error - non fatal] {e}")
     finally:
         try:
             cur.close()
@@ -134,6 +140,99 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
             pass
         conn.close()
 
+def retention_cleanup(redact_hours: int = 24, delete_days: int = 90):
+    """
+    Redact PII after `redact_hours`.
+    Delete old jobs entirely after `delete_days`.
+
+    Safe for both SQLite and Postgres.
+    """
+
+    conn = connect()
+    cur = conn.cursor()
+
+    try:
+        if is_postgres():
+            # ---------------------------
+            # REDACT (Postgres)
+            # ---------------------------
+            cur.execute("""
+                UPDATE jobs
+                SET payload_json = '{}',
+                    error = '',
+                    status_msg = COALESCE(NULLIF(status_msg,''), 'Redacted')
+                WHERE status IN ('done','failed')
+                  AND payload_json <> '{}'
+                  AND COALESCE(finished_at, created_at)
+                        < (NOW() - INTERVAL %s)
+            """, (f"{redact_hours} hours",))
+
+            redacted = cur.rowcount
+
+            # ---------------------------
+            # DELETE (Postgres)
+            # ---------------------------
+            cur.execute("""
+                DELETE FROM jobs
+                WHERE COALESCE(finished_at, created_at)
+                      < (NOW() - INTERVAL %s)
+            """, (f"{delete_days} days",))
+
+            deleted = cur.rowcount
+
+        else:
+            # ---------------------------
+            # REDACT (SQLite)
+            # ---------------------------
+            cur.execute("""
+                UPDATE jobs
+                SET payload_json='{}',
+                    error='',
+                    status_msg=CASE
+                        WHEN status_msg IS NULL OR status_msg='' THEN 'Redacted'
+                        ELSE status_msg
+                    END
+                WHERE status IN ('done','failed')
+                  AND payload_json <> '{}'
+                  AND (
+                      strftime('%s','now') - strftime('%s',
+                        COALESCE(NULLIF(finished_at,''), NULLIF(created_at,''))
+                      )
+                  ) > ?
+            """, (redact_hours * 3600,))
+
+            redacted = cur.rowcount
+
+            # ---------------------------
+            # DELETE (SQLite)
+            # ---------------------------
+            cur.execute("""
+                DELETE FROM jobs
+                WHERE (
+                    strftime('%s','now') - strftime('%s',
+                      COALESCE(NULLIF(finished_at,''), NULLIF(created_at,''))
+                    )
+                ) > ?
+            """, (delete_days * 24 * 3600,))
+
+            deleted = cur.rowcount
+
+        conn.commit()
+
+        print(f"[Retention] Redacted: {redacted} | Deleted: {deleted}")
+
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"[Retention ERROR] {e}")
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
 def _begin(cur):
     # SQLite supports BEGIN IMMEDIATE, Postgres doesn't need it (BEGIN is fine)
