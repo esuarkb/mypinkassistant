@@ -2,6 +2,10 @@
 import os
 import uuid
 from typing import Optional, Tuple
+import time
+
+RETENTION_EVERY_SECONDS = 15 * 60  # run every 15 minutes (change if you want)
+_last_retention_run = 0.0
 
 from db import connect, is_postgres, paramify
 
@@ -128,11 +132,15 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
 
         conn.commit()
         
-        # Run retention cleanup while we're at it
-        try:
-            retention_cleanup()
-        except Exception as e:
-            print(f"[Retention error - non fatal] {e}")
+        # Run retention cleanup occasionally (NOT every loop)
+        global _last_retention_run
+        now = time.time()
+        if (now - _last_retention_run) >= RETENTION_EVERY_SECONDS:
+            try:
+                retention_cleanup()
+            except Exception as e:
+                print(f"[Retention ERROR - non-fatal] {e}")
+        _last_retention_run = now
     finally:
         try:
             cur.close()
@@ -218,8 +226,8 @@ def retention_cleanup(redact_hours: int = 24, delete_days: int = 90):
             deleted = cur.rowcount
 
         conn.commit()
-
-        print(f"[Retention] Redacted: {redacted} | Deleted: {deleted}")
+        if redacted or deleted:
+            print(f"[Retention] Redacted: {redacted} | Deleted: {deleted}")
 
     except Exception as e:
         try:
