@@ -7,7 +7,7 @@ import datetime
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -665,6 +665,14 @@ UI_EN = {
     "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
     "reply_yes_no_qty": "Reply yes/no — or type a quantity like `2` or `x2`.",
     "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
+
+    # ✅ Missing keys your code uses:
+    "parse_error": "❌ Parse error: {err}",
+    "cant_tell": "I couldn’t tell if that was a new customer or an order. Try rephrasing.",
+    "cust_confirmed": "✅ {first} {last} confirmed. Adding to MyCustomers now.",
+    "cust_reject": "No problem — Send the corrected customer info and I’ll try again.",
+    "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
+    "order_reject": "Okay — paste the corrected order and I’ll rebuild the summary.",
 }
 
 UI_ES = {
@@ -679,7 +687,8 @@ UI_ES = {
     "birthday": "Cumpleaños",
     "none": "(ninguno)",
     "cust_confirm_q": "¿Se ve correcto? (sí/no)",
-    "cust_edit_hint": "También puedes decir 'add...' o 'edit...'",  # keep your add/edit commands in English if you want
+    # keep add/edit commands in English so your parser stays simple
+    "cust_edit_hint": "You can also say 'add...' or 'edit...'",
 
     "order_intro": "Perfecto — tengo este pedido para {first} {last}:",
     "estimated_total": "Total estimado (precio): {total}",
@@ -689,7 +698,15 @@ UI_ES = {
     "need_items": "¿Qué artículos debo agregar al pedido?",
     "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
     "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
-    "order_adjust_hint": "También puedes decir `add ...` o `remove ...`.",
+    "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
+
+    # ✅ Missing keys your code uses:
+    "parse_error": "❌ Error al interpretar: {err}",
+    "cant_tell": "No pude determinar si era un cliente nuevo o un pedido. Intenta reformularlo.",
+    "cust_confirmed": "✅ {first} {last} confirmado. Agregando a MyCustomers ahora.",
+    "cust_reject": "No hay problema — envíame la info corregida del cliente y lo intento de nuevo.",
+    "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",
+    "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
 }
 
 def parse_add_remove(message: str):
@@ -735,7 +752,6 @@ def propose_top(top: dict, current_qty: int) -> str:
     line = " ".join(parts) + qtxt
 
     return f"I think you mean: {line}. Is that right? (yes/no)"
-
 
 def render_top5(matches: List[dict]) -> str:
     top = matches[:TOP5]
@@ -993,6 +1009,7 @@ class MKChatEngine:
     def __init__(self):
         load_dotenv()
         self.client = OpenAI()
+        self._catalog_cache = {}  # {"en": [...], "es": [...]}
 
     ##
     def handle_message(self, message: str, consultant_id: int, session_id: Optional[int] = None) -> ChatReply:
@@ -1005,76 +1022,15 @@ class MKChatEngine:
         language = (consultant.get("language", "en") if consultant else "en") or "en"
         language = language.strip().lower()
 
-        # -------------------------
-        # UI copy (EN/ES)
-        # -------------------------
-        UI_EN = {
-            "empty_prompt": "Say something like: “new customer Jane Doe …” or “order for Jane Doe: …”",
-            "canceled": "Okay — canceled. Ready for your new customer or order.",
-
-            "cust_submit_intro": "Okay — here’s the customer I’m about to submit:",
-            "name": "Name",
-            "email": "Email",
-            "phone": "Phone",
-            "address": "Address",
-            "birthday": "Birthday",
-            "none": "(none)",
-            "cust_confirm_q": "Does that look right? (yes/no)",
-            "cust_edit_hint": "You can also say 'add...' or 'edit...'",
-
-            "order_intro": "Okay — I have this order for {first} {last}:",
-            "estimated_total": "Estimated retail total: {total}",
-            "order_confirm_q": "Does that sound right? (yes/no)",
-
-            "need_customer_for_order": "Who is this order for? Please tell me the customer name and paste the order again.",
-            "need_items": "What items should I add to the order?",
-            "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
-            "reply_yes_no_qty": "Reply yes/no — or type a quantity like `2` or `x2`.",
-            "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
-            "parse_error": "❌ Parse error: {err}",
-            "cant_tell": "I couldn’t tell if that was a new customer or an order. Try rephrasing.",
-            "cust_confirmed": "✅ {first} {last} confirmed. Adding to MyCustomers now.",
-            "cust_reject": "No problem — Send the corrected customer info and I’ll try again.",
-            "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
-            "order_reject": "Okay — paste the corrected order and I’ll rebuild the summary.",
-        }
-
-        UI_ES = {
-            "empty_prompt": "Di algo como: “nuevo cliente Jane Doe …” o “pedido para Jane Doe: …”",
-            "canceled": "Listo — cancelado. Estoy listo para tu nuevo cliente o pedido.",
-
-            "cust_submit_intro": "Perfecto — este es el cliente que estoy por enviar:",
-            "name": "Nombre",
-            "email": "Correo",
-            "phone": "Teléfono",
-            "address": "Dirección",
-            "birthday": "Cumpleaños",
-            "none": "(ninguno)",
-            "cust_confirm_q": "¿Se ve correcto? (sí/no)",
-            # Keep add/edit commands in English so your parser doesn't change
-            "cust_edit_hint": "You can also say 'add...' or 'edit...'",
-
-            "order_intro": "Perfecto — tengo este pedido para {first} {last}:",
-            "estimated_total": "Total estimado (precio): {total}",
-            "order_confirm_q": "¿Suena bien? (sí/no)",
-
-            "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y vuelve a pegar el pedido.",
-            "need_items": "¿Qué artículos debo agregar al pedido?",
-            "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
-            "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
-            "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
-            "parse_error": "❌ Error al interpretar: {err}",
-            "cant_tell": "No pude determinar si era un cliente nuevo o un pedido. Intenta reformularlo.",
-            "cust_confirmed": "✅ {first} {last} confirmado. Agregando a MyCustomers ahora.",
-            "cust_reject": "No hay problema — envíame la info corregida del cliente y lo intento de nuevo.",
-            "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",
-            "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
-        }
+        #moved ui en and ui es from here
 
         ui = UI_ES if language == "es" else UI_EN
 
-        catalog_path = get_catalog_path_for_language(language)
-        catalog = load_catalog(catalog_path)
+        if language not in self._catalog_cache:
+            catalog_path = get_catalog_path_for_language(language)
+            self._catalog_cache[language] = load_catalog(catalog_path)
+
+        catalog = self._catalog_cache[language]
 
         last_customer = state.get("last_customer")
         pending = state.get("pending")
