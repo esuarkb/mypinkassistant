@@ -170,10 +170,10 @@ def retention_cleanup(redact_hours: int = 24, delete_days: int = 90):
                     error = '',
                     status_msg = COALESCE(NULLIF(status_msg,''), 'Redacted')
                 WHERE status IN ('done','failed')
-                  AND payload_json <> '{}'
-                  AND COALESCE(finished_at, created_at)
-                        < (NOW() - INTERVAL %s)
-            """, (f"{redact_hours} hours",))
+                AND payload_json <> '{}'
+                AND COALESCE(finished_at, created_at)
+                        < (NOW() - make_interval(hours => %s))
+            """, (int(redact_hours),))
 
             redacted = cur.rowcount
 
@@ -183,8 +183,8 @@ def retention_cleanup(redact_hours: int = 24, delete_days: int = 90):
             cur.execute("""
                 DELETE FROM jobs
                 WHERE COALESCE(finished_at, created_at)
-                      < (NOW() - INTERVAL %s)
-            """, (f"{delete_days} days",))
+                    < (NOW() - make_interval(days => %s))
+            """, (int(delete_days),))
 
             deleted = cur.rowcount
 
