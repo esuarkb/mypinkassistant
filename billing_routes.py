@@ -451,10 +451,8 @@ def billing_cancel():
 @router.get("/billing/success")
 def billing_success(request: Request, session_id: str = ""):
     """
-    ✅ FIX #1: NEW FLOW bridge
-    onboard created the consultant + set consultant_id in session,
-    billing/start created checkout session tied to that consultant/customer.
-    billing/success just verifies the checkout and sends to /app.
+    Bridge after Stripe checkout: verify and then make sure the DB is updated
+    so /app doesn't bounce them back to billing.
     """
     if not session_id:
         return RedirectResponse("/splash.html", status_code=302)
@@ -478,7 +476,7 @@ def billing_success(request: Request, session_id: str = ""):
     if payment_status not in ("paid", "no_payment_required"):
         return RedirectResponse("/billing/cancel", status_code=302)
 
-    # ✅ Always trust the checkout session's client_reference_id
+    # Always trust the checkout session's client_reference_id
     cid_str = (s.get("client_reference_id") or "").strip()
     try:
         cid_int = int(cid_str)
@@ -488,9 +486,76 @@ def billing_success(request: Request, session_id: str = ""):
     if not cid_int:
         return RedirectResponse("/login", status_code=302)
 
-    # ✅ Clear any stale login, then set the correct one
+    # Log them in
     request.session.pop("consultant_id", None)
     request.session["consultant_id"] = cid_int
+
+    # --- IMPORTANT: write billing state immediately so /app doesn't loop ---
+
+    # customer can be an expanded object or a string id
+    customer_raw = s.get("customer")
+    if isinstance(customer_raw, dict):
+        customer_id = (customer_raw.get("id") or "").strip()
+    else:
+        customer_id = (customer_raw or "").strip()
+
+    # subscription can be an expanded object or a string id
+    sub_raw = s.get("subscription")
+    subscription_id = ""
+    sub_status = ""
+    trial_end = ""
+    current_period_end = ""
+    cancel_at_period_end = 0
+
+    if isinstance(sub_raw, dict):
+        subscription_id = (sub_raw.get("id") or "").strip()
+        sub_status = (sub_raw.get("status") or "").strip().lower()
+        trial_end = _ts_to_utc_string(sub_raw.get("trial_end"))
+        current_period_end = _ts_to_utc_string(sub_raw.get("current_period_end"))
+        cancel_at_period_end = 1 if sub_raw.get("cancel_at_period_end") else 0
+    else:
+        subscription_id = (sub_raw or "").strip()
+
+    # If we got a subscription status, reflect it; otherwise default to trialing
+    billing_status = "trialing"
+    if sub_status == "active":
+        billing_status = "active"
+    elif sub_status == "trialing":
+        billing_status = "trialing"
+
+    # Persist to DB
+    conn = connect()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"""
+            UPDATE consultants
+            SET stripe_customer_id={PH},
+                stripe_subscription_id={PH},
+                billing_status={PH},
+                trial_end={PH},
+                current_period_end={PH},
+                cancel_at_period_end={PH},
+                last_billing_event_at={_now_sql()}
+            WHERE id={PH}
+            """,
+            (
+                customer_id,
+                subscription_id,
+                billing_status,
+                trial_end,
+                current_period_end,
+                int(cancel_at_period_end),
+                cid_int,
+            ),
+        )
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
     return RedirectResponse("/app", status_code=302)
 
