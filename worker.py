@@ -160,7 +160,30 @@ def main():
                 
 
                 # Login once for this consultant session
-                login_intouch(page, username, password)
+                try:
+                    login_intouch(page, username, password)
+                except Exception as e:
+                    err = str(e)
+
+                    # friendly msg if it smells like bad creds / login screen issue
+                    friendly = (
+                        "InTouch login failed. Please check your InTouch username/password in Settings "
+                        "and try again."
+                    )
+
+                    # mark ALL queued jobs for this consultant failed so they don't keep retrying forever
+                    while True:
+                        refresh_consultant_lock(cid)
+                        claimed = claim_next_job_for_consultant(cid)
+                        if not claimed:
+                            break
+                        job_id, _job_type, _payload_json = claimed
+                        mark_job_failed(job_id, friendly)
+
+                    print(f"[Worker] Login failed for consultant_id={cid}: {err}")
+
+                    # IMPORTANT: don't crash worker; just move on
+                    continue
 
                 last_job_time = time.time()
 
