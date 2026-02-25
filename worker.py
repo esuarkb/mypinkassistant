@@ -35,6 +35,18 @@ ORDER_BATCH_GRACE_MS = int(os.getenv("ORDER_BATCH_GRACE_MS", "800"))  # brief wi
 def _missing_creds_message() -> str:
     return "Missing Intouch credentials. Please open Settings and save your Intouch username + password."
 
+def _fail_all_queued_jobs_for_consultant(cid: int, msg: str) -> None:
+    """
+    Drain this consultant's queued jobs and mark them failed with a user-friendly message.
+    Assumes this worker already holds the consultant lock.
+    """
+    while True:
+        refresh_consultant_lock(cid)
+        claimed = claim_next_job_for_consultant(cid)
+        if not claimed:
+            break
+        job_id, _job_type, _payload_json = claimed
+        mark_job_failed(job_id, msg)
 
 def _norm(s: str) -> str:
     return (s or "").strip().lower()
@@ -202,7 +214,17 @@ def main():
                             mark_job_failed(job_id, f"Unknown job type: {job_type}")
 
                     except Exception as e:
-                        mark_job_failed(job_id, str(e))
+                        err_text = str(e)
+
+                        # If this looks like an InTouch/MyCustomers navigation failure,
+                        # show a clean message instead of Playwright internals
+                        if "Timeout" in err_text and "New Customer" in err_text:
+                            err_text = (
+                                "Could not reach MyCustomers after login. "
+                                "Please verify your InTouch credentials in Settings and try again."
+                            )
+
+                        mark_job_failed(job_id, err_text)
 
             finally:
                 # Always clean up and release the consultant lock
