@@ -146,6 +146,40 @@
             line-height: 1.5
         }
 
+        /* ✅ Demo video section (added) */
+        .demo {
+            margin-top: 46px;
+            text-align: center;
+        }
+
+        .demo h2 {
+            margin: 0 0 10px;
+            font-size: 26px;
+        }
+
+        .demo p {
+            margin: 0 0 18px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .demo video {
+            width: 100%;
+            max-width: 920px;
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, .12);
+            background: #000;
+        }
+
+        .demoCta {
+            margin-top: 16px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
         .footer {
             margin-top: 40px;
             padding-top: 18px;
@@ -188,6 +222,10 @@
 
             .grid {
                 grid-template-columns: 1fr
+            }
+
+            .demo h2 {
+                font-size: 22px;
             }
         }
     </style>
@@ -248,6 +286,22 @@
                 </div>
             </div>
         </div>
+
+        <!-- ✅ Demo video section (added) -->
+        <section class="demo">
+            <h2>See MyPinkAssistant in Action</h2>
+            <p>Watch a real customer and order being entered in under 90 seconds.</p>
+
+            <video controls preload="metadata" playsinline poster="/web/demo-poster.jpg">
+                <source src="/web/demo.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+
+            <div class="demoCta">
+                <a class="btn btnPrimary" href="/splash.html">Start now</a>
+                <a class="btn" href="/login">Log in</a>
+            </div>
+        </section>
 
         <footer class="footer">
             <div class="footerLinks">
