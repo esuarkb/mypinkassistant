@@ -44,10 +44,24 @@ def login_intouch(page: Page, username: str, password: str) -> None:
     # Allow redirects / MFA / slow loads
     #page.wait_for_timeout(7000)
     
+    # Give the page a moment for login error banner to render
+    page.wait_for_timeout(1500)
+
+    # If invalid login message appears, fail immediately
+    try:
+        err = page.get_by_text("invalid login attempt", exact=False)
+        if err.count() > 0 and err.first.is_visible():
+            raise RuntimeError(
+                "InTouch login failed: invalid username or password. "
+                "Please update your credentials in Settings and try again."
+            )
+    except Exception:
+        pass  # If selector fails, just continue
+
     _wait_for_mycustomers_ready(page, timeout_ms=45000)
     
     # Basic sanity check: we should no longer be on the login page
-    if "login" in page.url.lower():
-        raise RuntimeError(
-            "Intouch login failed. Please try again or double-check your username and password."
-        )
+    #if "login" in page.url.lower():
+    #    raise RuntimeError(
+    #        "Intouch login failed. Please try again or double-check your username and password."
+    #    )
