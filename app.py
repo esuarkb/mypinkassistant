@@ -903,6 +903,7 @@ def onboard_post(
     intouch_username: str = Form(...),
     intouch_password: str = Form(...),
     ref: str = Form(""),
+    agree_terms: str = Form(None),
 ):
     # normalize
     email = (email or "").strip().lower()
@@ -947,10 +948,6 @@ def onboard_post(
 
     if len(password or "") < 8:
         return _redirect_onboard_error("Password must be at least 8 characters.")
-
-    agree_terms: str = Form(""),
-    if agree_terms != "1":
-        return _err("Please accept the Terms & Privacy Policy to continue.")    
 
     if not agree_terms:
         return _redirect_onboard_error("You must agree to the Terms & Conditions.")
