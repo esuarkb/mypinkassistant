@@ -17,6 +17,6 @@
     "emergency": {
         "enabled": false,
         "title": "Service Notice",
-        "message": "AWS is currently down. Customers and orders will be submitted when service resumes."
+        "message": "Testing emergency message."
     }
 }

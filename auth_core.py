@@ -230,7 +230,7 @@ def get_consultant(cid: int) -> Optional[dict]:
 
 def get_consultant_full(cid: int) -> Optional[dict]:
     """
-    Full consultant row needed for onboard/profile checks.
+    Full consultant row needed for onboard/profile checks + billing gate.
     IMPORTANT: uses _row_get so it works for both sqlite + postgres dict_row.
     """
     conn = _get_conn()
@@ -238,7 +238,23 @@ def get_consultant_full(cid: int) -> Optional[dict]:
     try:
         cur.execute(
             f"""
-            SELECT id, email, first_name, last_name, language, intouch_username, intouch_password_enc
+            SELECT
+                id,
+                email,
+                first_name,
+                last_name,
+                language,
+                intouch_username,
+                intouch_password_enc,
+
+                stripe_customer_id,
+                stripe_subscription_id,
+                billing_status,
+                trial_end,
+                current_period_end,
+                cancel_at_period_end,
+                onboarding_complete,
+                last_billing_event_at
             FROM consultants
             WHERE id={PH}
             """,
@@ -263,6 +279,16 @@ def get_consultant_full(cid: int) -> Optional[dict]:
         "language": (_row_get(row, "language", 4) or "en"),
         "intouch_username": (_row_get(row, "intouch_username", 5) or ""),
         "intouch_password_enc": (_row_get(row, "intouch_password_enc", 6) or ""),
+
+        # billing fields
+        "stripe_customer_id": (_row_get(row, "stripe_customer_id", 7) or ""),
+        "stripe_subscription_id": (_row_get(row, "stripe_subscription_id", 8) or ""),
+        "billing_status": (_row_get(row, "billing_status", 9) or ""),
+        "trial_end": (_row_get(row, "trial_end", 10) or ""),
+        "current_period_end": (_row_get(row, "current_period_end", 11) or ""),
+        "cancel_at_period_end": int(_row_get(row, "cancel_at_period_end", 12) or 0),
+        "onboarding_complete": int(_row_get(row, "onboarding_complete", 13) or 0),
+        "last_billing_event_at": (_row_get(row, "last_billing_event_at", 14) or ""),
     }
 
 

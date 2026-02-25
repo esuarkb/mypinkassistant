@@ -94,13 +94,9 @@
             border: 1px solid var(--border);
             border-radius: 18px;
             padding: 20px;
-            /* slightly more breathing room */
             max-width: 520px;
-            /* controls width */
             margin: 60px auto;
-            /* centers horizontally */
         }
-
 
         h1 {
             margin: 0 0 10px;
@@ -209,10 +205,61 @@
                     Your InTouch password is encrypted and never shared.
                 </div>
 
+                <!-- ✅ Save button moved here -->
                 <div class="actions">
                     <button class="btn btnPrimary" type="submit">Save</button>
                 </div>
 
+                <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
+
+                <!-- ✅ Referral section moved above Billing -->
+                <label>Referral Program!</label>
+
+                <div class="hint" style="margin-top:6px">
+                    Share your link - give a month, get a month! New subscribers get one month free; after their
+                    first paid month, so do you! (And yes, it stacks!)
+                </div>
+
+                <label style="margin-top:10px">Your referral link:</label>
+                <div class="row" style="margin-top:8px; align-items:stretch">
+                    <input id="refLink" class="inputShort" style="flex:1" readonly value="{{REFERRAL_LINK}}" />
+                    <button type="button" class="btn btnGhost" id="copyRefBtn">Copy</button>
+                </div>
+
+                <div class="hint" id="copyRefMsg" style="margin-top:8px"></div>
+
+                <script>
+                    (function () {
+                        const btn = document.getElementById("copyRefBtn");
+                        const input = document.getElementById("refLink");
+                        const msg = document.getElementById("copyRefMsg");
+                        if (!btn || !input) return;
+
+                        btn.addEventListener("click", async function () {
+                            try {
+                                await navigator.clipboard.writeText(input.value);
+                                if (msg) msg.textContent = "Copied!";
+                            } catch (e) {
+                                input.select();
+                                document.execCommand("copy");
+                                if (msg) msg.textContent = "Copied!";
+                            }
+                            setTimeout(() => { if (msg) msg.textContent = ""; }, 2000);
+                        });
+                    })();
+                </script>
+
+                <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
+
+                <!-- ✅ Billing moved to bottom -->
+                <label>Billing</label>
+                <div class="row" style="margin-top:8px">
+                    <a class="btn btnGhost" href="/billing/portal">Manage subscription & billing</a>
+                </div>
+
+                <div class="hint">
+                    Update your payment method, view invoices, or cancel anytime.
+                </div>
 
             </form>
         </div>

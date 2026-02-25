@@ -31,6 +31,82 @@ def _sqlite_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     return conn
 
+# db.py (add near other helpers)
+
+from typing import Optional
+
+def get_system_setting(key: str, default: str = "") -> str:
+    """
+    Read a setting from system_settings (works for sqlite + postgres).
+    """
+    key = (key or "").strip()
+    if not key:
+        return default
+
+    conn = connect()
+    cur = conn.cursor()
+    try:
+        ph = "%s" if is_postgres() else "?"
+        cur.execute(f"SELECT value FROM system_settings WHERE key={ph}", (key,))
+        row = cur.fetchone()
+        if not row:
+            return default
+
+        # row might be dict-like (pg) or tuple (sqlite)
+        try:
+            val = row.get("value")  # type: ignore
+        except Exception:
+            val = row[0]
+        return (val or default)
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
+
+
+def set_system_setting(key: str, value: str) -> None:
+    """
+    Upsert a setting into system_settings (works for sqlite + postgres).
+    """
+    key = (key or "").strip()
+    if not key:
+        return
+
+    val = "" if value is None else str(value)
+
+    conn = connect()
+    cur = conn.cursor()
+    try:
+        ph = "%s" if is_postgres() else "?"
+
+        if is_postgres():
+            cur.execute(
+                f"""
+                INSERT INTO system_settings (key, value)
+                VALUES ({ph}, {ph})
+                ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value
+                """,
+                (key, val),
+            )
+        else:
+            cur.execute(
+                f"""
+                INSERT INTO system_settings (key, value)
+                VALUES ({ph}, {ph})
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (key, val),
+            )
+
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
 def _pg_conn():
     if psycopg is None:

@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Welcome to MyPinkAssistant</title>
+    <title>Welcome to MyPinkAssistant.com</title>
     <style>
         body {
             font-family: system-ui, -apple-system, Segoe UI, Roboto;
@@ -15,6 +15,39 @@
             justify-content: center;
             min-height: 100vh;
             padding: 24px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        .logo {
+            display: block;
+            margin: 0 auto 16px;
+            max-width: 180px;
+        }
+
+        .welcome {
+            text-align: center;
+            font-size: 15px;
+            color: #555;
+            margin-bottom: 14px;
+        }
+
+        .err {
+            margin: 12px 0 6px;
+            padding: 10px 12px;
+            border: 1px solid #f3c1cf;
+            background: #fff5f8;
+            color: #8a1740;
+            border-radius: 14px;
+            font-size: 13px;
+        }
+
+        .err a {
+            color: #8a1740;
+            font-weight: 700;
+            text-decoration: none;
         }
 
         .card {
@@ -54,6 +87,38 @@
             font-size: 14px;
         }
 
+        /* ✅ Only affects the T&C checkbox row */
+        .checkbox-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-top: 18px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-top: 3px;
+            padding: 0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .checkbox-row label {
+            margin: 0;
+            font-size: 13px;
+            color: #444;
+            cursor: pointer;
+        }
+
+        .checkbox-row a {
+            color: #c2185b;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
         button {
             width: 100%;
             margin-top: 22px;
@@ -76,28 +141,36 @@
 
 <body>
     <div class="card">
-        <h1>Let’s finish setting up your account</h1>
-        <p>This only takes a minute.</p>
+        {{REF_WELCOME}}
+        <h1>Welcome to MyPinkAssistant.com 💕</h1>
+        <p class="welcome">
+            Ready to automate your customer & order entry?
+        </p>
+        <p>Let's get you set up; this only takes a minute!</p>
 
-        <form method="post" action="/onboard">
+        {{ERROR_BLOCK}}
 
-            <!-- MyPinkAssistant Account Info -->
+        <form method="post" action="/onboard" id="onboardForm" onsubmit="return validateOnboardPasswords();">
+
+            <input type="hidden" name="ref" value="{{REF}}">
+
             <label>First Name</label>
-            <input name="first_name" required />
+            <input name="first_name" value="{{FIRST_NAME}}" required />
 
             <label>Last Name</label>
-            <input name="last_name" required />
+            <input name="last_name" value="{{LAST_NAME}}" required />
 
             <label>Email</label>
-            <input name="email" type="email" required />
+            <input name="email" type="email" value="{{EMAIL}}" required />
 
-            <label>Create Password (for MyPinkAssistant login)</label>
-            <input name="password" type="password" required />
+            <label>Create Password for MyPinkAssistant.com login</label>
+            <input name="password" id="pw1" type="password" required />
 
-            <label>Confirm Password</label>
-            <input name="password2" type="password" required />
+            <label>Confirm Password for MyPinkAssistant.com login</label>
+            <input name="password2" id="pw2" type="password" required />
 
-            <!-- InTouch Credentials -->
+            <div id="pwErr" class="err" style="display:none;"></div>
+
             <label>InTouch Username</label>
             <input name="intouch_username" required />
 
@@ -108,9 +181,50 @@
                 Your InTouch password is encrypted and never shared.
             </div>
 
+            <!-- ✅ Terms & Conditions -->
+
+            <div class="checkbox-row">
+                <input type="checkbox" id="agree_terms" name="agree_terms" required>
+                <label for="agree_terms">
+                    I agree to the
+                    <a href="/legal#terms" target="_blank">Terms & Conditions</a>
+                    and
+                    <a href="/legal#privacy" target="_blank">Privacy Policy</a>
+                </label>
+            </div>
+
             <button type="submit">Create My Account</button>
         </form>
     </div>
+
+    <script>
+        function validateOnboardPasswords() {
+            const pw1 = document.getElementById("pw1");
+            const pw2 = document.getElementById("pw2");
+            const err = document.getElementById("pwErr");
+
+            if (!pw1 || !pw2 || !err) return true;
+
+            err.style.display = "none";
+            err.textContent = "";
+
+            if (pw1.value !== pw2.value) {
+                err.textContent = "Passwords do not match.";
+                err.style.display = "block";
+                pw2.focus();
+                return false;
+            }
+
+            if ((pw1.value || "").length < 8) {
+                err.textContent = "Password must be at least 8 characters.";
+                err.style.display = "block";
+                pw1.focus();
+                return false;
+            }
+
+            return true;
+        }
+    </script>
 </body>
 
 </html>

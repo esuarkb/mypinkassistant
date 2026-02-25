@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+from typing import Any, Iterable, Optional, Sequence, Dict
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -19,7 +20,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
 from db import connect, is_postgres
+from db import get_system_setting, set_system_setting
 from mk_chat_core import MKChatEngine, save_session_state
+from billing_routes import router as billing_router
 
 from auth_core import (
     authenticate,
@@ -38,6 +41,7 @@ WEB_DIR = BASE_DIR / "web"
 PAGES_DIR = BASE_DIR / "pages"
 
 app = FastAPI()
+app.include_router(billing_router)
 
 # -------------------------
 # ENV
@@ -107,6 +111,13 @@ async def add_security_headers(request: Request, call_next):
 
     return resp
 
+import stripe
+
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "").strip()
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:8000").strip()
+
+stripe.api_key = STRIPE_SECRET_KEY
 
 # -------------------------
 # DB helpers
@@ -153,6 +164,193 @@ def _find_consultant_by_email(email: str):
     return int(cid)
 
 
+import re
+import secrets
+
+def _generate_referral_code() -> str:
+    # short + readable (8 chars). You can tweak length later.
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # avoid confusing chars
+    return "".join(secrets.choice(alphabet) for _ in range(8))
+
+def get_or_create_referral_code(cid: int) -> str:
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT referral_code FROM consultants WHERE id={PH}", (int(cid),))
+        row = cur.fetchone()
+        existing = ""
+        if row:
+            try:
+                existing = (row.get("referral_code") or "").strip()  # type: ignore
+            except Exception:
+                existing = (row[0] or "").strip()
+
+        if existing:
+            return existing
+
+        # generate unique code
+        for _ in range(10):
+            code = _generate_referral_code()
+            cur.execute(f"SELECT id FROM consultants WHERE referral_code={PH}", (code,))
+            taken = cur.fetchone()
+            if not taken:
+                cur.execute(
+                    f"UPDATE consultants SET referral_code={PH} WHERE id={PH}",
+                    (code, int(cid)),
+                )
+                conn.commit()
+                return code
+
+        # extremely unlikely fallback
+        code = _generate_referral_code() + _generate_referral_code()
+        cur.execute(
+            f"UPDATE consultants SET referral_code={PH} WHERE id={PH}",
+            (code, int(cid)),
+        )
+        conn.commit()
+        return code
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
+
+def apply_referral(referee_cid: int, ref_code: str) -> tuple[bool, str]:
+    """
+    Links referee -> referrer (one-time).
+
+    Guard rails:
+      - code must exist
+      - cannot self-refer
+      - referee can only be referred once
+    """
+    code = (ref_code or "").strip().upper()
+    if not code:
+        return (False, "Missing referral code")
+
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        # find referrer by code
+        cur.execute(
+            f"SELECT id FROM consultants WHERE referral_code={PH}",
+            (code,),
+        )
+        r = cur.fetchone()
+        if not r:
+            return (False, "Invalid referral code")
+
+        referrer_id = _row_get(r, "id", None) if _row_get(r, "id", None) is not None else r[0]
+        referrer_id = int(referrer_id)
+
+        if referrer_id == int(referee_cid):
+            return (False, "You can’t use your own referral code")
+
+        # if referee already has a referrer, do nothing (idempotent)
+        cur.execute(
+            f"SELECT referred_by_consultant_id FROM consultants WHERE id={PH}",
+            (int(referee_cid),),
+        )
+        rr = cur.fetchone()
+        existing = None
+        if rr:
+            existing = _row_get(rr, "referred_by_consultant_id", None)
+            if existing is None:
+                existing = rr[0]
+
+        if existing:
+            return (True, "Referral already applied")
+
+        # set referee -> referrer and stamp applied_at
+        cur.execute(
+            f"""
+            UPDATE consultants
+            SET referred_by_consultant_id={PH},
+                referral_applied_at={USED_AT_NOW_SQL}
+            WHERE id={PH}
+            """,
+            (referrer_id, int(referee_cid)),
+        )
+
+        # audit row (UNIQUE(referee_consultant_id) prevents double)
+        # do "ignore" in a DB-specific way
+        if is_postgres():
+            cur.execute(
+                f"""
+                INSERT INTO referrals (referrer_consultant_id, referee_consultant_id, applied_at, status)
+                VALUES ({PH},{PH},NOW(),'applied')
+                ON CONFLICT (referee_consultant_id) DO NOTHING
+                """,
+                (referrer_id, int(referee_cid)),
+            )
+        else:
+            cur.execute(
+                f"""
+                INSERT OR IGNORE INTO referrals (referrer_consultant_id, referee_consultant_id, applied_at, status)
+                VALUES ({PH},{PH},datetime('now'),'applied')
+                """,
+                (referrer_id, int(referee_cid)),
+            )
+
+        conn.commit()
+        return (True, "Referral applied")
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
+
+def get_billing_status_by_id(cid: int) -> str:
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT billing_status FROM consultants WHERE id={PH}", (int(cid),))
+        row = cur.fetchone()
+        if not row:
+            return ""
+        try:
+            return (row.get("billing_status") or "").strip().lower()  # type: ignore
+        except Exception:
+            return (row[0] or "").strip().lower()
+    finally:
+        conn.close()
+
+
+def billing_redirect_for_cid(cid: int) -> str:
+    """
+    If this consultant has a Stripe customer already, send them to the billing portal.
+    Otherwise send them to Stripe checkout start.
+    """
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"SELECT stripe_customer_id FROM consultants WHERE id={PH}",
+            (int(cid),),
+        )
+        row = cur.fetchone()
+        if not row:
+            return "/billing/start"
+
+        try:
+            stripe_customer_id = (row.get("stripe_customer_id") or "").strip()  # type: ignore
+        except Exception:
+            stripe_customer_id = (row[0] or "").strip()
+
+        return "/billing/portal" if stripe_customer_id else "/billing/start"
+    finally:
+        conn.close()
+
+def require_active_subscription_by_id(cid: int) -> None:
+    status = get_billing_status_by_id(cid)
+    if status in ("active", "trialing"):
+        return
+    raise PermissionError(f"Billing inactive: {status or 'unknown'}")
+
+
+
 def _update_name_fields(cid: int, first_name: str, last_name: str) -> None:
     """Save first/last name in DB (kept here so you don't have to edit auth_core)."""
     fn = (first_name or "").strip()
@@ -192,6 +390,16 @@ def require_login(request: Request) -> int:
         raise PermissionError("Not logged in")
     return int(cid)
 
+def require_active_subscription(c: dict) -> None:
+    """
+    Allows access only if billing is good.
+    For now we treat 'active' and 'trialing' as OK.
+    Everything else -> blocked.
+    """
+    status = (c.get("billing_status") or "").strip().lower()
+    if status in ("active", "trialing"):
+        return
+    raise PermissionError(f"Billing inactive: {status or 'unknown'}")
 
 def require_admin(request: Request) -> int:
     """
@@ -226,17 +434,79 @@ def is_profile_complete(c: dict) -> bool:
     )
 
 
+
 def render_page(filename: str, replaces: dict | None = None) -> HTMLResponse:
     path = PAGES_DIR / filename
     if not path.exists():
         return HTMLResponse(f"Missing page: {filename}", status_code=500)
 
     html = path.read_text(encoding="utf-8")
+
+    # Inject emergency banner (global UI guardrail)
+    ui = get_ui_emergency()
+    if ui["enabled"] and ui["message"]:
+        banner = f"""
+        <style>
+        /* banner */
+        #ui-emergency-banner {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 99999;
+            background: #fff3cd;
+            color: #856404;
+            padding: 14px 16px;
+            text-align: center;
+            font-weight: 600;
+            border-bottom: 1px solid #ffeeba;
+        }}
+
+        /* default: push page content down */
+        body {{
+            padding-top: 70px !important;
+        }}
+
+        /* login page compatibility (centering layouts) */
+        html.ui-emergency-on body {{
+            align-items: flex-start !important;
+        }}
+        </style>
+
+        <div id="ui-emergency-banner">{ui["message"]}</div>
+
+        <script>
+        document.documentElement.classList.add("ui-emergency-on");
+        </script>
+        """
+
+        if "<body" in html.lower():
+            body_index = html.lower().find("<body")
+            insert_index = html.find(">", body_index) + 1
+            html = html[:insert_index] + banner + html[insert_index:]
+
     if replaces:
         for k, v in replaces.items():
             html = html.replace(k, v)
+
     return HTMLResponse(html)
 
+def get_ui_emergency() -> dict:
+    """
+    Returns {"enabled": bool, "message": str}
+    Reads from system_settings:
+      - ui_emergency_enabled: "0"/"1"
+      - ui_emergency_message: string
+    """
+    enabled_raw = (get_system_setting("ui_emergency_enabled", "0") or "0").strip()
+    msg = (get_system_setting("ui_emergency_message", "") or "").strip()
+
+    enabled = enabled_raw in ("1", "true", "yes", "on")
+    return {"enabled": enabled, "message": msg}
+
+def set_ui_emergency(enabled: bool, message: str) -> None:
+    set_system_setting("ui_emergency_enabled", "1" if enabled else "0")
+    set_system_setting("ui_emergency_message", (message or "").strip())
 
 # Create the chat engine once (loads catalog once)
 engine = MKChatEngine()
@@ -250,34 +520,134 @@ def landing(request: Request):
     return render_page("landing.html")
 
 
+from fastapi.responses import RedirectResponse
+
+@app.get("/r/{code}")
+def referral_landing(request: Request, code: str):
+    """
+    Referral link landing.
+    Stores referral code in session, then sends them to onboarding.
+    Example share link: https://mypinkassistant.com/r/ABC123
+    """
+    code = (code or "").strip()
+    if code:
+        request.session["referral_code"] = code
+    return RedirectResponse("/onboard", status_code=302)
+
 @app.get("/splash.html", response_class=HTMLResponse)
 def splash(request: Request):
     return render_page("splash.html")
+
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+
+from fastapi import Query
+
+from urllib.parse import unquote_plus
+
+@app.get("/onboard", response_class=HTMLResponse)
+def onboard_get(
+    request: Request,
+    first_name: str = Query("", alias="first_name"),
+    last_name: str = Query("", alias="last_name"),
+    email: str = Query("", alias="email"),
+    intouch_username: str = Query("", alias="intouch_username"),
+    language: str = Query("en", alias="language"),
+    error: str = Query("", alias="error"),
+    ref: str = Query("", alias="ref"),
+):
+    cid = request.session.get("consultant_id")
+    c = get_consultant_full(int(cid)) if cid else None
+
+    if ref:
+        ref_block = "<div class='welcome'>You've been invited! We're glad you're here 🎉</div>"
+    else:
+        ref_block = ""
+        
+    # If logged in + complete, go to app
+    if c and is_profile_complete(c):
+        return RedirectResponse("/app", status_code=302)
+
+    # Prefer query param values (when bouncing back), otherwise DB, otherwise blank
+    fn_val = (first_name or ((c.get("first_name") or "") if c else "")).strip()
+    ln_val = (last_name or ((c.get("last_name") or "") if c else "")).strip()
+    em_val = (email or ((c.get("email") or "") if c else "")).strip()
+    iu_val = (intouch_username or ((c.get("intouch_username") or "") if c else "")).strip()
+
+    lang = (language or (c.get("language") if c else "en") or "en").strip().lower()
+    if lang not in ("en", "es"):
+        lang = "en"
+
+    error_block = f"<div class='err'>{error}</div>" if error else ""
+
+    replaces = {
+        "{{FIRST_NAME}}": fn_val,
+        "{{LAST_NAME}}": ln_val,
+        "{{EMAIL}}": em_val,
+        "{{INTOUCH_USERNAME}}": iu_val,
+        "{{EN_SELECTED}}": "selected" if lang == "en" else "",
+        "{{ES_SELECTED}}": "selected" if lang == "es" else "",
+        "{{ERROR_BLOCK}}": error_block,
+        "{{REF}}": (ref or "").strip(),
+        "{{REF_WELCOME}}": ref_block
+    }
+    return render_page("onboard.html", replaces=replaces)
 
 
 @app.get("/login", response_class=HTMLResponse)
 def login_get(request: Request):
     cid = request.session.get("consultant_id")
-    if cid:
-        c = get_consultant_full(int(cid))
-        if not is_profile_complete(c):
-            return RedirectResponse("/onboard", status_code=302)
-        return RedirectResponse("/app", status_code=302)
-    return render_page("login.html")
-
-
-@app.post("/login")
-def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
-    cid = authenticate(email, password)
     if not cid:
-        return HTMLResponse("Login failed. <a href='/login'>Try again</a>.", status_code=401)
+        return render_page("login.html")
 
-    request.session["consultant_id"] = int(cid)
+    c = get_consultant_full(int(cid)) or {}
 
-    c = get_consultant_full(int(cid))
     if not is_profile_complete(c):
         return RedirectResponse("/onboard", status_code=302)
 
+    try:
+        require_active_subscription_by_id(int(cid))
+    except Exception:
+        return RedirectResponse(billing_redirect_for_cid(int(cid)), status_code=302)
+
+    return RedirectResponse("/app", status_code=302)
+
+
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+@app.post("/login")
+def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
+    email_norm = (email or "").strip().lower()
+
+    cid = authenticate(email_norm, password)
+    if not cid:
+        return HTMLResponse(
+            "Login failed. <a href='/login'>Try again</a>.",
+            status_code=401,
+        )
+
+    # ✅ Login success always sets session (billing does NOT block authentication)
+    request.session["consultant_id"] = int(cid)
+
+    c = get_consultant_full(int(cid)) or {}
+
+    # 1) If profile incomplete, finish onboarding first
+    if not is_profile_complete(c):
+        return RedirectResponse("/onboard", status_code=302)
+
+    # 2) If billing inactive, send to Stripe checkout
+    # Option A: if you already have require_active_subscription_by_id()
+    try:
+        require_active_subscription_by_id(int(cid))
+    except Exception:
+        return RedirectResponse(billing_redirect_for_cid(int(cid)), status_code=302)
+
+    # Option B (if you do NOT have require_active_subscription_by_id):
+    # try:
+    #     require_active_subscription(c)
+    # except PermissionError:
+    #     return RedirectResponse("/billing/start", status_code=302)
+
+    # 3) Otherwise go to app
     return RedirectResponse("/app", status_code=302)
 
 
@@ -519,9 +889,8 @@ def reset_password_post(
     return RedirectResponse("/login", status_code=302)
 
 
-# -------------------------
-# Onboarding (public; can be accessed without login)
-# -------------------------
+from fastapi.responses import HTMLResponse, RedirectResponse
+
 @app.post("/onboard")
 def onboard_post(
     request: Request,
@@ -533,43 +902,93 @@ def onboard_post(
     language: str = Form("en"),
     intouch_username: str = Form(...),
     intouch_password: str = Form(...),
+    ref: str = Form(""),
 ):
-    cid = request.session.get("consultant_id")
+    # normalize
+    email = (email or "").strip().lower()
+    first_name = (first_name or "").strip()
+    last_name = (last_name or "").strip()
+    intouch_username = (intouch_username or "").strip()
 
-    # CASE A: Already logged in → UPDATE ONLY
-    if cid:
-        update_profile_and_intouch(
-            int(cid),
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            language=language,
-            intouch_username=intouch_username,
-            intouch_password=intouch_password,
+    def _err(msg: str) -> HTMLResponse:
+        # history.back keeps what they typed in the browser
+        return HTMLResponse(
+            f"{msg}<br><br><a href='javascript:history.back()'>← Go back</a>",
+            status_code=400,
         )
 
-        pw = (password or "").strip()
-        pw2 = (password2 or "").strip()
-        if pw or pw2:
-            if pw != pw2:
-                return HTMLResponse("Passwords do not match.", status_code=400)
-            if len(pw) < 8:
-                return HTMLResponse("Password must be at least 8 characters.", status_code=400)
-            set_consultant_password(int(cid), pw)
-
+    # ---------------------------------------------------
+    # If logged in, they should NOT be creating an account
+    # ---------------------------------------------------
+    cid = request.session.get("consultant_id")
+    if cid:
+        # If you want them to edit profile, send to /settings or /app
         return RedirectResponse("/app", status_code=302)
 
-    # CASE B: Not logged in → CREATE NEW ACCOUNT
+    # ---------------------------------------------------
+    # New account validations
+    # ---------------------------------------------------
+    from urllib.parse import urlencode
+
+    def _redirect_onboard_error(msg: str):
+        q = urlencode({
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "intouch_username": intouch_username,
+            "language": language,
+            "ref": ref,
+            "error": msg,
+        })
+        return RedirectResponse(f"/onboard?{q}", status_code=302)
+
     if password != password2:
-        return HTMLResponse("Passwords do not match.", status_code=400)
+        return _redirect_onboard_error("MyPinkAssistant.com passwords do not match.")
 
-    if len(password) < 8:
-        return HTMLResponse("Password must be at least 8 characters.", status_code=400)
+    if len(password or "") < 8:
+        return _redirect_onboard_error("Password must be at least 8 characters.")
 
+    agree_terms = form.get("agree_terms")
+
+    if not agree_terms:
+        return _redirect_onboard_error("You must agree to the Terms & Conditions.")
+
+    # (Optional but recommended) require InTouch password too
+    if len(intouch_password or "") < 1:
+        return _err("Please enter your InTouch password.")
+
+    from urllib.parse import urlencode
+
+    # block duplicate emails
+    existing_cid = _find_consultant_by_email(email)
+    if existing_cid:
+        q = urlencode(
+            {
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+                "intouch_username": intouch_username,
+                "language": language,
+                "error": "That email is already registered. Please <a href='/login'>log in</a> instead.",
+            }
+        )
+        return RedirectResponse(f"/onboard?{q}", status_code=302)
+
+    # ---------------------------------------------------
+    # Create account
+    # ---------------------------------------------------
     ok, msg, new_cid = create_consultant(email, password, language=language)
     if not ok:
-        return HTMLResponse(msg, status_code=400)
+        # e.g. "email already exists"
+        return _err(msg)
 
+    # <-- PUT IT HERE (right after success)
+    ref_code = (ref or "").strip() or (request.session.get("referral_code") or "").strip()
+    if ref_code:
+        apply_referral(int(new_cid), ref_code)
+        request.session.pop("referral_code", None)
+
+    # Fill profile + InTouch
     update_profile_and_intouch(
         int(new_cid),
         email=email,
@@ -580,32 +999,27 @@ def onboard_post(
         intouch_password=intouch_password,
     )
 
+    # Mark onboarding complete (so /onboard GET doesn't keep showing)
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"UPDATE consultants SET onboarding_complete=1 WHERE id={PH}",
+            (int(new_cid),),
+        )
+        conn.commit()
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
+
+    # Log them in
     request.session["consultant_id"] = int(new_cid)
-    return RedirectResponse("/app", status_code=302)
 
-
-@app.get("/onboard", response_class=HTMLResponse)
-def onboard_get(request: Request):
-    cid = request.session.get("consultant_id")
-    c = get_consultant_full(int(cid)) if cid else None
-
-    if c and is_profile_complete(c):
-        return RedirectResponse("/app", status_code=302)
-
-    lang = (c.get("language") if c else "en") or "en"
-    if lang not in ("en", "es"):
-        lang = "en"
-
-    replaces = {
-        "{{FIRST_NAME}}": (c.get("first_name") or "") if c else "",
-        "{{LAST_NAME}}": (c.get("last_name") or "") if c else "",
-        "{{EMAIL}}": (c.get("email") or "") if c else "",
-        "{{INTOUCH_USERNAME}}": (c.get("intouch_username") or "") if c else "",
-        "{{EN_SELECTED}}": "selected" if lang == "en" else "",
-        "{{ES_SELECTED}}": "selected" if lang == "es" else "",
-        "{{ERROR_BLOCK}}": "",
-    }
-    return render_page("onboard.html", replaces=replaces)
+    # NEW FLOW: now pay
+    return RedirectResponse("/billing/start", status_code=302)
 
 
 # -------------------------
@@ -621,9 +1035,62 @@ def app_page(request: Request):
     c = get_consultant_full(cid)
     if not c or not is_profile_complete(c):
         return RedirectResponse("/onboard", status_code=302)
+    
+    print("[APP] c keys:", list((c or {}).keys()))
+    print("[APP] c billing_status:", (c or {}).get("billing_status"))
+    
+    # Billing Gate Here (use already-loaded consultant row)
+    try:
+        require_active_subscription_by_id(cid)  # Option A everywhere
+    except PermissionError:
+        return RedirectResponse(billing_redirect_for_cid(cid), status_code=302)
 
     index_path = WEB_DIR / "index.html"
-    return HTMLResponse(index_path.read_text(encoding="utf-8"))
+    html = index_path.read_text(encoding="utf-8")
+
+    ui = get_ui_emergency()
+    if ui["enabled"] and ui["message"]:
+        banner = f"""
+        <style>
+        #ui-emergency-banner {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 99999;
+            background: #fff3cd;
+            color: #856404;
+            padding: 14px 16px;
+            text-align: center;
+            font-weight: 600;
+            border-bottom: 1px solid #ffeeba;
+        }}
+
+        /* chat-specific push-down */
+        body {{
+            padding-top: 70px !important;
+        }}
+
+        /* move the fixed topbar down */
+        header.topbar {{
+            top: 70px !important;
+        }}
+
+        /* push main layout down so it doesn't hide under header */
+        main.layout {{
+            padding-top: 70px !important;
+        }}
+        </style>
+
+        <div id="ui-emergency-banner">{ui["message"]}</div>
+        """
+
+        if "<body" in html.lower():
+            i = html.lower().find("<body")
+            j = html.find(">", i) + 1
+            html = html[:j] + banner + html[j:]
+
+    return HTMLResponse(html)
 
 
 # -------------------------
@@ -645,12 +1112,21 @@ def settings_get(request: Request):
     if lang not in ("en", "es"):
         lang = "en"
 
+    # ✅ referral code + link
+    code = get_or_create_referral_code(int(cid))
+    base = (os.getenv("APP_BASE_URL") or "").strip() or str(request.base_url).rstrip("/")
+    referral_link = f"{base}/onboard?ref={code}"
+
     replaces = {
         "{{EMAIL}}": (c.get("email") or ""),
         "{{INTOUCH_USERNAME}}": (c.get("intouch_username") or ""),
         "{{LANG_VALUE}}": lang,
         "{{EN_ACTIVE}}": "active" if lang == "en" else "",
         "{{ES_ACTIVE}}": "active" if lang == "es" else "",
+
+        # new:
+        "{{REFERRAL_CODE}}": code,
+        "{{REFERRAL_LINK}}": referral_link,
     }
     return render_page("settings.html", replaces=replaces)
 
@@ -682,6 +1158,12 @@ async def chat(request: Request):
     except PermissionError:
         return JSONResponse({"reply": "Please log in."}, status_code=401)
 
+    c = get_consultant_full(cid) or {}
+    try:
+        require_active_subscription(c)
+    except PermissionError:
+        return JSONResponse({"reply": "Billing inactive. Please subscribe to continue."}, status_code=402)
+
     data = await request.json()
     message = (data.get("message") or "").strip()
 
@@ -698,6 +1180,12 @@ def jobs(request: Request):
         cid = require_login(request)
     except PermissionError:
         return JSONResponse({"jobs": []}, status_code=401)
+    
+    c = get_consultant_full(cid) or {}
+    try:
+        require_active_subscription(c)
+    except PermissionError:
+        return JSONResponse({"jobs": [], "error": "Billing inactive"}, status_code=402)
 
     conn = _conn()
     cur = conn.cursor()
@@ -730,8 +1218,6 @@ def jobs(request: Request):
 # -------------------------
 # Admin diagnostics (protected)
 # -------------------------
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_diagnostics(request: Request):
@@ -740,6 +1226,10 @@ def admin_diagnostics(request: Request):
         _ = require_admin(request)
     except PermissionError:
         return RedirectResponse("/login", status_code=302)
+    
+    ui = get_ui_emergency()
+    em_checked = "checked" if ui["enabled"] else ""
+    em_msg = ui["message"].replace('"', "&quot;")
 
     CT = ZoneInfo("America/Chicago")
 
@@ -975,6 +1465,33 @@ def admin_diagnostics(request: Request):
         <button type="submit" class="adminBtn danger">Fail All Running Jobs</button>
       </form>
     </div>
+    
+    <h2 style="margin:20px 0 6px;font-size:16px">Emergency UI Banner</h2>
+    <div class="card">
+    <form method="post" action="/admin/ui-emergency">
+
+        <label style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" name="enabled" value="1" {em_checked} />
+        <span style="font-weight:700">Enable emergency banner</span>
+        </label>
+
+        <label style="display:block;font-size:12px;color:#666;margin-top:10px">
+        Banner Message
+        </label>
+
+        <input
+        name="message"
+        value="{em_msg}"
+        placeholder="Example: We’re performing maintenance. Chat may be delayed."
+        style="width:100%;margin-top:6px;padding:10px;border-radius:10px;border:1px solid #ddd;"
+        />
+
+        <button type="submit" class="adminBtn" style="margin-top:12px">
+        Save Banner
+        </button>
+
+    </form>
+    </div>
 
     <div class="cards">
       <div class="card"><div class="k">Queued</div><div class="v">{counts_map.get("queued",0)}</div></div>
@@ -1096,57 +1613,19 @@ def admin_fail_all_running(request: Request):
 
     return RedirectResponse("/admin", status_code=302)
 
-
-
-
-@app.post("/admin/clear-locks")
-def admin_clear_locks(request: Request):
+@app.post("/admin/ui-emergency")
+def admin_ui_emergency_post(
+    request: Request,
+    enabled: str = Form(None),
+    message: str = Form(""),
+):
     try:
         _ = require_admin(request)
     except PermissionError:
         return RedirectResponse("/login", status_code=302)
 
-    conn = _conn()
-    cur = conn.cursor()
-    try:
-        cur.execute("DELETE FROM consultant_locks")
-        conn.commit()
-    finally:
-        conn.close()
-
-    return RedirectResponse("/admin", status_code=302)
-
-@app.post("/admin/fail-running")
-def admin_fail_running(request: Request):
-    try:
-        _ = require_admin(request)
-    except PermissionError:
-        return RedirectResponse("/login", status_code=302)
-
-    conn = _conn()
-    cur = conn.cursor()
-    try:
-        if is_postgres():
-            cur.execute("""
-                UPDATE jobs
-                SET status='failed',
-                    status_msg='Failed ❌ (manually reset)',
-                    error=COALESCE(error,'') || ' | admin reset',
-                    finished_at=NOW()
-                WHERE status='running'
-            """)
-        else:
-            cur.execute("""
-                UPDATE jobs
-                SET status='failed',
-                    status_msg='Failed ❌ (manually reset)',
-                    error=IFNULL(error,'') || ' | admin reset',
-                    finished_at=datetime('now')
-                WHERE status='running'
-            """)
-        conn.commit()
-    finally:
-        conn.close()
+    is_enabled = enabled == "1"
+    set_ui_emergency(is_enabled, message)
 
     return RedirectResponse("/admin", status_code=302)
 
