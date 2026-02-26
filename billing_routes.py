@@ -10,6 +10,7 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
+from emailer import send_welcome_email
 
 from db import connect, is_postgres
 
@@ -556,6 +557,34 @@ def billing_success(request: Request, session_id: str = ""):
         except Exception:
             pass
         conn.close()
+        
+        # ---------------------------------------------
+        # ✅ Send Welcome Email (after successful billing)
+        # ---------------------------------------------
+        try:
+            # We already know cid_int is valid here
+            conn = connect()
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    f"SELECT email, first_name FROM consultants WHERE id={PH}",
+                    (cid_int,),
+                )
+                row = cur.fetchone()
+            finally:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+                conn.close()
+
+            if row:
+                email = (row[0] or "").strip()
+                first_name = (row[1] or "").strip()
+                send_welcome_email(to_email=email, first_name=first_name)
+
+        except Exception as e:
+            print("[WelcomeEmail after billing] failed:", repr(e))
 
     return RedirectResponse("/app", status_code=302)
 
