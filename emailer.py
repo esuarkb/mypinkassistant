@@ -34,12 +34,12 @@ ADD A CUSTOMER ORDER
 Add multiple items and quantities in one message — I’ll confirm everything before submitting.
 
 Example:
-New order for Jane Doe; she wants a poppy lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry skin.
+New order for Jane Doe; she wants a poppy lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
 
 REFERRAL PROGRAM
 Give a month, get a month! Your referral link is in Settings at https://mypinkassistant.com
 
-Thank you so much for being here!
+We built MyPinkAssistant to save you time and simplify your business - and we’re honored you’re here.
 
 Need help or have a feature request?
 support@mypinkassistant.com
@@ -88,7 +88,7 @@ support@mypinkassistant.com
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
-        New order for Jane Doe; she wants a poppy lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry skin.
+        New order for Jane Doe; she wants a poppy lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
       </p>
       <p style="margin:0 0 16px 0;color:#111;">
         I’ll confirm each item before submitting, and you can always add/remove before final approval.
@@ -100,7 +100,7 @@ support@mypinkassistant.com
       </p>
       
       <p style="margin:0 0 18px 0;font-size:15px;color:#111;font-weight:500;">
-        We are so glad you are here — and we are excited to support your business 💗
+        We built MyPinkAssistant to save you time and simplify your business — and we’re honored you’re here. 💗
       </p>
 
       <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:18px;"></div>

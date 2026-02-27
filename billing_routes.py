@@ -342,13 +342,16 @@ def billing_start(request: Request):
 
     cid_int = int(cid)
 
-    # ---- Read onboarding email + existing stripe_customer_id + billing_status from DB
     conn = connect()
     cur = conn.cursor()
     try:
         cur.execute(
             f"""
-            SELECT email, stripe_customer_id, billing_status, referred_by_consultant_id
+            SELECT email,
+                   stripe_customer_id,
+                   stripe_subscription_id,   -- ✅ ADD THIS
+                   billing_status,
+                   referred_by_consultant_id
             FROM consultants
             WHERE id={PH}
             """,
@@ -358,25 +361,30 @@ def billing_start(request: Request):
         if not row:
             return RedirectResponse("/onboard", status_code=302)
 
-        # sqlite row tuple order matches SELECT above
         email = (row[0] or "").strip().lower()
         stripe_customer_id = (row[1] or "").strip()
-        billing_status = (row[2] or "").strip().lower()
-        
-        referred_by_consultant_id = row[3]
+        stripe_subscription_id = (row[2] or "").strip()   # ✅ ADD THIS
+        billing_status = (row[3] or "").strip().lower()
+
+        referred_by_consultant_id = row[4]
         try:
             ref_id_int = int(referred_by_consultant_id) if referred_by_consultant_id is not None else 0
         except Exception:
             ref_id_int = 0
 
-        trial_days = 30 if ref_id_int > 0 else 7
-
         if not email:
             return HTMLResponse("Missing email for account.", status_code=400)
 
-        # ✅ FIX #2: If already paid/trialing, do NOT send them back to Stripe
+        # ✅ If already paid/trialing, do NOT send them back to Stripe
         if billing_status in ("active", "trialing"):
             return RedirectResponse("/app", status_code=302)
+
+        # ✅ TRIAL DECISION GOES HERE (replaces your old trial_days line)
+        has_subscribed_before = bool(stripe_subscription_id)
+        if has_subscribed_before:
+            trial_days = 0
+        else:
+            trial_days = 30 if ref_id_int > 0 else 7
 
         # ---- Create Stripe customer if we don't have one yet (locks email)
         if not stripe_customer_id:
@@ -404,7 +412,6 @@ def billing_start(request: Request):
             pass
         conn.close()
 
-    # ---- Create checkout session tied to that customer (email locked)
     session = stripe.checkout.Session.create(
         mode="subscription",
         customer=stripe_customer_id,
@@ -423,22 +430,22 @@ def billing_start(request: Request):
     )
 
     return HTMLResponse(
-    f"""
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <meta http-equiv="refresh" content="0; url={session.url}">
-        <title>Redirecting…</title>
-      </head>
-      <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto;padding:24px">
-        <p>Redirecting to secure payment…</p>
-        <p>If you are not redirected automatically, <a href="{session.url}">tap here to continue</a>.</p>
-      </body>
-    </html>
-    """,
-    status_code=200,
+        f"""
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width,initial-scale=1" />
+            <meta http-equiv="refresh" content="0; url={session.url}">
+            <title>Redirecting…</title>
+          </head>
+          <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto;padding:24px">
+            <p>Redirecting to secure payment…</p>
+            <p>If you are not redirected automatically, <a href="{session.url}">tap here to continue</a>.</p>
+          </body>
+        </html>
+        """,
+        status_code=200,
     )
 
 
