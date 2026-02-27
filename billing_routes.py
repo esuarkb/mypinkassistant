@@ -1,12 +1,10 @@
-##
-
 # billing_routes.py
 from __future__ import annotations
 
 import os
 import time
-
 import stripe
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
