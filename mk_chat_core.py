@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from crm_store import find_customers_by_name, format_customer_card
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -1017,12 +1018,12 @@ class MKChatEngine:
         state = load_session_state(session_id=sid)
 
         from auth_core import get_consultant
+        from db import tx
+        from crm_store import find_customers_by_name, format_customer_card
 
         consultant = get_consultant(consultant_id)
         language = (consultant.get("language", "en") if consultant else "en") or "en"
         language = language.strip().lower()
-
-        #moved ui en and ui es from here
 
         ui = UI_ES if language == "es" else UI_EN
 
@@ -1039,6 +1040,99 @@ class MKChatEngine:
         if not msg:
             return ChatReply(ui["empty_prompt"])
 
+        lowered = msg.lower()
+
+        # -------------------------
+        # CRM quick lookup: customer info (no LLM call)
+        # -------------------------
+        if not pending:
+            triggers = ("what's", "whats", "what is", "lookup", "show", "info on", "information for")
+            if any(t in lowered for t in triggers) and "order" not in lowered:
+                import re
+
+                m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
+                stop_words = {
+                    "what", "is", "whats", "what's", "info", "information", "for", "on",
+                    "lookup", "show", "me", "please", "customer", "customers"
+                }
+
+                tokens = []
+                for raw in m_clean.split():
+                    t = raw.strip()
+                    if t.lower().endswith("'s"):
+                        t = t[:-2]
+                    if t and t.lower() not in stop_words:
+                        tokens.append(t)
+
+                guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
+
+                with tx() as (conn, cur):
+                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+
+                if len(matches) == 0:
+                    return ChatReply(
+                        f"I couldn’t find **{guess}** in your saved customers yet. "
+                        f"Want to add her now? (Paste: name, phone, address, email.)"
+                    )
+
+                if len(matches) == 1:
+                    return ChatReply(format_customer_card(matches[0]))
+
+                lines = ["I found a few matches — who did you mean?"]
+                for c in matches[:10]:
+                    full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                    hint = " • ".join([p for p in [c.get("phone"), c.get("email")] if p]) or "—"
+                    lines.append(f"- {full} ({hint})")
+                return ChatReply("\n".join(lines))
+
+        # -------------------------
+        # CRM quick lookup: recent orders (no LLM call)
+        # -------------------------
+        if not pending:
+            if "order" in lowered and any(k in lowered for k in ["last", "recent", "show", "lookup", "history"]):
+                import re
+                from crm_store import get_recent_orders_for_customer, format_recent_orders
+
+                m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
+                stop_words = {
+                    "last", "recent", "show", "lookup", "order", "orders", "history",
+                    "for", "on", "info", "information", "what", "is", "whats", "what's",
+                    "me", "please", "customer"
+                }
+
+                tokens = []
+                for raw in m_clean.split():
+                    t = raw.strip()
+                    if t.lower().endswith("'s"):
+                        t = t[:-2]
+                    if t and t.lower() not in stop_words:
+                        tokens.append(t)
+
+                guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
+
+                with tx() as (conn, cur):
+                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+
+                    if len(matches) == 0:
+                        return ChatReply(f"I couldn’t find **{guess}** in your saved customers yet.")
+
+                    if len(matches) > 1:
+                        lines = ["I found a few matches — who did you mean?"]
+                        for c in matches[:10]:
+                            full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                            hint = " • ".join([p for p in [c.get('phone'), c.get('email')] if p]) or "—"
+                            lines.append(f"- {full} ({hint})")
+                        return ChatReply("\n".join(lines))
+
+                    c = matches[0]
+                    customer_id = int(c["id"])
+                    customer_name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+
+                    orders = get_recent_orders_for_customer(cur, customer_id=customer_id, limit=3)
+
+                return ChatReply(format_recent_orders(customer_name, orders))
+
+        # Cancel command (works even outside pending)
         if msg.lower() in ("cancel", "stop", "nevermind", "never mind"):
             state["pending"] = None
             save_session_state(state, session_id=sid)
@@ -1051,13 +1145,22 @@ class MKChatEngine:
             kind = pending.get("kind")
 
             if kind == "customer_confirm":
-                # ✅ Confirm
                 if yes(msg):
                     customer = pending["customer"]
+
+                    # 1) Save to CRM (permanent)
+                    from crm_store import upsert_customer_from_pending
+
+                    with tx() as (conn, cur):
+                        upsert_customer_from_pending(cur, consultant_id=consultant_id, customer=customer)
+
+                    # 2) Keep existing behavior: job for worker/playwright
                     insert_job("NEW_CUSTOMER", customer, consultant_id=consultant_id)
+
                     state["last_customer"] = customer
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
+
                     return ChatReply(
                         ui["cust_confirmed"].format(
                             first=customer.get("First Name", "").strip(),
@@ -1065,13 +1168,11 @@ class MKChatEngine:
                         )
                     )
 
-                # ❌ Reject
                 if no(msg):
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["cust_reject"])
 
-                # ✏️ Edit / add support
                 updated, notes = apply_customer_edits(pending["customer"], msg)
                 pending["customer"] = updated
                 state["pending"] = pending
@@ -1172,6 +1273,28 @@ class MKChatEngine:
                     cust_first = order["customer"]["First Name"]
                     cust_last = order["customer"]["Last Name"]
 
+                    # 1) Save order + items to CRM (permanent, even if Playwright fails)
+                    from crm_store import get_customer_id_by_name, create_order_from_confirmed, upsert_customer_from_pending
+
+                    with tx() as (conn, cur):
+                        customer_id = get_customer_id_by_name(cur, consultant_id, cust_first, cust_last)
+
+                        if customer_id is None:
+                            customer_id = upsert_customer_from_pending(
+                                cur,
+                                consultant_id=consultant_id,
+                                customer={"First Name": cust_first, "Last Name": cust_last},
+                            )
+
+                        create_order_from_confirmed(
+                            cur,
+                            consultant_id=consultant_id,
+                            customer_id=customer_id,
+                            order_lines=order["lines"],
+                            source="chat",
+                        )
+
+                    # 2) Keep existing behavior: create jobs for worker/playwright
                     for line in order["lines"]:
                         sku = line["chosen"]["sku"]
                         qty = int(line["qty"])
@@ -1262,11 +1385,6 @@ class MKChatEngine:
 
         return ChatReply(ui["cant_tell"])
 
-
-    # -------------------------
-    # Internal helper methods
-    # -------------------------
-    # -------------------------
 # Internal helper methods
 # -------------------------
     def _continue_resolving_and_reply(
