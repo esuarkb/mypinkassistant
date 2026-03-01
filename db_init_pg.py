@@ -61,6 +61,61 @@ CREATE TABLE IF NOT EXISTS consultant_locks (
   locked_by TEXT NOT NULL,
   locked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- system settings (used by db.py get_system_setting / set_system_setting)
+CREATE TABLE IF NOT EXISTS system_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- customers
+CREATE TABLE IF NOT EXISTS customers (
+  id BIGSERIAL PRIMARY KEY,
+  consultant_id BIGINT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  email TEXT NULL,
+  phone TEXT NULL,
+  street TEXT NULL,
+  city TEXT NULL,
+  state TEXT NULL,
+  postal_code TEXT NULL,
+  birthday TEXT NULL,
+  notes TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_consultant ON customers(consultant_id);
+CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(consultant_id, last_name, first_name);
+
+-- orders
+CREATE TABLE IF NOT EXISTS orders (
+  id BIGSERIAL PRIMARY KEY,
+  consultant_id BIGINT NOT NULL,
+  customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  order_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  total NUMERIC(10,2) NULL,
+  source TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id, order_date DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_consultant ON orders(consultant_id, order_date DESC);
+
+-- order items
+CREATE TABLE IF NOT EXISTS order_items (
+  id BIGSERIAL PRIMARY KEY,
+  order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  sku TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  unit_price NUMERIC(10,2) NOT NULL,
+  quantity INT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_sku ON order_items(sku);
 """
 
 

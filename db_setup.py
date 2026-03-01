@@ -55,6 +55,68 @@ CREATE TABLE IF NOT EXISTS password_resets (
 cur.execute("CREATE INDEX IF NOT EXISTS idx_password_resets_token_hash ON password_resets(token_hash)")
 cur.execute("CREATE INDEX IF NOT EXISTS idx_password_resets_consultant ON password_resets(consultant_id)")
 
+# ---- system settings (used by db.py get_system_setting / set_system_setting) ----
+cur.execute("""
+CREATE TABLE IF NOT EXISTS system_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+)
+""")
+
+# ---- customers ----
+cur.execute("""
+CREATE TABLE IF NOT EXISTS customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  street TEXT,
+  city TEXT,
+  state TEXT,
+  postal_code TEXT,
+  birthday TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_customers_consultant ON customers(consultant_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(consultant_id, last_name, first_name)")
+
+# ---- orders ----
+cur.execute("""
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL,
+  customer_id INTEGER NOT NULL,
+  order_date TEXT NOT NULL DEFAULT (datetime('now')),
+  total REAL,
+  source TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id, order_date DESC)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_consultant ON orders(consultant_id, order_date DESC)")
+
+# ---- order items ----
+cur.execute("""
+CREATE TABLE IF NOT EXISTS order_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  sku TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  unit_price REAL NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_order_items_sku ON order_items(sku)")
+
 conn.commit()
 conn.close()
 
