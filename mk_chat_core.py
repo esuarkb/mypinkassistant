@@ -1042,51 +1042,67 @@ class MKChatEngine:
 
         lowered = msg.lower()
 
+        ##
         # -------------------------
-        # CRM quick lookup: customer info (no LLM call)
+        # CRM quick lookup: leaderboard / top customers (no LLM call)
         # -------------------------
         if not pending:
-            triggers = ("what's", "whats", "what is", "lookup", "show", "info on", "information for")
-            if any(t in lowered for t in triggers) and "order" not in lowered:
-                import re
+            import re
 
-                m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
-                stop_words = {
-                    "what", "is", "whats", "what's", "info", "information", "for", "on",
-                    "lookup", "show", "me", "please", "customer", "customers"
-                }
+            leaderboard_triggers = (
+                "leaderboard",
+                "spent the most", "spend the most",
+                "pcp list", "pcp mailer",
+                "top customers", "top customer"
+            )
 
-                tokens = []
-                for raw in m_clean.split():
-                    t = raw.strip()
-                    if t.lower().endswith("'s"):
-                        t = t[:-2]
-                    if t and t.lower() not in stop_words:
-                        tokens.append(t)
+            looks_like_top_n = bool(re.search(r"\btop\s*\d+\s*customers?\b", lowered))
+            looks_like_top_customers = ("top" in lowered and "customer" in lowered)
 
-                guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
+            if any(t in lowered for t in leaderboard_triggers) or looks_like_top_n or looks_like_top_customers:
+                from crm_store import (
+                    parse_top_n_from_text,
+                    parse_time_filter_from_text,
+                    get_top_customers,
+                    format_leaderboard,
+                )
+
+                n = parse_top_n_from_text(msg, default=5, soft_cap=10, hard_cap=50)
+                start_date, end_date = parse_time_filter_from_text(msg)
+
+                # Title label (simple)
+                period = "lifetime"
+                if "this year" in lowered:
+                    period = "this year"
+                elif "this month" in lowered:
+                    period = "this month"
+                elif "this quarter" in lowered:
+                    period = "this quarter"
+                elif "last quarter" in lowered:
+                    period = "last quarter"
+                else:
+                    import re
+                    m = re.search(r"(last|past)\s+(\d+)\s+day", lowered)
+                    if m:
+                        period = f"{m.group(1)} {m.group(2)} days"
+
+                title = f"Top {n} customers ({period})"
+                if "pcp" in lowered:
+                    title = f"PCP list starting point — Top {n} customers ({period})"
 
                 with tx() as (conn, cur):
-                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
-
-                if len(matches) == 0:
-                    return ChatReply(
-                        f"I couldn’t find **{guess}** in your saved customers yet. "
-                        f"Want to add her now? (Paste: name, phone, address, email.)"
+                    rows = get_top_customers(
+                        cur,
+                        consultant_id=consultant_id,
+                        limit=n,
+                        start_date=start_date,
+                        end_date=end_date,
                     )
 
-                if len(matches) == 1:
-                    return ChatReply(format_customer_card(matches[0]))
-
-                lines = ["I found a few matches — who did you mean?"]
-                for c in matches[:10]:
-                    full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
-                    hint = " • ".join([p for p in [c.get("phone"), c.get("email")] if p]) or "—"
-                    lines.append(f"- {full} ({hint})")
-                return ChatReply("\n".join(lines))
-
+                return ChatReply(format_leaderboard(rows, title))
+        
         # -------------------------
-        # CRM quick lookup: recent orders (no LLM call)
+        # CRM quick lookup: recent orders lookup (no LLM call)
         # -------------------------
         if not pending:
             if "order" in lowered and any(k in lowered for k in ["last", "recent", "show", "lookup", "history"]):
@@ -1097,7 +1113,10 @@ class MKChatEngine:
                 stop_words = {
                     "last", "recent", "show", "lookup", "order", "orders", "history",
                     "for", "on", "info", "information", "what", "is", "whats", "what's",
-                    "me", "please", "customer"
+                    "me", "please", "customer","was", "did", "do", "does",
+                    "order", "orders", "ordered",
+                    "last", "recent", "latest",
+                    "buy", "bought", "purchase", "purchased"
                 }
 
                 tokens = []
@@ -1105,10 +1124,105 @@ class MKChatEngine:
                     t = raw.strip()
                     if t.lower().endswith("'s"):
                         t = t[:-2]
-                    if t and t.lower() not in stop_words:
+
+                    if not t:
+                        continue
+
+                    # ✅ ignore numbers like "3" in "last 3 orders"
+                    if t.isdigit():
+                        continue
+
+                    # ✅ ignore common time/count words
+                    if t.lower() in ("day", "days", "week", "weeks", "month", "months", "year", "years"):
+                        continue
+
+                    if t.lower() not in stop_words:
                         tokens.append(t)
 
                 guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
+
+                import re
+                limit = 3
+                m = re.search(r"\blast\s+(\d+)\s+orders?\b", lowered)
+                if m:
+                    limit = max(1, min(10, int(m.group(1))))
+                elif "last order" in lowered or "latest order" in lowered:
+                    limit = 1
+
+                with tx() as (conn, cur):
+                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+                with tx() as (conn, cur):
+                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+
+                    if len(matches) == 0:
+                        return ChatReply(f"I couldn’t find **{guess}** in your saved customers yet.")
+
+                    if len(matches) > 1:
+                        top = matches[:3]
+
+                        state["pending"] = {
+                            "kind": "pick_customer",
+                            "candidates": top,
+                            "action": "orders",
+                            "orders_limit": limit
+                        }
+                        save_session_state(state, session_id=sid)
+
+                        lines = ["I found multiple matches — reply with 1, 2, or 3:"]
+                        for i, c in enumerate(top, start=1):
+                            full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                            hint = " • ".join([p for p in [c.get('phone'), c.get('email')] if p]) or "—"
+                            lines.append(f"{i}. {full} ({hint})")
+
+                        return ChatReply("\n".join(lines))
+
+                    c = matches[0]
+                    customer_id = int(c["id"])
+                    customer_name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+
+                    orders = get_recent_orders_for_customer(cur, customer_id=customer_id, limit=limit)
+
+                return ChatReply(format_recent_orders(customer_name, orders))
+        
+        # -------------------------
+        # CRM quick lookup: customer spending (no LLM call)
+        # -------------------------
+        if not pending:
+            if ("spent" in lowered or "spend" in lowered or "total" in lowered) and any(k in lowered for k in ["how much", "total", "spent", "spend"]):
+                import re
+                from crm_store import get_customer_spending, parse_time_filter_from_text
+
+                # Extract name-ish tokens (similar approach to other blocks)
+                m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
+                stop_words = {
+                    "how", "much", "did", "has", "have", "spent", "spend", "total", "in", "for", "on",
+                    "this", "year", "month", "last", "days", "customer", "orders", "order", "history",
+                    "what", "is", "whats", "what's", "me", "please"
+                }
+
+                tokens = []
+                for raw in m_clean.split():
+                    t = raw.strip()
+                    if t.lower().endswith("'s"):
+                        t = t[:-2]
+
+                    if not t:
+                        continue
+
+                    # ✅ ignore numbers like "7", "30", etc.
+                    if t.isdigit():
+                        continue
+
+                    # ✅ ignore common time unit words that might slip through
+                    if t.lower() in ("day", "days", "week", "weeks", "month", "months", "year", "years"):
+                        continue
+
+                    if t.lower() not in stop_words:
+                        tokens.append(t)
+
+                guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
+
+                start_date, end_date = parse_time_filter_from_text(msg)
 
                 with tx() as (conn, cur):
                     matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
@@ -1128,21 +1242,171 @@ class MKChatEngine:
                     customer_id = int(c["id"])
                     customer_name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
 
-                    orders = get_recent_orders_for_customer(cur, customer_id=customer_id, limit=3)
+                    total_spent = get_customer_spending(
+                        cur,
+                        consultant_id=consultant_id,
+                        customer_id=customer_id,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
 
-                return ChatReply(format_recent_orders(customer_name, orders))
+                # Friendly label for the time period
+                import re
+
+                period = "lifetime"
+                if "this year" in lowered:
+                    period = "this year"
+                elif "this month" in lowered:
+                    period = "this month"
+                else:
+                    m = re.search(r"(last|past)\s+(\d+)\s+day", lowered)
+                    if m:
+                        period = f"{m.group(1)} {m.group(2)} days"
+
+                return ChatReply(f"**{customer_name}** has spent **${total_spent:,.2f}** ({period}).")
 
         # Cancel command (works even outside pending)
         if msg.lower() in ("cancel", "stop", "nevermind", "never mind"):
             state["pending"] = None
             save_session_state(state, session_id=sid)
             return ChatReply(ui["canceled"])
+        
+        # -------------------------
+        # CRM quick lookup: customer info lookup (no LLM call)
+        # -------------------------
+        if not pending:
+            import re
+
+            # ✅ Guard: do NOT run lookup for "new customer ..." / "new order ..."
+            if lowered.startswith(("new customer", "add customer", "create customer", "new order", "add order")):
+                pass
+            
+            # ✅ ADD THIS
+            elif ("top" in lowered and "customer" in lowered) or "leaderboard" in lowered or "spent the most" in lowered:
+                pass
+
+            else:
+                triggers = ("what's", "whats", "what is", "lookup", "show", "info on", "information for")
+                looks_like_possessive_info = bool(re.search(r"\b\w+'\s*s?\s*(info|email|phone|address|birthday)\b", lowered))
+                looks_like_name_info = bool(re.search(r"\b\w+\s+(info|email|phone|address|birthday)\b", lowered))
+
+                if (any(t in lowered for t in triggers) or looks_like_possessive_info or looks_like_name_info) and "order" not in lowered:
+                    m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
+                    stop_words = {
+                        "what", "is", "whats", "what's", "info", "information", "for", "on",
+                        "lookup", "show", "me", "please", "customer", "customers",
+                        "email", "phone", "number", "address", "birthday", "bday"
+                    }
+
+                    tokens = []
+                    for raw in m_clean.split():
+                        t = raw.strip()
+                        if t.lower().endswith("'s"):
+                            t = t[:-2]
+                        if not t:
+                            continue
+                        if t.isdigit():
+                            continue
+                        if t.lower() in ("day", "days", "week", "weeks", "month", "months", "year", "years", "quarter", "quarters"):
+                            continue
+                        if t.lower() not in stop_words:
+                            tokens.append(t)
+
+                    guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
+                    if not guess:
+                        return ChatReply("Who is the customer? Try: “show Jane’s info”.")
+
+                    with tx() as (conn, cur):
+                        matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+
+                    if len(matches) == 0:
+                        return ChatReply(
+                            f"I couldn’t find {guess} in your saved customers yet. "
+                            f"Want to add her now? (Paste: name, phone, address, email.)"
+                        )
+
+                    if len(matches) == 1:
+                        c = matches[0]
+                        state["last_ref_customer_id"] = int(c["id"])
+                        state["last_ref_customer_name"] = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(format_customer_card(c))
+
+                    # Multiple matches → trigger picker
+                    top = matches[:3]
+                    state["pending"] = {"kind": "pick_customer", "candidates": top, "action": "info"}
+                    save_session_state(state, session_id=sid)
+
+                    lines = ["I found multiple matches — reply with 1, 2, or 3:"]
+                    for i, c in enumerate(top, start=1):
+                        full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                        hint = " • ".join([p for p in [c.get('phone'), c.get('email')] if p]) or "—"
+                        lines.append(f"{i}. {full} ({hint})")
+
+                    return ChatReply("\n".join(lines))
 
         # -------------------------
         # Pending flows
         # -------------------------
         if pending:
             kind = pending.get("kind")
+
+            if kind == "pick_customer":
+                # user should reply 1/2/3
+                choice = (msg or "").strip()
+
+                if not choice.isdigit():
+                    return ChatReply("Multiple matches: Reply with 1, 2, or 3 — or type cancel.")
+
+                idx = int(choice)
+                candidates = pending.get("candidates") or []
+                if idx < 1 or idx > len(candidates):
+                    return ChatReply("Multiple matches: Please reply with 1, 2, or 3 — or type cancel.")
+
+                c = candidates[idx - 1]
+                customer_id = int(c["id"])
+                customer_name = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+
+                # Remember for follow-ups
+                state["last_ref_customer_id"] = customer_id
+                state["last_ref_customer_name"] = customer_name
+
+                # Resume the original action
+                action = pending.get("action")  # "info" | "orders" | "spend"
+                start_date = pending.get("start_date")
+                end_date = pending.get("end_date")
+
+                from db import tx
+                from crm_store import format_customer_card, get_recent_orders_for_customer, format_recent_orders, get_customer_spending
+
+                # Clear pending before doing work (prevents loops)
+                state["pending"] = None
+                save_session_state(state, session_id=sid)
+
+                if action == "info":
+                    return ChatReply(format_customer_card(c))
+
+                if action == "orders":
+                    with tx() as (conn, cur):
+                        limit = int(pending.get("orders_limit") or 3)
+                        orders = get_recent_orders_for_customer(cur, customer_id=customer_id, limit=limit)
+                    return ChatReply(format_recent_orders(customer_name, orders))
+
+                if action == "spend":
+                    with tx() as (conn, cur):
+                        total_spent = get_customer_spending(
+                            cur,
+                            consultant_id=consultant_id,
+                            customer_id=customer_id,
+                            start_date=start_date,
+                            end_date=end_date,
+                        )
+
+                    # period label (stored if we want; fall back)
+                    period = pending.get("period_label") or "lifetime"
+                    return ChatReply(f"**{customer_name}** has spent **${total_spent:,.2f}** ({period}).")
+
+                return ChatReply("Okay — what would you like to do with that customer?")
 
             if kind == "customer_confirm":
                 if yes(msg):
@@ -1277,14 +1541,22 @@ class MKChatEngine:
                     from crm_store import get_customer_id_by_name, create_order_from_confirmed, upsert_customer_from_pending
 
                     with tx() as (conn, cur):
-                        customer_id = get_customer_id_by_name(cur, consultant_id, cust_first, cust_last)
+                        # Prefer the customer we already resolved earlier in this session
+                        customer_id = state.get("last_ref_customer_id")
 
+                        # If not available, fall back to name matching
+                        if not customer_id:
+                            customer_id = get_customer_id_by_name(cur, consultant_id, cust_first, cust_last)
+
+                        # If still not found, create a minimal customer record
                         if customer_id is None:
                             customer_id = upsert_customer_from_pending(
                                 cur,
                                 consultant_id=consultant_id,
                                 customer={"First Name": cust_first, "Last Name": cust_last},
                             )
+
+                        customer_id = int(customer_id)
 
                         create_order_from_confirmed(
                             cur,
@@ -1346,6 +1618,17 @@ class MKChatEngine:
 
             if not cust_first or not cust_last:
                 return ChatReply(ui["need_customer_for_order"])
+
+            # Resolve CRM customer_id once and carry it through the order flow
+            from crm_store import find_customers_by_name
+
+            with tx() as (conn, cur):
+                matches = find_customers_by_name(cur, consultant_id=consultant_id, name=f"{cust_first} {cust_last}", limit=3)
+
+            if len(matches) == 1:
+                state["last_ref_customer_id"] = int(matches[0]["id"])
+                state["last_ref_customer_name"] = f"{matches[0].get('first_name','')} {matches[0].get('last_name','')}".strip()
+                save_session_state(state, session_id=sid)
 
             items = order.get("items") or []
             if not items:
