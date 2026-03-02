@@ -1042,6 +1042,87 @@ class MKChatEngine:
 
         lowered = msg.lower()
 
+        import re
+        from crm_store import find_customers_by_name, get_customer_by_id, count_orders_for_customer, delete_customer_local
+
+        # -------------------------
+        # CRM: delete customer (local only)
+        # -------------------------
+        if not pending:
+            m = re.match(r"^\s*delete\s+(customer\s+)?(.+?)\s*$", msg, re.IGNORECASE)
+            if m:
+                target = (m.group(2) or "").strip()
+
+                # delete by id: "delete customer id 7" or "delete id 7"
+                m_id = re.search(r"\b(id)\s+(\d+)\b", target, re.IGNORECASE)
+                with tx() as (conn, cur):
+                    if m_id:
+                        cid = int(m_id.group(2))
+                        c = get_customer_by_id(cur, consultant_id=consultant_id, customer_id=cid)
+                        if not c:
+                            return ChatReply(f"I couldn’t find a customer with ID {cid}.")
+                        order_count = count_orders_for_customer(cur, customer_id=cid)
+
+                        state["pending"] = {
+                            "kind": "delete_customer_confirm",
+                            "customer_id": cid,
+                            "customer_name": f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip(),
+                            "order_count": order_count,
+                        }
+                        save_session_state(state, session_id=sid)
+
+                        if order_count > 0:
+                            return ChatReply(
+                                f"This will delete {state['pending']['customer_name']} from MyPinkAssistant and also remove "
+                                f"{order_count} local order(s). Type DELETE to confirm, or `cancel`."
+                            )
+                        return ChatReply(
+                            f"This will delete {state['pending']['customer_name']} from MyPinkAssistant. "
+                            f"Type DELETE to confirm, or `cancel`."
+                        )
+
+                    # delete by name
+                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=target, limit=10)
+
+                if len(matches) == 0:
+                    return ChatReply(f"I couldn’t find {target} in your saved customers.")
+
+                if len(matches) == 1:
+                    c = matches[0]
+                    cid = int(c["id"])
+                    with tx() as (conn, cur):
+                        order_count = count_orders_for_customer(cur, customer_id=cid)
+
+                    state["pending"] = {
+                        "kind": "delete_customer_confirm",
+                        "customer_id": cid,
+                        "customer_name": f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip(),
+                        "order_count": order_count,
+                    }
+                    save_session_state(state, session_id=sid)
+
+                    if order_count > 0:
+                        return ChatReply(
+                            f"This will delete {state['pending']['customer_name']} from MyPinkAssistant and also remove "
+                            f"{order_count} local order(s). Type DELETE to confirm, or `cancel`."
+                        )
+                    return ChatReply(
+                        f"This will delete {state['pending']['customer_name']} from MyPinkAssistant. "
+                        f"Type DELETE to confirm, or `cancel`."
+                    )
+
+                # Multiple matches -> picker
+                top = matches[:3]
+                state["pending"] = {"kind": "pick_customer", "candidates": top, "action": "delete"}
+                save_session_state(state, session_id=sid)
+
+                lines = ["I found multiple matches — reply with 1, 2, or 3:"]
+                for i, c in enumerate(top, start=1):
+                    full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                    hint = " • ".join([p for p in [c.get("phone"), c.get("email")] if p]) or "—"
+                    lines.append(f"{i}. {full} ({hint})")
+                return ChatReply("\n".join(lines))
+
         ##
         # -------------------------
         # CRM quick lookup: leaderboard / top customers (no LLM call)
@@ -1151,11 +1232,9 @@ class MKChatEngine:
 
                 with tx() as (conn, cur):
                     matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
-                with tx() as (conn, cur):
-                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                     if len(matches) == 0:
-                        return ChatReply(f"I couldn’t find **{guess}** in your saved customers yet.")
+                        return ChatReply(f"I couldn’t find {guess} in your saved customers yet.")
 
                     if len(matches) > 1:
                         top = matches[:3]
@@ -1228,7 +1307,7 @@ class MKChatEngine:
                     matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                     if len(matches) == 0:
-                        return ChatReply(f"I couldn’t find **{guess}** in your saved customers yet.")
+                        return ChatReply(f"I couldn’t find {guess} in your saved customers yet.")
 
                     if len(matches) > 1:
                         lines = ["I found a few matches — who did you mean?"]
@@ -1263,7 +1342,7 @@ class MKChatEngine:
                     if m:
                         period = f"{m.group(1)} {m.group(2)} days"
 
-                return ChatReply(f"**{customer_name}** has spent **${total_spent:,.2f}** ({period}).")
+                return ChatReply(f"{customer_name} has spent ${total_spent:,.2f} ({period}).")
 
         # Cancel command (works even outside pending)
         if msg.lower() in ("cancel", "stop", "nevermind", "never mind"):
@@ -1351,6 +1430,19 @@ class MKChatEngine:
         if pending:
             kind = pending.get("kind")
 
+            # Allow CRM lookups even while confirming a customer/order
+            # (Otherwise "show Jane info" gets treated like an edit)
+            if kind in ("customer_confirm", "order_confirm"):
+                low = (msg or "").strip().lower()
+                if any(k in low for k in ("show", "lookup", "info", "what is", "what's", "whats")):
+                    # Let user do lookups without breaking the pending flow
+                    # Tip: they can still say cancel if they want out
+                    state["pending"] = pending  # keep it
+                    save_session_state(state, session_id=sid)
+                    # Force the normal lookup handlers to run by temporarily pretending no pending:
+                    # simplest: return a hint instead of trying to re-run the whole pipeline
+                    return ChatReply("You’re in the middle of confirming something. Reply `cancel` first if you want to do lookups, then try again.")
+
             if kind == "pick_customer":
                 # user should reply 1/2/3
                 choice = (msg or "").strip()
@@ -1372,12 +1464,12 @@ class MKChatEngine:
                 state["last_ref_customer_name"] = customer_name
 
                 # Resume the original action
-                action = pending.get("action")  # "info" | "orders" | "spend"
+                action = pending.get("action")  # "info" | "orders" | "spend" | "delete"
                 start_date = pending.get("start_date")
                 end_date = pending.get("end_date")
 
                 from db import tx
-                from crm_store import format_customer_card, get_recent_orders_for_customer, format_recent_orders, get_customer_spending
+                from crm_store import format_customer_card, get_recent_orders_for_customer, format_recent_orders, get_customer_spending, count_orders_for_customer
 
                 # Clear pending before doing work (prevents loops)
                 state["pending"] = None
@@ -1392,6 +1484,28 @@ class MKChatEngine:
                         orders = get_recent_orders_for_customer(cur, customer_id=customer_id, limit=limit)
                     return ChatReply(format_recent_orders(customer_name, orders))
 
+                if action == "delete":
+                    with tx() as (conn, cur):
+                        order_count = count_orders_for_customer(cur, customer_id=customer_id)
+
+                    state["pending"] = {
+                        "kind": "delete_customer_confirm",
+                        "customer_id": customer_id,
+                        "customer_name": customer_name,
+                        "order_count": order_count,
+                    }
+                    save_session_state(state, session_id=sid)
+
+                    if order_count > 0:
+                        return ChatReply(
+                            f"This will delete {customer_name} from MyPinkAssistant and also remove "
+                            f"{order_count} local order(s). Type DELETE to confirm, or `cancel`."
+                        )
+                    return ChatReply(
+                        f"This will delete {customer_name} from MyPinkAssistant. "
+                        f"Type DELETE to confirm, or `cancel`."
+                    )
+
                 if action == "spend":
                     with tx() as (conn, cur):
                         total_spent = get_customer_spending(
@@ -1404,7 +1518,7 @@ class MKChatEngine:
 
                     # period label (stored if we want; fall back)
                     period = pending.get("period_label") or "lifetime"
-                    return ChatReply(f"**{customer_name}** has spent **${total_spent:,.2f}** ({period}).")
+                    return ChatReply(f"{customer_name} has spent ${total_spent:,.2f} ({period}).")
 
                 return ChatReply("Okay — what would you like to do with that customer?")
 
@@ -1447,6 +1561,31 @@ class MKChatEngine:
                     note_line = "Updated: " + ", ".join(notes[:3]) + ("…" if len(notes) > 3 else "") + "\n\n"
 
                 return ChatReply(note_line + self._format_customer_confirm(updated, ui))
+
+            if kind == "delete_customer_confirm":
+                if msg.strip().lower() in ("cancel", "stop", "no"):
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply("Canceled — nothing deleted.")
+
+                if msg.strip() != "DELETE":
+                    return ChatReply("To confirm deletion, type DELETE. Or type `cancel`.")
+
+                cid = int(pending["customer_id"])
+                name = pending.get("customer_name") or "Customer"
+
+                from db import tx
+                from crm_store import delete_customer_local
+
+                with tx() as (conn, cur):
+                    n = delete_customer_local(cur, consultant_id=consultant_id, customer_id=cid, delete_orders=True)
+
+                state["pending"] = None
+                save_session_state(state, session_id=sid)
+
+                if n:
+                    return ChatReply(f"✅ Deleted {name} from MyPinkAssistant (MyCustomers was not changed).")
+                return ChatReply("I couldn’t delete that customer (maybe it was already removed).")
 
             if kind == "order_line_confirm_top":
                 order = pending["order"]
@@ -1541,14 +1680,14 @@ class MKChatEngine:
                     from crm_store import get_customer_id_by_name, create_order_from_confirmed, upsert_customer_from_pending
 
                     with tx() as (conn, cur):
-                        # Prefer the customer we already resolved earlier in this session
-                        customer_id = state.get("last_ref_customer_id")
+                        # 1) Prefer the customer_id attached to THIS order flow
+                        customer_id = order.get("customer_id")
 
-                        # If not available, fall back to name matching
+                        # 2) If not available, fall back to name matching
                         if not customer_id:
                             customer_id = get_customer_id_by_name(cur, consultant_id, cust_first, cust_last)
 
-                        # If still not found, create a minimal customer record
+                        # 3) If still not found, create a minimal customer record
                         if customer_id is None:
                             customer_id = upsert_customer_from_pending(
                                 cur,
@@ -1618,6 +1757,19 @@ class MKChatEngine:
 
             if not cust_first or not cust_last:
                 return ChatReply(ui["need_customer_for_order"])
+            
+            # Resolve CRM customer_id once and attach it to this order flow
+            resolved_customer_id = None
+            with tx() as (conn, cur):
+                matches = find_customers_by_name(
+                    cur,
+                    consultant_id=consultant_id,
+                    name=f"{cust_first} {cust_last}",
+                    limit=3
+                )
+
+            if len(matches) == 1:
+                resolved_customer_id = int(matches[0]["id"])
 
             # Resolve CRM customer_id once and carry it through the order flow
             from crm_store import find_customers_by_name
@@ -1635,6 +1787,7 @@ class MKChatEngine:
                 return ChatReply(ui["need_items"])
 
             order_draft = self._make_order_draft(cust_first, cust_last, items)
+            order_draft["customer_id"] = resolved_customer_id
             if not order_draft["lines"]:
                 return ChatReply("I didn’t catch any items — try again with the product names.")
 

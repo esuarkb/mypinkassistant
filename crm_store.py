@@ -700,3 +700,66 @@ def format_leaderboard(rows: list, title: str) -> str:
         lines.append("\nWant more? Try: show 20 or top 25 customers.")
 
     return "\n".join(lines)
+
+def get_customer_by_id(cur, consultant_id: int, customer_id: int):
+    is_sqlite = _is_sqlite_cursor(cur)
+    if is_sqlite:
+        cur.execute("""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday
+            FROM customers
+            WHERE consultant_id = ? AND id = ?
+            LIMIT 1
+        """, (consultant_id, customer_id))
+    else:
+        cur.execute("""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday
+            FROM customers
+            WHERE consultant_id = %s AND id = %s
+            LIMIT 1
+        """, (consultant_id, customer_id))
+    row = cur.fetchone()
+    if not row:
+        return None
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, row))
+
+
+def count_orders_for_customer(cur, customer_id: int) -> int:
+    is_sqlite = _is_sqlite_cursor(cur)
+    if is_sqlite:
+        cur.execute("SELECT COUNT(*) FROM orders WHERE customer_id = ?", (customer_id,))
+    else:
+        cur.execute("SELECT COUNT(*) FROM orders WHERE customer_id = %s", (customer_id,))
+    return int(cur.fetchone()[0] or 0)
+
+
+def delete_customer_local(cur, consultant_id: int, customer_id: int, delete_orders: bool = True) -> int:
+    """
+    Deletes a customer from local CRM only (scoped to consultant_id).
+    If delete_orders=True, deletes related orders + order_items first.
+    Returns number of customers deleted (0 or 1).
+    """
+    is_sqlite = _is_sqlite_cursor(cur)
+
+    if delete_orders:
+        # Delete order_items for this customer's orders
+        if is_sqlite:
+            cur.execute("""
+                DELETE FROM order_items
+                WHERE order_id IN (SELECT id FROM orders WHERE customer_id = ?)
+            """, (customer_id,))
+            cur.execute("DELETE FROM orders WHERE customer_id = ?", (customer_id,))
+        else:
+            cur.execute("""
+                DELETE FROM order_items
+                WHERE order_id IN (SELECT id FROM orders WHERE customer_id = %s)
+            """, (customer_id,))
+            cur.execute("DELETE FROM orders WHERE customer_id = %s", (customer_id,))
+
+    # Delete customer
+    if is_sqlite:
+        cur.execute("DELETE FROM customers WHERE consultant_id = ? AND id = ?", (consultant_id, customer_id))
+        return int(cur.rowcount or 0)
+    else:
+        cur.execute("DELETE FROM customers WHERE consultant_id = %s AND id = %s", (consultant_id, customer_id))
+        return int(cur.rowcount or 0)
