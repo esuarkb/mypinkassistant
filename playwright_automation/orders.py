@@ -43,11 +43,11 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     
     # Search customer, small wait for search results to populate
     page.get_by_role("searchbox", name="Note Title").fill(full_name)
-    page.wait_for_timeout(300)
+    page.wait_for_timeout(500)
     
     # Existence check (duplicate-safe)
     try:
-        page.get_by_text(full_name, exact=True).first.wait_for(timeout=3000)
+        page.get_by_text(full_name).first.wait_for(timeout=3000)
     except PlaywrightTimeoutError:
         raise RuntimeError(
             f"Customer not found: '{full_name}'. "
@@ -55,7 +55,7 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
         )
 
     # Select customer from search results (first match if duplicates), loads customer page
-    page.get_by_text(full_name, exact=True).first.click()
+    page.get_by_text(full_name).first.click()
     page.wait_for_timeout(1000)
 
     # Click New Order Button and load order page
