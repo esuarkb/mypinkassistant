@@ -1401,7 +1401,6 @@ class MKChatEngine:
                     if len(matches) == 0:
                         return ChatReply(
                             f"I couldn’t find {guess} in your saved customers yet. "
-                            f"Want to add her now? (Paste: name, phone, address, email.)"
                         )
 
                     if len(matches) == 1:
