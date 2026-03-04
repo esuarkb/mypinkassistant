@@ -1047,6 +1047,19 @@ def app_page(request: Request):
     index_path = WEB_DIR / "index.html"
     html = index_path.read_text(encoding="utf-8")
 
+    # Admin button injection
+    try:
+        email = (c.get("email") or "").strip().lower()
+        allowed = os.environ.get("MK_ADMIN_EMAILS", "")
+        allowed_set = {e.strip().lower() for e in allowed.split(",") if e.strip()}
+        is_admin = bool(allowed_set) and (email in allowed_set)
+    except Exception:
+        is_admin = False
+
+    admin_btn = '<a class="btn" href="/admin">Admin</a>' if is_admin else ""
+
+    html = html.replace("{{ADMIN_BUTTON}}", admin_btn)
+
     ui = get_ui_emergency()
     if ui["enabled"] and ui["message"]:
         banner = f"""
