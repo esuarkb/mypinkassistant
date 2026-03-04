@@ -655,7 +655,7 @@ UI_EN = {
     "birthday": "Birthday",
     "none": "(none)",
     "cust_confirm_q": "Does that look right? (yes/no)",
-    "cust_edit_hint": "You can also say 'add...' or 'edit...'",
+    "cust_edit_hint": "If you need to add or edit just add the correct information in chat.",
 
     "order_intro": "Okay — I have this order for {first} {last}:",
     "estimated_total": "Estimated retail total: {total}",
@@ -664,8 +664,8 @@ UI_EN = {
     "need_customer_for_order": "Who is this order for? Please tell me the customer name and paste the order again.",
     "need_items": "What items should I add to the order?",
     "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
-    "reply_yes_no_qty": "Reply yes/no — or type a quantity like `2` or `x2`.",
-    "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
+    "reply_yes_no_qty": "Reply 'yes' or 'no' — or add a quantity like 'x2'",
+    "order_adjust_hint": "You can also say `add` or `remove`.",
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Parse error: {err}",
@@ -761,17 +761,51 @@ def render_top5(matches: List[dict]) -> str:
         lines.append(f"{i}) {m['product_name']} {fmt_price(m.get('price'))}".strip())
     return "\n".join(lines)
 
+def looks_like_command(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    if not s:
+        return False
+
+    # direct command starts
+    command_starts = (
+        "show ", "lookup ", "info ", "information ",
+        "what is", "what's", "whats",
+        "top ", "leaderboard", "spent", "last ", "recent ", "history",
+        "new customer", "add customer", "create customer",
+        "new order", "order for", "add order",
+        "delete ", "remove ",
+    )
+
+    if s.startswith(command_starts):
+        return True
+
+    # detect possessive info requests like: "Jane's info"
+    if re.search(r"\b\w+'\s*s?\s*(info|email|phone|address|birthday)\b", s):
+        return True
+
+    # detect patterns like "Jane info"
+    if re.search(r"\b\w+\s+(info|email|phone|address|birthday)\b", s):
+        return True
+
+    # detect "top X customers"
+    if re.search(r"\btop\s*\d+\s*customers?\b", s):
+        return True
+
+    return False
+
 def split_edit_parts(message: str) -> List[str]:
     """
     Splits a user edit message into chunks.
-    IMPORTANT: do NOT split on commas, because addresses use commas.
+    IMPORTANT:
+    - Do NOT split on commas (addresses)
+    - Do NOT split on 'and' (addresses like 'Fish and Game Rd')
     """
     s = (message or "").strip()
     if not s:
         return []
 
-    # Split on semicolons OR the word "and" used as a separator OR newlines
-    parts = re.split(r"\s*;\s*|\s+\band\b\s+|\n+", s, flags=re.IGNORECASE)
+    # Split only on semicolons OR newlines
+    parts = re.split(r"\s*;\s*|\n+", s)
 
     return [p.strip() for p in parts if p.strip()]
 
@@ -1440,7 +1474,7 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     # Force the normal lookup handlers to run by temporarily pretending no pending:
                     # simplest: return a hint instead of trying to re-run the whole pipeline
-                    return ChatReply("You’re in the middle of confirming something. Reply `cancel` first if you want to do lookups, then try again.")
+                    return ChatReply("You’re in the middle of confirming something. You can confirm with 'yes' or 'no' or reply 'cancel' if you want to do something else.")
 
             if kind == "pick_customer":
                 # user should reply 1/2/3
@@ -1550,6 +1584,8 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["cust_reject"])
 
+                if looks_like_command(msg):
+                    return ChatReply("You're confirming a new customer. Reply 'yes' or 'no', or type 'cancel' to retry.")
                 updated, notes = apply_customer_edits(pending["customer"], msg)
                 pending["customer"] = updated
                 state["pending"] = pending
@@ -1651,6 +1687,11 @@ class MKChatEngine:
             if kind == "order_confirm":
                 order = pending["order"]
 
+                # ✅ NEW: stop random commands from being treated as add/remove/yes/no noise
+                if looks_like_command(msg) and not yes(msg) and not no(msg):
+                    return ChatReply(
+                        "You’re confirming an order. Reply 'yes' or 'no', or type 'cancel' to restart.")
+                        
                 action, rest = parse_add_remove(msg)
                 if action == "add":
                     qty, item_text = parse_qty_prefix(rest)
@@ -1725,7 +1766,7 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["order_reject"])
 
-                return ChatReply("Reply yes/no — or say `add ...` / `remove ...` to adjust the order.")
+                return ChatReply("Reply 'yes' or 'no' — or say 'add' or 'remove' to adjust the order.")
 
         # -------------------------
         # Normal parse
