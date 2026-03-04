@@ -182,6 +182,22 @@
     </style>
 </head>
 
+<script>
+    (function () {
+        const params = new URLSearchParams(window.location.search);
+        const ref = (params.get("ref") || "").trim();
+        if (!ref) return;
+
+        // Update Continue button
+        const continueBtn = document.querySelector('a[href="/onboard"]');
+        if (continueBtn) {
+            const url = new URL(continueBtn.getAttribute("href"), window.location.origin);
+            url.searchParams.set("ref", ref);
+            continueBtn.setAttribute("href", url.pathname + "?" + url.searchParams.toString());
+        }
+    })();
+</script>
+
 <body>
     <div class="wrap">
         <div class="top">
@@ -225,8 +241,8 @@
 
                 <div class="actions">
                     <!-- For now, this can go to /signup (your signup page).
-               Later you’ll swap this to a Stripe Checkout link. -->
-                    <a class="btn btnPrimary" href="/onboard">Continue</a>
+                Later you’ll swap this to a Stripe Checkout link. -->
+                    <a class="btn btnPrimary" href="/onboard{{REF_QS}}">Continue</a>
                     <a class="btn" href="/login">I already have an account</a>
                 </div>
 

@@ -515,28 +515,56 @@ engine = MKChatEngine()
 # -------------------------
 # Public pages
 # -------------------------
+from urllib.parse import urlencode
+
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request):
-    return render_page("landing.html")
+    # Prefer ref from URL, else session
+    ref = (request.query_params.get("ref") or "").strip().upper()
+    if not ref:
+        ref = (request.session.get("referral_code") or "").strip().upper()
 
+    # keep it in session once we see it
+    if ref:
+        request.session["referral_code"] = ref
 
-from fastapi.responses import RedirectResponse
+    ref_qs = ""
+    if ref:
+        ref_qs = "?" + urlencode({"ref": ref})
+
+    return render_page("landing.html", replaces={
+        "{{REF_QS}}": ref_qs,
+    })
+
+from urllib.parse import urlencode
 
 @app.get("/r/{code}")
 def referral_landing(request: Request, code: str):
-    """
-    Referral link landing.
-    Stores referral code in session, then sends them to onboarding.
-    Example share link: https://mypinkassistant.com/r/ABC123
-    """
-    code = (code or "").strip()
+    code = (code or "").strip().upper()
     if code:
         request.session["referral_code"] = code
-    return RedirectResponse("/onboard", status_code=302)
+        return RedirectResponse(f"/?{urlencode({'ref': code})}", status_code=302)
+
+    return RedirectResponse("/", status_code=302)
+
+from urllib.parse import urlencode
 
 @app.get("/splash.html", response_class=HTMLResponse)
 def splash(request: Request):
-    return render_page("splash.html")
+    # Prefer ref from URL, else session
+    ref = (request.query_params.get("ref") or "").strip().upper()
+    if not ref:
+        ref = (request.session.get("referral_code") or "").strip().upper()
+
+    # Keep it in session once we see it
+    if ref:
+        request.session["referral_code"] = ref
+
+    ref_qs = ""
+    if ref:
+        ref_qs = "?" + urlencode({"ref": ref})
+
+    return render_page("splash.html", replaces={"{{REF_QS}}": ref_qs})
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
 
@@ -555,6 +583,8 @@ def onboard_get(
     error: str = Query("", alias="error"),
     ref: str = Query("", alias="ref"),
 ):
+    if not ref:
+        ref = (request.session.get("referral_code") or "").strip()
     cid = request.session.get("consultant_id")
     c = get_consultant_full(int(cid)) if cid else None
 
@@ -1127,7 +1157,7 @@ def settings_get(request: Request):
     # ✅ referral code + link
     code = get_or_create_referral_code(int(cid))
     base = (os.getenv("APP_BASE_URL") or "").strip() or str(request.base_url).rstrip("/")
-    referral_link = f"{base}/onboard?ref={code}"
+    referral_link = f"{base}/r/{code}"
 
     replaces = {
         "{{EMAIL}}": (c.get("email") or ""),

@@ -231,13 +231,41 @@
     </style>
 </head>
 
+<script>
+    (function () {
+        const params = new URLSearchParams(window.location.search);
+        const ref = (params.get("ref") || "").trim();
+        if (!ref) return;
+
+        // Update ANY link that points to /splash.html (or /splash.html?...),
+        // so referral persists no matter how many buttons you add later.
+        document.querySelectorAll('a[href^="/splash.html"]').forEach(a => {
+            try {
+                const url = new URL(a.getAttribute("href"), window.location.origin);
+                url.searchParams.set("ref", ref);
+                a.setAttribute("href", url.pathname + "?" + url.searchParams.toString());
+            } catch (e) { }
+        });
+
+        // Optional: if you ever add direct-to-onboard buttons on landing, catch those too.
+        document.querySelectorAll('a[href^="/onboard"]').forEach(a => {
+            try {
+                const url = new URL(a.getAttribute("href"), window.location.origin);
+                url.searchParams.set("ref", ref);
+                a.setAttribute("href", url.pathname + "?" + url.searchParams.toString());
+            } catch (e) { }
+        });
+    })();
+</script>
+
 <body>
     <div class="wrap">
         <div class="top">
             <div class="brand"><span class="dot"></span> MyPinkAssistant</div>
             <div class="nav">
                 <a class="btn" href="/login">Log in</a>
-                <a class="btn btnPrimary" href="/splash.html">Get started</a>
+                <a class="btn btnPrimary" href="/splash.html{{REF_QS}}">Get started</a>
+
             </div>
         </div>
 
@@ -257,7 +285,7 @@
                 </ul>
 
                 <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-                    <a class="btn btnPrimary" href="/splash.html">Start now</a>
+                    <a class="btn btnPrimary" href="/splash.html{{REF_QS}}">Start now</a>
                     <a class="btn" href="/login">I already have an account</a>
                 </div>
             </div>
@@ -299,7 +327,7 @@
             </video>
 
             <div class="demoCta">
-                <a class="btn btnPrimary" href="/splash.html">Start now</a>
+                <a class="btn btnPrimary" href="/splash.html{{REF_QS}}">Start now</a>
                 <a class="btn" href="/login">Log in</a>
             </div>
         </section>
