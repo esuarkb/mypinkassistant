@@ -425,9 +425,14 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) 
     print("---- END RAW TEXT ----")
 
     data = extract_json_object(output_text)
+
+    # If the model returned nothing usable, treat it as unknown instead of erroring
     if not data:
-        # If the model asked a question instead of returning JSON, raise a clean error
-        raise ValueError(f"No JSON returned by model. Got: {output_text[:200]}")
+        return {"type": "unknown"}
+
+    # If JSON exists but is missing the expected structure
+    if not isinstance(data, dict) or not data.get("type"):
+        return {"type": "unknown"}
 
     return data
 
@@ -1122,6 +1127,15 @@ class MKChatEngine:
         pending = state.get("pending")
         msg = (message or "").strip()
 
+        def _resolve_pronoun_guess(guess: str) -> str:
+            g = (guess or "").strip().lower()
+            if g in ("she", "her", "he", "him", "they", "them"):
+                # Prefer last referenced customer from lookups
+                name = (state.get("last_ref_customer_name") or "").strip()
+                if name:
+                    return name
+            return guess
+
         if not msg:
             return ChatReply(ui["empty_prompt"])
 
@@ -1271,7 +1285,14 @@ class MKChatEngine:
         # CRM quick lookup: recent orders lookup (no LLM call)
         # -------------------------
         if not pending:
-            if "order" in lowered and any(k in lowered for k in ["last", "recent", "show", "lookup", "history"]):
+            # 🔥 Orders lookup triggers (covers: "what did Jane order", "what has she ordered", "last 3 orders", etc.)
+            orders_triggers = (
+                "last", "recent", "show", "lookup", "history",
+                "what did", "what has", "what have", "did", "has", "have",
+                "ordered", "buy", "bought", "purchase", "purchased"
+            )
+
+            if ("order" in lowered or "orders" in lowered or "ordered" in lowered) and any(k in lowered for k in orders_triggers):
                 import re
                 from crm_store import get_recent_orders_for_customer, format_recent_orders
 
@@ -1305,7 +1326,8 @@ class MKChatEngine:
                     if t.lower() not in stop_words:
                         tokens.append(t)
 
-                guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
+                guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
+                guess = _resolve_pronoun_guess(guess, state) or (state.get("last_ref_customer_name") or "").strip() or msg
 
                 import re
                 limit = 3
@@ -1385,6 +1407,7 @@ class MKChatEngine:
                         tokens.append(t)
 
                 guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
+                guess = _resolve_pronoun_guess(guess)
 
                 start_date, end_date = parse_time_filter_from_text(msg)
 
@@ -1477,6 +1500,7 @@ class MKChatEngine:
                             tokens.append(t)
 
                     guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
+                    guess = _resolve_pronoun_guess(guess)
                     if not guess:
                         return ChatReply("Who is the customer? Try: “show Jane’s info”.")
 
@@ -1620,6 +1644,7 @@ class MKChatEngine:
                     insert_job("NEW_CUSTOMER", customer, consultant_id=consultant_id)
 
                     state["last_customer"] = customer
+                    state["last_ref_customer_name"] = f"{customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}".strip()
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
 
@@ -1812,6 +1837,7 @@ class MKChatEngine:
 
                     state["pending"] = None
                     state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
+                    state["last_ref_customer_name"] = f"{cust_first} {cust_last}".strip()
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["order_confirmed"].format(first=cust_first, last=cust_last))
 
