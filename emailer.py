@@ -82,6 +82,18 @@ support@mypinkassistant.com
         I’ll organize what you enter and get it ready to send to <strong>MyCustomers</strong>.
       </p>
 
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📇 Look up Customer Information and Orders</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        You can instantly find customer details and past orders.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Example:</strong><br>
+        What is Jane Doe's address? What was Jane's last order?
+      </p>
+      <p style="margin:0 0 16px 0;color:#111;">
+        Can't remember the exact name? No worries — just give me what you have and I’ll find the closest match.
+      </p>
+
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🛍 Add a Customer Order</h3>
       <p style="margin:0 0 10px 0;color:#111;">
         Add multiple items and quantities in one message — I’ll work with whatever you tell me.

@@ -311,8 +311,8 @@ def llm_pick_from_candidates(client: OpenAI, item_text: str, candidates: List[di
                 {"role": "user", "content": user},
             ],
         )
-        txt = resp.output[0].content[0].text.strip()
-        data = json.loads(txt)
+        txt = (resp.output[0].content[0].text or "").strip()
+        data = extract_json_object(txt) or {}
         pick = data.get("pick")
         if pick is None:
             return None
@@ -326,6 +326,31 @@ def llm_pick_from_candidates(client: OpenAI, item_text: str, candidates: List[di
 # -------------------------
 # OpenAI parsing
 # -------------------------
+def extract_json_object(s: str) -> Optional[dict]:
+    s = (s or "").strip()
+    if not s:
+        return None
+
+    # Remove ```json fences if present
+    if s.startswith("```"):
+        s = s.strip()
+        s = s.strip("`").strip()
+        if s.lower().startswith("json"):
+            s = s[4:].strip()
+
+    # Find JSON object boundaries
+    i = s.find("{")
+    j = s.rfind("}")
+    if i == -1 or j == -1 or j <= i:
+        return None
+
+    candidate = s[i : j + 1]
+    try:
+        return json.loads(candidate)
+    except Exception:
+        return None
+
+
 def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) -> dict:
     system_prompt = (
         "You extract structured data from user text.\n"
@@ -377,8 +402,34 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) 
         ],
     )
 
-    output_text = resp.output[0].content[0].text.strip()
-    return json.loads(output_text)
+    output_text = ""
+    try:
+        # Some responses have multiple output blocks; join all text we can find
+        parts = []
+        for out in (resp.output or []):
+            for c in (getattr(out, "content", None) or []):
+                t = getattr(c, "text", None)
+                if t:
+                    parts.append(t)
+        output_text = "\n".join(parts).strip()
+    except Exception:
+        # fallback (your original path)
+        try:
+            output_text = (resp.output[0].content[0].text or "").strip()
+        except Exception:
+            output_text = ""
+
+    # ✅ TEST LINES (keep these until it's stable)
+    print("---- OPENAI RAW TEXT (repr) ----")
+    print(repr(output_text))
+    print("---- END RAW TEXT ----")
+
+    data = extract_json_object(output_text)
+    if not data:
+        # If the model asked a question instead of returning JSON, raise a clean error
+        raise ValueError(f"No JSON returned by model. Got: {output_text[:200]}")
+
+    return data
 
 
 # -------------------------
@@ -1474,7 +1525,7 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     # Force the normal lookup handlers to run by temporarily pretending no pending:
                     # simplest: return a hint instead of trying to re-run the whole pipeline
-                    return ChatReply("You’re in the middle of confirming something. You can confirm with 'yes' or 'no' or reply 'cancel' if you want to do something else.")
+                    return ChatReply("Sorry, I don't quite understand. You can confirm with 'yes' or 'no' or reply 'cancel' if you want to try again.")
 
             if kind == "pick_customer":
                 # user should reply 1/2/3
@@ -1687,12 +1738,9 @@ class MKChatEngine:
             if kind == "order_confirm":
                 order = pending["order"]
 
-                # ✅ NEW: stop random commands from being treated as add/remove/yes/no noise
-                if looks_like_command(msg) and not yes(msg) and not no(msg):
-                    return ChatReply(
-                        "You’re confirming an order. Reply 'yes' or 'no', or type 'cancel' to restart.")
-                        
+                # ✅ FIRST: handle add/remove (so they don't get blocked by looks_like_command)
                 action, rest = parse_add_remove(msg)
+
                 if action == "add":
                     qty, item_text = parse_qty_prefix(rest)
                     if not item_text:
@@ -1704,13 +1752,19 @@ class MKChatEngine:
                 if action == "remove":
                     target = (rest or "").strip()
                     if not target:
-                        return ChatReply("Tell me what to remove, e.g. `remove 2` or `remove satin lips`.")
+                        return ChatReply("Tell me what to remove, e.g. `remove 1` or `remove charcoal`.")
                     removed = self._remove_line(order, target)
                     if not removed:
-                        return ChatReply("I couldn’t find that item to remove. Try `remove 2` or part of the name.")
+                        return ChatReply("I couldn’t find that item to remove. Try `remove 1` or part of the name.")
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
+
+                # ✅ THEN: guardrail for random commands (but not add/remove)
+                if looks_like_command(msg) and not yes(msg) and not no(msg):
+                    return ChatReply("You’re confirming an order. Reply 'yes' or 'no', or say 'add ...' or 'remove ...'.")
+
+                # ... keep your existing yes/no handling below ...
 
                 if yes(msg):
                     cust_first = order["customer"]["First Name"]
@@ -1961,6 +2015,39 @@ class MKChatEngine:
             lines.append({"text": text, "qty": qty, "chosen": None})
         return {"customer": {"First Name": cust_first, "Last Name": cust_last}, "lines": lines}
 
+    def _aggregate_lines_for_preview(self, order: dict) -> List[dict]:
+        """
+        Aggregates identical items for DISPLAY ONLY.
+        Does NOT change order["lines"] (so Playwright/job creation stays 1-row-per-unit).
+        Group key is SKU when available (best), else product_name, else raw text.
+        Returns list of dicts: {"name": str, "price": float|None, "qty": int}
+        """
+        groups: Dict[str, dict] = {}
+
+        for line in (order.get("lines") or []):
+            qty = int(line.get("qty") or 1)
+            if qty < 1:
+                qty = 1
+
+            chosen = line.get("chosen") or {}
+            sku = (chosen.get("sku") or "").strip()
+            name = (chosen.get("product_name") or "").strip() or (line.get("text") or "").strip()
+            price = chosen.get("price")
+
+            # Prefer SKU grouping; fallback to name/text
+            key = sku or name.lower()
+
+            if key not in groups:
+                groups[key] = {"name": name, "price": price, "qty": 0}
+
+            groups[key]["qty"] += qty
+
+            # If price was missing before and we see it now, keep it
+            if groups[key].get("price") is None and isinstance(price, (int, float)):
+                groups[key]["price"] = price
+
+        return list(groups.values())
+
     def _format_order_confirm(self, order: dict, ui: dict) -> str:
         cust = order["customer"]
         out = [ui["order_intro"].format(first=cust["First Name"], last=cust["Last Name"])]
@@ -1968,16 +2055,17 @@ class MKChatEngine:
         total = 0.0
         any_prices = False
 
-        for i, line in enumerate(order["lines"], start=1):
-            chosen = line["chosen"]
-            qty = int(line["qty"])
-            price = chosen.get("price")
+        preview_lines = self._aggregate_lines_for_preview(order)
+
+        for i, pl in enumerate(preview_lines, start=1):
+            qty = int(pl["qty"])
+            price = pl.get("price")
 
             if isinstance(price, (int, float)):
                 any_prices = True
-                total += price * qty
+                total += float(price) * qty
 
-            out.append(f"• {i}) {chosen['product_name']} {fmt_price(price)} x{qty}")
+            out.append(f"• {i}) {pl['name']} {fmt_price(price)} x{qty}")
 
         if any_prices:
             out.append(ui["estimated_total"].format(total=f"${total:.2f}"))

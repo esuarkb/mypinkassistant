@@ -1065,9 +1065,6 @@ def app_page(request: Request):
     if not c or not is_profile_complete(c):
         return RedirectResponse("/onboard", status_code=302)
     
-    print("[APP] c keys:", list((c or {}).keys()))
-    print("[APP] c billing_status:", (c or {}).get("billing_status"))
-    
     # Billing Gate Here (use already-loaded consultant row)
     try:
         require_active_subscription_by_id(cid)  # Option A everywhere
