@@ -555,13 +555,34 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     # Special case: "31 W East st madison, WI 35976"
     # Split street at a real street suffix, then treat the rest as city/state/zip.
     m = re.match(
-        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?$",
+        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt,
         re.IGNORECASE,
     )
     if m:
+        street = m.group("street").strip()
+        extra = (m.group("extra") or "").strip()
+
+        unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
+
+        if extra and any(word in extra.lower() for word in unit_words):
+
+            # Stop at anything that looks like a date (10-14, 10/14, etc)
+            parts = extra.split()
+            clean_parts = []
+
+            for p in parts:
+                if re.match(r"\d{1,2}[-/]\d{1,2}", p):
+                    break
+                clean_parts.append(p)
+
+            extra_clean = " ".join(clean_parts)
+
+            if extra_clean:
+                street = f"{street} {extra_clean}"
+
         return {
-            "Street": m.group("street").strip(),
+            "Street": street,
             "City": m.group("city").strip(),
             "State": m.group("state").strip(),
             "Postal Code": m.group("zip").strip(),
@@ -574,12 +595,33 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     # ---------- Pattern A: "street city, ST ZIP"
     # Example: "444 4th St Arab, AL 35976"
     m = re.match(
-        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?$",
+        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt
     )
     if m:
+        street = m.group("street").strip()
+        extra = (m.group("extra") or "").strip()
+
+        unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
+
+        if extra and any(word in extra.lower() for word in unit_words):
+
+            # Stop at anything that looks like a date (10-14, 10/14, etc)
+            parts = extra.split()
+            clean_parts = []
+
+            for p in parts:
+                if re.match(r"\d{1,2}[-/]\d{1,2}", p):
+                    break
+                clean_parts.append(p)
+
+            extra_clean = " ".join(clean_parts)
+
+            if extra_clean:
+                street = f"{street} {extra_clean}"
+
         return {
-            "Street": m.group("street").strip(),
+            "Street": street,
             "City": m.group("city").strip(),
             "State": m.group("state").strip(),
             "Postal Code": m.group("zip").strip(),
@@ -588,26 +630,68 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     # ---------- Pattern B: "street, city, ST ZIP"
     # Example: "444 4th St, Arab, AL 35976"
     m = re.match(
-        r"^(?P<street>.+?)\s*,\s*(?P<city>.+?)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?$",
+        r"^(?P<street>.+?)\s*,\s*(?P<city>.+?)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt
     )
     if m:
+        street = m.group("street").strip()
+        extra = (m.group("extra") or "").strip()
+
+        unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
+
+        if extra and any(word in extra.lower() for word in unit_words):
+
+            # Stop at anything that looks like a date (10-14, 10/14, etc)
+            parts = extra.split()
+            clean_parts = []
+
+            for p in parts:
+                if re.match(r"\d{1,2}[-/]\d{1,2}", p):
+                    break
+                clean_parts.append(p)
+
+            extra_clean = " ".join(clean_parts)
+
+            if extra_clean:
+                street = f"{street} {extra_clean}"
+
         return {
-            "Street": m.group("street").strip(),
+            "Street": street,
             "City": m.group("city").strip(),
             "State": m.group("state").strip(),
             "Postal Code": m.group("zip").strip(),
         }
-
+    
     # ---------- Pattern D: "street city ST ZIP" (no commas)
     # Example: "333 3rd st arab al 35976"
     m = re.match(
-        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?$",
+        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt
     )
     if m:
+        street = m.group("street").strip()
+        extra = (m.group("extra") or "").strip()
+
+        unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
+
+        if extra and any(word in extra.lower() for word in unit_words):
+
+            # Stop at anything that looks like a date (10-14, 10/14, etc)
+            parts = extra.split()
+            clean_parts = []
+
+            for p in parts:
+                if re.match(r"\d{1,2}[-/]\d{1,2}", p):
+                    break
+                clean_parts.append(p)
+
+            extra_clean = " ".join(clean_parts)
+
+            if extra_clean:
+                street = f"{street} {extra_clean}"
+
         return {
-            "Street": m.group("street").strip(),
+            "Street": street,
             "City": m.group("city").strip(),
             "State": m.group("state").strip(),
             "Postal Code": m.group("zip").strip(),
@@ -1662,7 +1746,7 @@ class MKChatEngine:
 
                     if not (street and city and state_val and postal):
                         return ChatReply(
-                            "I need the full address before I can save this customer, because MyCustomers now requires it for all orders. "
+                            "I need the full address before I can save this customer, as MyCustomers now requires it for all orders. "
                             "Please type the street, city, state, and ZIP, or say cancel."
                         )
 
