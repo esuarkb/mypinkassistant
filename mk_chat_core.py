@@ -1795,6 +1795,29 @@ class MKChatEngine:
                     cust_first = order["customer"]["First Name"]
                     cust_last = order["customer"]["Last Name"]
 
+                    # Block Mary Kay submission if customer has no address on file
+                    from crm_store import get_customer_by_id
+
+                    customer_id = order.get("customer_id")
+                    customer_row = None
+
+                    if customer_id:
+                        with tx() as (conn, cur):
+                            customer_row = get_customer_by_id(cur, consultant_id=consultant_id, customer_id=int(customer_id))
+
+                    street_ok = bool((customer_row or {}).get("street"))
+                    city_ok = bool((customer_row or {}).get("city"))
+                    state_ok = bool((customer_row or {}).get("state"))
+                    postal_ok = bool((customer_row or {}).get("postal_code"))
+
+                    if not (street_ok and city_ok and state_ok and postal_ok):
+                        state["pending"] = None
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(
+                            f"I couldn’t submit this order for {cust_first} {cust_last} because MyCustomers now requires a customer address for personal inventory orders. "
+                            f"Please add the address first, then try the order again."
+                        )
+
                     # 1) Save order + items to CRM (permanent, even if Playwright fails)
                     from crm_store import get_customer_id_by_name, create_order_from_confirmed, upsert_customer_from_pending
 
@@ -2016,6 +2039,10 @@ class MKChatEngine:
         phone_disp = format_phone_display(customer.get("Phone", ""))
         birthday_disp = birthday_display(customer.get("Birthday", ""))
 
+        warning = ""
+        if not street:
+            warning = "\n⚠ No address added yet. MyCustomers now requires an address before personal inventory orders can be submitted.\n"
+
         return (
             f"{ui['cust_submit_intro']}\n"
             f"• {ui['name']}: {customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}\n"
@@ -2023,6 +2050,7 @@ class MKChatEngine:
             f"• {ui['phone']}: {phone_disp or ui['none']}\n"
             f"• {ui['address']}: {addr}\n"
             f"• {ui['birthday']}: {birthday_disp or ui['none']}\n"
+            f"{warning}"
             f"{ui['cust_confirm_q']}\n"
             f"{ui['cust_edit_hint']}"
         )
