@@ -1,6 +1,7 @@
 # crm_store.py
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
+from rapidfuzz import fuzz
 
 
 def _rows_to_dicts(cur) -> List[Dict[str, Any]]:
@@ -42,6 +43,7 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
       - "Bonnie" (single token): match first OR last
       - "Kirk C" (last initial): first startswith kirk, last startswith c
       - "Kirk Cam" (partial last): first + last partials
+      - fuzzy fallback if no SQL matches ("jnae" -> "jane")
     Returns list of dicts, best matches first.
     """
     q = (name or "").strip()
@@ -64,23 +66,21 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
     p1_low = p1.lower()
     p2_low = p2.lower()
 
-    # Helper patterns
     first_starts = f"{p1_low}%"
     first_contains = f"%{p1_low}%"
 
     last_starts = f"{p2_low}%"
     last_contains = f"%{p2_low}%"
 
-    # Single token: use it for both first/last
     single_starts = f"{p1_low}%"
     single_contains = f"%{p1_low}%"
 
-    # Last initial patterns
     last_init_starts = f"{last_initial}%"
 
-    # SQL differs for sqlite vs postgres placeholders
+    # -------------------------
+    # Primary SQL search
+    # -------------------------
     if is_sqlite:
-        # ORDER BY: starts-with matches first, then contains matches
         if len(parts) == 1:
             sql = """
             SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
@@ -99,7 +99,6 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
             params = (consultant_id, single_contains, single_contains, single_starts, single_starts, limit)
 
         elif last_initial:
-            # "Kirk C" -> first starts/contains kirk + last startswith c
             sql = """
             SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
             FROM customers
@@ -114,7 +113,6 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
             params = (consultant_id, first_contains, last_init_starts, first_starts, limit)
 
         else:
-            # "Kirk Cam" or "Kirk Cameron" -> first+last partials
             sql = """
             SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
             FROM customers
@@ -129,58 +127,105 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
             """
             params = (consultant_id, first_contains, last_contains, first_starts, last_starts, limit)
 
-        cur.execute(sql, params)
-        return _rows_to_dicts(cur)
-
-    # Postgres version (%s placeholders)
-    if len(parts) == 1:
-        sql = """
-        SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
-        FROM customers
-        WHERE consultant_id = %s
-          AND (
-            LOWER(first_name) LIKE %s
-            OR LOWER(last_name) LIKE %s
-          )
-        ORDER BY
-          CASE WHEN LOWER(first_name) LIKE %s THEN 0 ELSE 1 END,
-          CASE WHEN LOWER(last_name)  LIKE %s THEN 0 ELSE 1 END,
-          last_name, first_name
-        LIMIT %s
-        """
-        params = (consultant_id, single_contains, single_contains, single_starts, single_starts, limit)
-
-    elif last_initial:
-        sql = """
-        SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
-        FROM customers
-        WHERE consultant_id = %s
-          AND LOWER(first_name) LIKE %s
-          AND LOWER(last_name) LIKE %s
-        ORDER BY
-          CASE WHEN LOWER(first_name) LIKE %s THEN 0 ELSE 1 END,
-          last_name, first_name
-        LIMIT %s
-        """
-        params = (consultant_id, first_contains, last_init_starts, first_starts, limit)
-
     else:
-        sql = """
-        SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
-        FROM customers
-        WHERE consultant_id = %s
-          AND LOWER(first_name) LIKE %s
-          AND LOWER(last_name) LIKE %s
-        ORDER BY
-          CASE WHEN LOWER(first_name) LIKE %s THEN 0 ELSE 1 END,
-          CASE WHEN LOWER(last_name)  LIKE %s THEN 0 ELSE 1 END,
-          last_name, first_name
-        LIMIT %s
-        """
-        params = (consultant_id, first_contains, last_contains, first_starts, last_starts, limit)
+        if len(parts) == 1:
+            sql = """
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            FROM customers
+            WHERE consultant_id = %s
+              AND (
+                LOWER(first_name) LIKE %s
+                OR LOWER(last_name) LIKE %s
+              )
+            ORDER BY
+              CASE WHEN LOWER(first_name) LIKE %s THEN 0 ELSE 1 END,
+              CASE WHEN LOWER(last_name)  LIKE %s THEN 0 ELSE 1 END,
+              last_name, first_name
+            LIMIT %s
+            """
+            params = (consultant_id, single_contains, single_contains, single_starts, single_starts, limit)
+
+        elif last_initial:
+            sql = """
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            FROM customers
+            WHERE consultant_id = %s
+              AND LOWER(first_name) LIKE %s
+              AND LOWER(last_name) LIKE %s
+            ORDER BY
+              CASE WHEN LOWER(first_name) LIKE %s THEN 0 ELSE 1 END,
+              last_name, first_name
+            LIMIT %s
+            """
+            params = (consultant_id, first_contains, last_init_starts, first_starts, limit)
+
+        else:
+            sql = """
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            FROM customers
+            WHERE consultant_id = %s
+              AND LOWER(first_name) LIKE %s
+              AND LOWER(last_name) LIKE %s
+            ORDER BY
+              CASE WHEN LOWER(first_name) LIKE %s THEN 0 ELSE 1 END,
+              CASE WHEN LOWER(last_name)  LIKE %s THEN 0 ELSE 1 END,
+              last_name, first_name
+            LIMIT %s
+            """
+            params = (consultant_id, first_contains, last_contains, first_starts, last_starts, limit)
 
     cur.execute(sql, params)
-    return _rows_to_dicts(cur)
+    rows = _rows_to_dicts(cur)
+
+    if rows:
+        return rows
+
+    # -------------------------
+    # Fuzzy fallback
+    # -------------------------
+    if is_sqlite:
+        cur.execute(
+            """
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            FROM customers
+            WHERE consultant_id = ?
+            """,
+            (consultant_id,),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            FROM customers
+            WHERE consultant_id = %s
+            """,
+            (consultant_id,),
+        )
+
+    all_rows = _rows_to_dicts(cur)
+
+    q_low = q.lower().strip()
+    scored = []
+
+    for r in all_rows:
+        first = (r.get("first_name") or "").strip()
+        last = (r.get("last_name") or "").strip()
+        full = f"{first} {last}".strip()
+
+        score_full = fuzz.WRatio(q_low, full.lower()) if full else 0
+        score_first = fuzz.WRatio(q_low, first.lower()) if first else 0
+        score_last = fuzz.WRatio(q_low, last.lower()) if last else 0
+
+        score = max(score_full, score_first, score_last)
+
+        if q_low and q_low in full.lower():
+            score += 5
+
+        scored.append((score, r))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    return [r for score, r in scored if score >= 75][:limit]
 
 
 def format_customer_card(c: Dict[str, Any]) -> str:
