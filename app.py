@@ -1473,8 +1473,10 @@ def admin_diagnostics(request: Request):
       border-radius:10px;
       border:1px solid #ddd;
       background:#fff;
+      color:#111;
       font-weight:600;
       cursor:pointer;
+      min-width:140px;
     }}
     .adminBtn:hover{{ background:#f5f5f5; }}
     .adminBtn.danger{{
@@ -1482,6 +1484,7 @@ def admin_diagnostics(request: Request):
       background:#fff5f5;
       color:#b91c1c;
     }}
+    
   </style>
 </head>
 <body>
