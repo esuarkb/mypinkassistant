@@ -1496,13 +1496,17 @@ def admin_diagnostics(request: Request):
 
     <!-- Admin action buttons -->
     <div class="row" style="margin-top:14px">
-      <form method="post" action="/admin/clear-locks">
+    <form method="post" action="/admin/clear-locks">
         <button type="submit" class="adminBtn">Clear All Locks</button>
-      </form>
+    </form>
 
-      <form method="post" action="/admin/fail-running">
+    <form method="post" action="/admin/fail-running">
         <button type="submit" class="adminBtn danger">Fail All Running Jobs</button>
-      </form>
+    </form>
+
+    <form method="post" action="/admin/clear-failed">
+        <button type="submit" class="adminBtn">Clear Failed Jobs</button>
+    </form>
     </div>
     
     <h2 style="margin:20px 0 6px;font-size:16px">Emergency UI Banner</h2>
@@ -1646,6 +1650,23 @@ def admin_fail_all_running(request: Request):
                 WHERE status='running'
                 """
             )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return RedirectResponse("/admin", status_code=302)
+
+@app.post("/admin/clear-failed")
+def admin_clear_failed(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    conn = _conn()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM jobs WHERE status='failed'")
         conn.commit()
     finally:
         conn.close()
