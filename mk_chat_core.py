@@ -552,6 +552,21 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     # Normalize whitespace
     txt = re.sub(r"\s+", " ", raw).strip()
 
+    # Special case: "31 W East st madison, WI 35976"
+    # Split street at a real street suffix, then treat the rest as city/state/zip.
+    m = re.match(
+        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?$",
+        txt,
+        re.IGNORECASE,
+    )
+    if m:
+        return {
+            "Street": m.group("street").strip(),
+            "City": m.group("city").strip(),
+            "State": m.group("state").strip(),
+            "Postal Code": m.group("zip").strip(),
+        }
+
     # Pull ZIP first (required for full parse)
     mzip = re.search(r"\b(\d{5})(?:-\d{4})?\b", txt)
     zip5 = mzip.group(1) if mzip else ""
@@ -1024,6 +1039,13 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
                 notes.append("Birthday updated")
                 continue
 
+        # ✅ Address guess (must be BEFORE zip guess)
+        parsed = parse_address_line(txt)
+        if parsed:
+            c.update(parsed)
+            notes.append("Address updated")
+            continue
+
         # Phone guess
         ph = _extract_phone_candidate(txt)
         if ph:
@@ -1031,12 +1053,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             notes.append("Phone updated")
             continue
 
-        # ✅ Address guess (must be BEFORE zip guess)
-        parsed = parse_address_line(txt)
-        if parsed:
-            c.update(parsed)
-            notes.append("Address updated")
-            continue
+
 
         # Zip guess
         z = _extract_zip(txt)
@@ -1636,6 +1653,18 @@ class MKChatEngine:
 
                     # 1) Save to CRM (permanent)
                     from crm_store import upsert_customer_from_pending
+                    customer = pending["customer"]
+
+                    street = (customer.get("Street") or "").strip()
+                    city = (customer.get("City") or "").strip()
+                    state_val = (customer.get("State") or "").strip()
+                    postal = (customer.get("Postal Code") or "").strip()
+
+                    if not (street and city and state_val and postal):
+                        return ChatReply(
+                            "I need the full address before I can save this customer, because MyCustomers now requires it for all orders. "
+                            "Please type the street, city, state, and ZIP, or say cancel."
+                        )
 
                     with tx() as (conn, cur):
                         upsert_customer_from_pending(cur, consultant_id=consultant_id, customer=customer)
@@ -1794,29 +1823,6 @@ class MKChatEngine:
                 if yes(msg):
                     cust_first = order["customer"]["First Name"]
                     cust_last = order["customer"]["Last Name"]
-
-                    # Block Mary Kay submission if customer has no address on file
-                    from crm_store import get_customer_by_id
-
-                    customer_id = order.get("customer_id")
-                    customer_row = None
-
-                    if customer_id:
-                        with tx() as (conn, cur):
-                            customer_row = get_customer_by_id(cur, consultant_id=consultant_id, customer_id=int(customer_id))
-
-                    street_ok = bool((customer_row or {}).get("street"))
-                    city_ok = bool((customer_row or {}).get("city"))
-                    state_ok = bool((customer_row or {}).get("state"))
-                    postal_ok = bool((customer_row or {}).get("postal_code"))
-
-                    if not (street_ok and city_ok and state_ok and postal_ok):
-                        state["pending"] = None
-                        save_session_state(state, session_id=sid)
-                        return ChatReply(
-                            f"I couldn’t submit this order for {cust_first} {cust_last} because MyCustomers now requires a customer address for personal inventory orders. "
-                            f"Please add the address first, then try the order again."
-                        )
 
                     # 1) Save order + items to CRM (permanent, even if Playwright fails)
                     from crm_store import get_customer_id_by_name, create_order_from_confirmed, upsert_customer_from_pending
@@ -2039,9 +2045,9 @@ class MKChatEngine:
         phone_disp = format_phone_display(customer.get("Phone", ""))
         birthday_disp = birthday_display(customer.get("Birthday", ""))
 
-        warning = ""
-        if not street:
-            warning = "\n⚠ No address added yet. MyCustomers now requires an address before personal inventory orders can be submitted.\n"
+        #warning = ""
+        #if not street:
+        #    warning = "\n⚠ No address added yet. Mary Kay now requires an address before personal inventory orders can be submitted.\n"
 
         return (
             f"{ui['cust_submit_intro']}\n"
@@ -2050,7 +2056,7 @@ class MKChatEngine:
             f"• {ui['phone']}: {phone_disp or ui['none']}\n"
             f"• {ui['address']}: {addr}\n"
             f"• {ui['birthday']}: {birthday_disp or ui['none']}\n"
-            f"{warning}"
+        #    f"{warning}"
             f"{ui['cust_confirm_q']}\n"
             f"{ui['cust_edit_hint']}"
         )
