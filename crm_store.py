@@ -277,12 +277,12 @@ def format_customer_card(c: Dict[str, Any]) -> str:
 
 def upsert_customer_from_pending(cur, consultant_id: int, customer: Dict[str, Any]) -> int:
     """
-    Save the confirmed customer into the CRM table.
-    - "Upsert" means: update if we think they already exist, otherwise insert.
-    - Returns the customer_id in the CRM table.
+    For now, always INSERT a new customer row.
+    We are intentionally not auto-merging/updating existing customers,
+    because family members may share phone numbers or email addresses.
+    Returns the new customer_id.
     """
 
-    # Your pending customer dict uses keys like "First Name", "Last Name", etc.
     first = (customer.get("First Name") or "").strip()
     last = (customer.get("Last Name") or "").strip()
     email = (customer.get("Email") or "").strip() or None
@@ -293,47 +293,8 @@ def upsert_customer_from_pending(cur, consultant_id: int, customer: Dict[str, An
     postal = (customer.get("Postal Code") or customer.get("Zip") or "").strip() or None
     birthday = (customer.get("Birthday") or "").strip() or None
 
-    # How we decide "same customer":
-    # Prefer phone, else email, else first+last match.
     is_sqlite = _is_sqlite_cursor(cur)
 
-    if phone:
-        where_sql = "consultant_id = ? AND phone = ?" if is_sqlite else "consultant_id = %s AND phone = %s"
-        where_params = (consultant_id, phone)
-    elif email:
-        where_sql = "consultant_id = ? AND LOWER(email) = LOWER(?)" if is_sqlite else "consultant_id = %s AND LOWER(email) = LOWER(%s)"
-        where_params = (consultant_id, email)
-    else:
-        where_sql = "consultant_id = ? AND LOWER(first_name)=LOWER(?) AND LOWER(last_name)=LOWER(?)" if is_sqlite else "consultant_id = %s AND LOWER(first_name)=LOWER(%s) AND LOWER(last_name)=LOWER(%s)"
-        where_params = (consultant_id, first, last)
-
-    # 1) Try to find existing
-    find_sql = f"SELECT id FROM customers WHERE {where_sql} LIMIT 1"
-    cur.execute(find_sql, where_params)
-    row = cur.fetchone()
-
-    # 2) Update or Insert
-    if row:
-        customer_id = int(row[0])
-
-        if is_sqlite:
-            cur.execute("""
-                UPDATE customers
-                SET first_name=?, last_name=?, email=?, phone=?, street=?, city=?, state=?, postal_code=?, birthday=?,
-                    updated_at=datetime('now')
-                WHERE id=? AND consultant_id=?
-            """, (first, last, email, phone, street, city, state, postal, birthday, customer_id, consultant_id))
-        else:
-            cur.execute("""
-                UPDATE customers
-                SET first_name=%s, last_name=%s, email=%s, phone=%s, street=%s, city=%s, state=%s, postal_code=%s, birthday=%s,
-                    updated_at=NOW()
-                WHERE id=%s AND consultant_id=%s
-            """, (first, last, email, phone, street, city, state, postal, birthday, customer_id, consultant_id))
-
-        return customer_id
-
-    # Insert new
     if is_sqlite:
         cur.execute("""
             INSERT INTO customers
