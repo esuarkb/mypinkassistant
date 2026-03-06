@@ -535,6 +535,31 @@ STREET_SUFFIXES = (
     "pkwy", "parkway", "hwy", "highway", "pl", "place", "way"
 )
 
+def _append_unit_suffix_if_present(street: str, extra: str) -> str:
+    extra = (extra or "").strip()
+    if not extra:
+        return street
+
+    unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
+
+    if not any(word in extra.lower() for word in unit_words):
+        return street
+
+    # Stop before anything that looks like a date, like 10-14 or 10/14
+    parts = extra.split()
+    clean_parts = []
+
+    for p in parts:
+        if re.match(r"\d{1,2}[-/]\d{1,2}$", p):
+            break
+        clean_parts.append(p)
+
+    extra_clean = " ".join(clean_parts).strip()
+    if not extra_clean:
+        return street
+
+    return f"{street} {extra_clean}"
+
 def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     """
     Best-effort parse of an address line into:
@@ -562,24 +587,7 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     if m:
         street = m.group("street").strip()
         extra = (m.group("extra") or "").strip()
-
-        unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
-
-        if extra and any(word in extra.lower() for word in unit_words):
-
-            # Stop at anything that looks like a date (10-14, 10/14, etc)
-            parts = extra.split()
-            clean_parts = []
-
-            for p in parts:
-                if re.match(r"\d{1,2}[-/]\d{1,2}", p):
-                    break
-                clean_parts.append(p)
-
-            extra_clean = " ".join(clean_parts)
-
-            if extra_clean:
-                street = f"{street} {extra_clean}"
+        street = _append_unit_suffix_if_present(street, extra)
 
         return {
             "Street": street,
@@ -601,24 +609,7 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     if m:
         street = m.group("street").strip()
         extra = (m.group("extra") or "").strip()
-
-        unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
-
-        if extra and any(word in extra.lower() for word in unit_words):
-
-            # Stop at anything that looks like a date (10-14, 10/14, etc)
-            parts = extra.split()
-            clean_parts = []
-
-            for p in parts:
-                if re.match(r"\d{1,2}[-/]\d{1,2}", p):
-                    break
-                clean_parts.append(p)
-
-            extra_clean = " ".join(clean_parts)
-
-            if extra_clean:
-                street = f"{street} {extra_clean}"
+        street = _append_unit_suffix_if_present(street, extra)
 
         return {
             "Street": street,
@@ -636,24 +627,7 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     if m:
         street = m.group("street").strip()
         extra = (m.group("extra") or "").strip()
-
-        unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
-
-        if extra and any(word in extra.lower() for word in unit_words):
-
-            # Stop at anything that looks like a date (10-14, 10/14, etc)
-            parts = extra.split()
-            clean_parts = []
-
-            for p in parts:
-                if re.match(r"\d{1,2}[-/]\d{1,2}", p):
-                    break
-                clean_parts.append(p)
-
-            extra_clean = " ".join(clean_parts)
-
-            if extra_clean:
-                street = f"{street} {extra_clean}"
+        street = _append_unit_suffix_if_present(street, extra)
 
         return {
             "Street": street,
@@ -671,24 +645,7 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     if m:
         street = m.group("street").strip()
         extra = (m.group("extra") or "").strip()
-
-        unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
-
-        if extra and any(word in extra.lower() for word in unit_words):
-
-            # Stop at anything that looks like a date (10-14, 10/14, etc)
-            parts = extra.split()
-            clean_parts = []
-
-            for p in parts:
-                if re.match(r"\d{1,2}[-/]\d{1,2}", p):
-                    break
-                clean_parts.append(p)
-
-            extra_clean = " ".join(clean_parts)
-
-            if extra_clean:
-                street = f"{street} {extra_clean}"
+        street = _append_unit_suffix_if_present(street, extra)
 
         return {
             "Street": street,
@@ -1584,7 +1541,9 @@ class MKChatEngine:
                 return ChatReply(f"{customer_name} has spent ${total_spent:,.2f} ({period}).")
 
         # Cancel command (intent-driven)
-        if intent_result.intent == "cancel":
+        if intent_result.intent == "cancel" and not (
+            pending and pending.get("kind") == "delete_customer_confirm"
+        ):
             state["pending"] = None
             save_session_state(state, session_id=sid)
             return ChatReply(ui["canceled"])
@@ -1787,29 +1746,31 @@ class MKChatEngine:
                 return ChatReply(note_line + self._format_customer_confirm(updated, ui))
 
             if kind == "delete_customer_confirm":
-                if msg.strip().lower() in ("cancel", "stop", "no"):
+                answer = (msg or "").strip()
+
+                if answer.upper() == "DELETE":
+                    cid = int(pending["customer_id"])
+                    name = pending.get("customer_name") or "Customer"
+
+                    from db import tx
+                    from crm_store import delete_customer_local
+
+                    with tx() as (conn, cur):
+                        n = delete_customer_local(cur, consultant_id=consultant_id, customer_id=cid, delete_orders=True)
+
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply("Canceled — nothing deleted.")
 
-                if msg.strip() != "DELETE":
-                    return ChatReply("To confirm deletion, type DELETE. Or type `cancel`.")
+                    if n:
+                        return ChatReply(f"✅ Deleted {name} from MyPinkAssistant (MyCustomers was not changed).")
+                    return ChatReply("I couldn’t delete that customer (maybe it was already removed).")
 
-                cid = int(pending["customer_id"])
-                name = pending.get("customer_name") or "Customer"
+                if answer.lower() in ("cancel", "stop", "no"):
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply("Canceled. Ready for your next customer or order.")
 
-                from db import tx
-                from crm_store import delete_customer_local
-
-                with tx() as (conn, cur):
-                    n = delete_customer_local(cur, consultant_id=consultant_id, customer_id=cid, delete_orders=True)
-
-                state["pending"] = None
-                save_session_state(state, session_id=sid)
-
-                if n:
-                    return ChatReply(f"✅ Deleted {name} from MyPinkAssistant (MyCustomers was not changed).")
-                return ChatReply("I couldn’t delete that customer (maybe it was already removed).")
+                return ChatReply("To confirm deletion, type DELETE. Or type `cancel`.")
 
             if kind == "order_line_confirm_top":
                 order = pending["order"]
