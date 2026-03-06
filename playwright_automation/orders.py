@@ -63,7 +63,7 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     page.wait_for_timeout(3000)
 
     #Select from my Inventory instead of CDS
-    page.get_by_role("button", name="My Inventory").click()
+    page.get_by_text("My Inventory").click()
     page.wait_for_timeout(500)
 
 
