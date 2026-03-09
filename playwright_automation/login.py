@@ -58,7 +58,7 @@ def login_intouch(page: Page, username: str, password: str) -> None:
     except Exception:
         pass  # If selector fails, just continue
 
-    _wait_for_mycustomers_ready(page, timeout_ms=4500)
+    _wait_for_mycustomers_ready(page, timeout_ms=45000)
     
     # Basic sanity check: we should no longer be on the login page
     #if "login" in page.url.lower():
