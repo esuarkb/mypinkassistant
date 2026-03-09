@@ -173,28 +173,6 @@ def main():
                 username = (username or "").strip()
                 password = (password or "").strip()
 
-                # If consultant has no creds, fail their queued jobs and move on
-                if not username or not password:
-                    msg = _missing_creds_message()
-
-                    send_failure_text(
-                        f"🚨 MyPinkAssistant Worker Failure\n\n"
-                        f"Type: Missing Credentials\n"
-                        f"Consultant ID: {cid}\n\n"
-                        f"InTouch username or password is missing."
-                    )
-
-                    while True:
-                        refresh_consultant_lock(cid)
-                        claimed = claim_next_job_for_consultant(cid)
-                        if not claimed:
-                            break
-
-                        job_id, _job_type, _payload_json = claimed
-                        mark_job_failed(job_id, msg)
-
-                    continue
-
                 # Headless only if explicitly set to true
                 HEADLESS = os.getenv("HEADLESS", "").lower() == "true"
                 print("HEADLESS env:", os.getenv("HEADLESS"))
