@@ -4,6 +4,55 @@
 import os
 import json
 import time
+import requests
+import traceback
+from dotenv import load_dotenv
+load_dotenv()
+
+PB_API_KEY = os.getenv("PB_API_KEY", "").strip()
+PB_CONTACT_ID = os.getenv("PB_CONTACT_ID", "").strip()
+
+ALERT_COOLDOWN_SECONDS = int(os.getenv("ALERT_COOLDOWN_SECONDS", "60"))
+_last_alert_time = 0.0
+
+
+def send_failure_text(message: str) -> None:
+    global _last_alert_time
+
+    if not PB_API_KEY or not PB_CONTACT_ID:
+        print("[Worker] Missing PB credentials")
+        return
+
+    now = time.time()
+    seconds_since_last = now - _last_alert_time
+
+    if seconds_since_last < ALERT_COOLDOWN_SECONDS:
+        remaining = int(ALERT_COOLDOWN_SECONDS - seconds_since_last)
+        print(f"[Worker] PB alert suppressed ({remaining}s cooldown remaining)")
+        return
+
+    url = f"https://app.projectbroadcast.com/api/v1/contacts/{PB_CONTACT_ID}/send"
+
+    headers = {
+        "x-api-key": PB_API_KEY,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    payload = {
+        "text": message[:1500]
+    }
+
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=15)
+        print("[Worker] PB alert status:", r.status_code)
+        print("[Worker] PB alert response:", r.text)
+
+        if r.ok:
+            _last_alert_time = now
+
+    except Exception as e:
+        print("[Worker] Failed to send PB alert:", e)
 
 from playwright.sync_api import sync_playwright
 
@@ -105,6 +154,7 @@ def _claim_more_order_rows_for_same_customer(cid: int, first_payload: dict):
 
 def main():
     print(f"✅ Worker starting: {WORKER_ID}")
+    #send_failure_text("✅ Test alert from MyPinkAssistant worker")
 
     with sync_playwright() as pw:
         while True:
@@ -165,13 +215,18 @@ def main():
                 except Exception as e:
                     err = str(e)
 
-                    # friendly msg if it smells like bad creds / login screen issue
                     friendly = (
                         "InTouch login failed. Please check your InTouch username/password in Settings "
                         "and try again."
                     )
 
-                    # mark ALL queued jobs for this consultant failed so they don't keep retrying forever
+                    send_failure_text(
+                        f"🚨 MyPinkAssistant Worker Failure\n\n"
+                        f"Type: Login Failure\n"
+                        f"Consultant ID: {cid}\n"
+                        f"Error: {err}"
+                    )
+
                     while True:
                         refresh_consultant_lock(cid)
                         claimed = claim_next_job_for_consultant(cid)
@@ -181,8 +236,6 @@ def main():
                         mark_job_failed(job_id, friendly)
 
                     print(f"[Worker] Login failed for consultant_id={cid}: {err}")
-
-                    # IMPORTANT: don't crash worker; just move on
                     continue
 
                 last_job_time = time.time()
@@ -237,15 +290,28 @@ def main():
                             mark_job_failed(job_id, f"Unknown job type: {job_type}")
 
                     except Exception as e:
-                        err_text = str(e)
+                        raw_err = str(e)
+                        err_text = raw_err
 
-                        # If this looks like an InTouch/MyCustomers navigation failure,
-                        # show a clean message instead of Playwright internals
-                        if "Timeout" in err_text and "New Customer" in err_text:
+                        if "Timeout" in raw_err and "New Customer" in raw_err:
                             err_text = (
                                 "Could not reach MyCustomers after login. "
                                 "Please verify your InTouch credentials in Settings and try again."
                             )
+
+                        customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
+                        item_desc = payload.get("Item Description", "") or payload.get("Product", "") or ""
+
+                        send_failure_text(
+                            f"🚨 MyPinkAssistant Worker Failure\n\n"
+                            f"Type: Job Failure\n"
+                            f"Consultant ID: {cid}\n"
+                            f"Job ID: {job_id}\n"
+                            f"Job Type: {job_type}\n"
+                            f"Customer: {customer_name or 'Unknown'}\n"
+                            f"Item: {item_desc or 'N/A'}\n"
+                            f"Error: {raw_err}"
+                        )
 
                         mark_job_failed(job_id, err_text)
 

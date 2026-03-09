@@ -34,9 +34,9 @@ def login_intouch(page: Page, username: str, password: str) -> None:
     # Fill login fields
     page.get_by_role("textbox", name="Consultant Number").wait_for(state="visible", timeout=30000)
     page.get_by_role("textbox", name="Consultant Number").fill(username)
-    #page.wait_for_timeout(100)
+    page.wait_for_timeout(100)
     page.get_by_role("textbox", name="Password").fill(password)
-    #page.wait_for_timeout(100)
+    page.wait_for_timeout(100)
 
     # Submit
     page.get_by_text("Log In").click()
@@ -49,7 +49,7 @@ def login_intouch(page: Page, username: str, password: str) -> None:
 
     # If invalid login message appears, fail immediately
     try:
-        err = page.get_by_text("invalid login attempt", exact=False)
+        err = page.get_by_text("Invalid login attempt.", exact=True)
         if err.count() > 0 and err.first.is_visible():
             raise RuntimeError(
                 "InTouch login failed: invalid username or password. "
@@ -58,7 +58,7 @@ def login_intouch(page: Page, username: str, password: str) -> None:
     except Exception:
         pass  # If selector fails, just continue
 
-    _wait_for_mycustomers_ready(page, timeout_ms=45000)
+    _wait_for_mycustomers_ready(page, timeout_ms=4500)
     
     # Basic sanity check: we should no longer be on the login page
     #if "login" in page.url.lower():
