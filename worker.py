@@ -173,6 +173,10 @@ def main():
                 username = (username or "").strip()
                 password = (password or "").strip()
 
+            print(f"[Worker] consultant_id={cid}")
+            print(f"[Worker] username from DB: {repr(username)}")
+            print(f"[Worker] password length from DB: {len(password)}")
+
                 # Headless only if explicitly set to true
                 HEADLESS = os.getenv("HEADLESS", "").lower() == "true"
                 print("HEADLESS env:", os.getenv("HEADLESS"))
