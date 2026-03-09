@@ -48,15 +48,12 @@ def login_intouch(page: Page, username: str, password: str) -> None:
     page.wait_for_timeout(1500)
 
     # If invalid login message appears, fail immediately
-    try:
-        err = page.get_by_text("Invalid login attempt.", exact=True)
-        if err.count() > 0 and err.first.is_visible():
-            raise RuntimeError(
-                "InTouch login failed: invalid username or password. "
-                "Please update your credentials in Settings and try again."
-            )
-    except Exception:
-        pass  # If selector fails, just continue
+    err = page.get_by_text("Invalid login attempt.", exact=True)
+    if err.count() > 0 and err.first.is_visible():
+        raise RuntimeError(
+            "InTouch login failed: invalid username or password. "
+            "Please update your credentials in Settings and try again."
+        )
 
     _wait_for_mycustomers_ready(page, timeout_ms=45000)
     
