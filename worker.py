@@ -154,7 +154,7 @@ def _claim_more_order_rows_for_same_customer(cid: int, first_payload: dict):
 
 def main():
     print(f"✅ Worker starting: {WORKER_ID}")
-    #send_failure_text("✅ Test alert from MyPinkAssistant worker")
+    send_failure_text("✅ Test alert from MyPinkAssistant worker")
 
     with sync_playwright() as pw:
         while True:
