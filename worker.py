@@ -154,7 +154,7 @@ def _claim_more_order_rows_for_same_customer(cid: int, first_payload: dict):
 
 def main():
     print(f"✅ Worker starting: {WORKER_ID}")
-    send_failure_text("✅ Test alert from MyPinkAssistant worker")
+    #send_failure_text("✅ Test alert from MyPinkAssistant worker")
 
     with sync_playwright() as pw:
         while True:
@@ -176,6 +176,13 @@ def main():
                 # If consultant has no creds, fail their queued jobs and move on
                 if not username or not password:
                     msg = _missing_creds_message()
+
+                    send_failure_text(
+                        f"🚨 MyPinkAssistant Worker Failure\n\n"
+                        f"Type: Missing Credentials\n"
+                        f"Consultant ID: {cid}\n\n"
+                        f"InTouch username or password is missing."
+                    )
 
                     while True:
                         refresh_consultant_lock(cid)
