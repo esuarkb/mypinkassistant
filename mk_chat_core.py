@@ -1230,6 +1230,25 @@ class MKChatEngine:
         import re
         from crm_store import find_customers_by_name, get_customer_by_id, count_orders_for_customer, delete_customer_local
 
+        def _looks_like_full_customer_entry(text: str) -> bool:
+            t = (text or "").strip()
+
+            has_zip = bool(re.search(r"\b\d{5}(?:-\d{4})?\b", t))
+            has_phone = bool(re.search(r"(?:\+?1[\s\-\.]?)?(?:\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4})", t))
+            has_birthday_word = any(x in t.lower() for x in ("birthday", "bday", "dob"))
+            has_month_name = bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b", t, re.IGNORECASE))
+            has_address_word = any(x in t.lower() for x in ("address", "street", "st ", "road", "rd ", "avenue", "ave ", "drive", "dr ", "lane", "ln ", "court", "ct ", "circle", "cir ", "way", "blvd", "boulevard", "unit", "apt", "apartment", "lot"))
+
+            score = sum([
+                has_zip,
+                has_phone,
+                has_birthday_word or has_month_name,
+                has_address_word,
+            ])
+
+            # if it looks like a bundle of customer fields, treat it as a customer entry
+            return score >= 2
+
         # -------------------------
         # CRM: delete customer (local only)
         # -------------------------
@@ -1551,57 +1570,64 @@ class MKChatEngine:
         # -------------------------
         # CRM quick lookup: customer info lookup (no LLM call)
         # -------------------------
+        
         if (not pending) or allow_pending_lookup_interrupt:
             if intent_result.intent == "customer_info":
                 import re
 
-                m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
-                stop_words = {
-                    "what", "is", "whats", "what's", "info", "information", "for", "on",
-                    "lookup", "show", "me", "please", "customer", "customers",
-                    "email", "phone", "number", "address", "birthday", "bday"
-                }
+                # Guard: if this looks like pasted full customer data, let normal parsing handle it
+                if _looks_like_full_customer_entry(msg):
+                    pass
+                else:
+                    m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
+        
 
-                tokens = []
-                for raw in m_clean.split():
-                    t = raw.strip()
-                    if t.lower().endswith("'s"):
-                        t = t[:-2]
-                    if not t:
-                        continue
-                    if t.isdigit():
-                        continue
-                    if t.lower() in ("day", "days", "week", "weeks", "month", "months", "year", "years", "quarter", "quarters"):
-                        continue
-                    if t.lower() not in stop_words:
-                        tokens.append(t)
+                    stop_words = {
+                        "what", "is", "whats", "what's", "info", "information", "for", "on",
+                        "lookup", "show", "me", "please", "customer", "customers",
+                        "email", "phone", "number", "address", "birthday", "bday"
+                    }
 
-                guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
-                guess = _resolve_pronoun_guess(guess, state)
-                if not guess:
-                    return ChatReply("Who is the customer? Try: “show Jane’s info”.")
+                    tokens = []
+                    for raw in m_clean.split():
+                        t = raw.strip()
+                        if t.lower().endswith("'s"):
+                            t = t[:-2]
+                        if not t:
+                            continue
+                        if t.isdigit():
+                            continue
+                        if t.lower() in ("day", "days", "week", "weeks", "month", "months", "year", "years", "quarter", "quarters"):
+                            continue
+                        if t.lower() not in stop_words:
+                            tokens.append(t)
 
-                with tx() as (conn, cur):
-                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+                    guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
+                    guess = _resolve_pronoun_guess(guess, state)
+                    if not guess:
+                        return ChatReply("Who is the customer? Try: “show Jane’s info”.")
 
-                if len(matches) == 0:
-                    return ChatReply(
-                        f"I couldn’t find {guess} in your saved customers yet. "
-                    )
+                    with tx() as (conn, cur):
+                        matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
-                if len(matches) == 1:
-                    c = matches[0]
-                    state["last_ref_customer_id"] = int(c["id"])
-                    state["last_ref_customer_name"] = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                    if len(matches) == 0:
+                        return ChatReply(
+                            f"I couldn’t find {guess} in your saved customers yet. "
+                        )
+
+                    if len(matches) == 1:
+                        c = matches[0]
+                        state["last_ref_customer_id"] = int(c["id"])
+                        state["last_ref_customer_name"] = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(format_customer_card(c))
+
+                    # Multiple matches → trigger picker
+                    top = matches[:3]
+                    state["pending"] = {"kind": "pick_customer", "candidates": top, "action": "info"}
                     save_session_state(state, session_id=sid)
-                    return ChatReply(format_customer_card(c))
 
-                # Multiple matches → trigger picker
-                top = matches[:3]
-                state["pending"] = {"kind": "pick_customer", "candidates": top, "action": "info"}
-                save_session_state(state, session_id=sid)
-
-                return ChatReply(render_customer_picker(top))
+                    return ChatReply(render_customer_picker(top))
 
         # -------------------------
         # Pending flows

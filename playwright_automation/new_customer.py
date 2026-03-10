@@ -80,12 +80,21 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     page.locator('[id^="PostalCode-"]').fill(str(customer.get("Postal Code", "")))
     page.wait_for_timeout(100)
 
-    # Select state from dropdown
-    page.get_by_role("button", name="Select an option").click()
+    #new state dropdown logic:
+    dialog = page.get_by_role("dialog")
+
+    dialog.get_by_role("button", name="Select an option").click()
     page.wait_for_timeout(700)
 
-    page.get_by_role("option", name=str(customer.get("State", ""))).click()
+    dialog.get_by_role("option", name=str(customer.get("State", ""))).click()
     page.wait_for_timeout(700)
+    
+    # OLD Select state from dropdown
+    #page.get_by_role("button", name="Select an option").click()
+    #page.wait_for_timeout(700)
+
+    #page.get_by_role("option", name=str(customer.get("State", ""))).click()
+    #page.wait_for_timeout(700)
 
     # Complete and Save address (button inside dialog)
     page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
