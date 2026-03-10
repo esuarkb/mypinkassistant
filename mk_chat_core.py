@@ -1703,6 +1703,14 @@ class MKChatEngine:
                     state_val = (customer.get("State") or "").strip()
                     postal = (customer.get("Postal Code") or "").strip()
 
+                    last = (customer.get("Last Name") or "").strip()
+
+                    if not last:
+                        return ChatReply(
+                            "I need both a first and last name before MyCustomers can save this customer. "
+                            "Please type `cancel` and re-enter the customer with the full name."
+                        )
+
                     if not (street and city and state_val and postal):
                         return ChatReply(
                             "I need the full address before I can save this customer, as MyCustomers now requires it for all orders. "
