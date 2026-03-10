@@ -72,6 +72,10 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "leaderboard" in lowered
         or "spent the most" in lowered
         or "spend the most" in lowered
+        or "ordered the most" in lowered
+        or "order the most" in lowered
+        or "bought the most" in lowered
+        or "buy the most" in lowered
         or "pcp" in lowered
         or ("top" in lowered and "customer" in lowered)
     ):
