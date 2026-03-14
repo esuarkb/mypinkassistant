@@ -617,7 +617,7 @@ def billing_portal(request: Request):
     try:
         cur.execute(
             f"""
-            SELECT stripe_customer_id, stripe_subscription_id
+            SELECT stripe_customer_id, stripe_subscription_id, billing_status
             FROM consultants
             WHERE id={PH}
             """,
@@ -629,6 +629,8 @@ def billing_portal(request: Request):
 
         raw_customer_id = (row[0] or "").strip()
         stripe_subscription_id = (row[1] or "").strip()
+        billing_status = (row[2] or "").strip().lower()
+        
     finally:
         try:
             cur.close()
@@ -638,6 +640,12 @@ def billing_portal(request: Request):
 
     # ---- Self-heal corrupted stored value
     stripe_customer_id = _clean_stripe_customer_id(raw_customer_id)
+    if (
+        not stripe_customer_id
+        or not stripe_subscription_id
+        or billing_status not in ("active", "trialing")
+    ):
+        return RedirectResponse("/billing/start", status_code=302)
 
     # If we cleaned it and it changed, update DB
     if stripe_customer_id and stripe_customer_id != raw_customer_id:
