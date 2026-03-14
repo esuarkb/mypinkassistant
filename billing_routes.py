@@ -382,7 +382,7 @@ def billing_start(request: Request):
         # ✅ TRIAL DECISION GOES HERE (replaces your old trial_days line)
         has_subscribed_before = bool(stripe_subscription_id)
         if has_subscribed_before:
-            trial_days = 0
+            trial_days = None
         else:
             trial_days = 30 if ref_id_int > 0 else 7
 
@@ -412,24 +412,28 @@ def billing_start(request: Request):
             pass
         conn.close()
 
-    session = stripe.checkout.Session.create(
-        mode="subscription",
-        customer=stripe_customer_id,
-        line_items=[{"price": PRICE_ID, "quantity": 1}],
-        subscription_data={"trial_period_days": trial_days},
-        automatic_tax={"enabled": True},
-        customer_update={"address": "auto"},
-        success_url=f"{APP_BASE_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
-        cancel_url=f"{APP_BASE_URL}/billing/cancel",
-        client_reference_id=str(cid_int),
-        metadata={
+    checkout_kwargs = {
+        "mode": "subscription",
+        "customer": stripe_customer_id,
+        "line_items": [{"price": PRICE_ID, "quantity": 1}],
+        "automatic_tax": {"enabled": True},
+        "customer_update": {"address": "auto"},
+        "success_url": f"{APP_BASE_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
+        "cancel_url": f"{APP_BASE_URL}/billing/cancel",
+        "client_reference_id": str(cid_int),
+        "metadata": {
             "consultant_id": str(cid_int),
             "source": "mypinkassistant",
-            "trial_days": str(trial_days),
+            "trial_days": str(trial_days or ""),
             "referred_by": str(ref_id_int) if ref_id_int > 0 else "",
         },
-        allow_promotion_codes=True,
-    )
+        "allow_promotion_codes": True,
+    }
+
+    if trial_days:
+        checkout_kwargs["subscription_data"] = {"trial_period_days": trial_days}
+
+    session = stripe.checkout.Session.create(**checkout_kwargs)
 
     return HTMLResponse(
         f"""
