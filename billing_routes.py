@@ -417,6 +417,8 @@ def billing_start(request: Request):
         customer=stripe_customer_id,
         line_items=[{"price": PRICE_ID, "quantity": 1}],
         subscription_data={"trial_period_days": trial_days},
+        automatic_tax={"enabled": True},
+        customer_update={"address": "auto"},
         success_url=f"{APP_BASE_URL}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{APP_BASE_URL}/billing/cancel",
         client_reference_id=str(cid_int),
