@@ -255,6 +255,9 @@ def main():
                         # NEW_ORDER_ROW (✅ batching)
                         # -------------------------
                         elif job_type == "NEW_ORDER_ROW":
+                            # Default to just this one job in case batching fails early
+                            job_ids = [job_id]
+
                             # Grab more queued order rows for the same customer (if any)
                             extra = _claim_more_order_rows_for_same_customer(cid, payload)
 
@@ -298,7 +301,11 @@ def main():
                             f"Error: {raw_err}"
                         )
 
-                        mark_job_failed(job_id, err_text)
+                        if job_type == "NEW_ORDER_ROW":
+                            for jid in job_ids:
+                                mark_job_failed(jid, err_text)
+                        else:
+                            mark_job_failed(job_id, err_text)
 
             finally:
                 # Always clean up and release the consultant lock

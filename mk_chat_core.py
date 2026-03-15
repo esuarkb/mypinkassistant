@@ -1714,6 +1714,49 @@ class MKChatEngine:
                     period = pending.get("period_label") or "lifetime"
                     return ChatReply(f"{customer_name} has spent ${total_spent:,.2f} ({period}).")
 
+                if action == "order_customer_pick":
+                    order_draft = pending.get("order_draft") or {}
+                    if not order_draft:
+                        return ChatReply("I lost track of that order draft. Please paste the order again.")
+
+                    # Attach the exact chosen customer
+                    order_draft["customer_id"] = customer_id
+                    order_draft["customer"] = {
+                        "First Name": (c.get("first_name") or "").strip(),
+                        "Last Name": (c.get("last_name") or "").strip(),
+                    }
+
+                    state["last_customer"] = order_draft["customer"]
+                    save_session_state(state, session_id=sid)
+
+                    # Try to auto-pick product matches first
+                    for line in order_draft.get("lines", []):
+                        if line.get("chosen") is None:
+                            picked, _m = auto_pick_match(catalog, line["text"])
+                            if picked:
+                                line["chosen"] = picked
+
+                    nxt = self._next_unresolved_index(order_draft)
+                    if nxt is not None:
+                        top, matches, _ = self._start_line_resolution(catalog, order_draft, nxt)
+                        pick_idx = llm_pick_from_candidates(self.client, order_draft["lines"][nxt]["text"], matches)
+                        if pick_idx is not None:
+                            top = matches[pick_idx]
+
+                        state["pending"] = {
+                            "kind": "order_line_confirm_top",
+                            "order": order_draft,
+                            "line_index": nxt,
+                            "top": top,
+                            "matches": matches,
+                        }
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"]))
+
+                    state["pending"] = {"kind": "order_confirm", "order": order_draft}
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(self._format_order_confirm(order_draft, ui) + "\n\n" + ui["order_adjust_hint"])
+
                 return ChatReply("Okay — what would you like to do with that customer?")
 
             if kind == "customer_confirm":
@@ -1979,36 +2022,48 @@ class MKChatEngine:
             cust_first = (order.get("customer_first") or "").strip()
             cust_last = (order.get("customer_last") or "").strip()
 
-            if (not cust_first or not cust_last) and last_customer:
+            if (not cust_first and not cust_last) and last_customer:
                 cust_first = (last_customer.get("First Name") or "").strip()
                 cust_last = (last_customer.get("Last Name") or "").strip()
 
-            if not cust_first or not cust_last:
+            customer_name_for_lookup = " ".join([p for p in [cust_first, cust_last] if p]).strip()
+
+            if not customer_name_for_lookup:
                 return ChatReply(ui["need_customer_for_order"])
             
-            # Resolve CRM customer_id once and attach it to this order flow
+            # Resolve CRM customer match once and carry it through the order flow
             resolved_customer_id = None
+
             with tx() as (conn, cur):
                 matches = find_customers_by_name(
                     cur,
                     consultant_id=consultant_id,
-                    name=f"{cust_first} {cust_last}",
-                    limit=3
+                    name=customer_name_for_lookup,
+                    limit=3,
                 )
 
             if len(matches) == 1:
                 resolved_customer_id = int(matches[0]["id"])
-
-            # Resolve CRM customer_id once and carry it through the order flow
-            from crm_store import find_customers_by_name
-
-            with tx() as (conn, cur):
-                matches = find_customers_by_name(cur, consultant_id=consultant_id, name=f"{cust_first} {cust_last}", limit=3)
-
-            if len(matches) == 1:
                 state["last_ref_customer_id"] = int(matches[0]["id"])
                 state["last_ref_customer_name"] = f"{matches[0].get('first_name','')} {matches[0].get('last_name','')}".strip()
                 save_session_state(state, session_id=sid)
+
+            elif len(matches) > 1:
+                items = order.get("items") or []
+                if not items:
+                    return ChatReply(ui["need_items"])
+
+                order_draft = self._make_order_draft(cust_first, cust_last, items)
+
+                state["pending"] = {
+                    "kind": "pick_customer",
+                    "candidates": matches[:3],
+                    "action": "order_customer_pick",
+                    "order_draft": order_draft,
+                }
+                save_session_state(state, session_id=sid)
+
+                return ChatReply(render_customer_picker(matches[:3]))
 
             items = order.get("items") or []
             if not items:
