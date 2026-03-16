@@ -73,13 +73,22 @@ function addMessage(text, who) {
 function showToast(text, smallText = "") {
     if (!toast) return;
 
+    const isError =
+        (text || "").includes("❌") ||
+        (smallText || "").toLowerCase().includes("error") ||
+        (smallText || "").toLowerCase().includes("could not") ||
+        (smallText || "").toLowerCase().includes("please open") ||
+        (smallText || "").toLowerCase().includes("confirm");
+
+    const duration = isError ? 10000 : 5500;
+
     toast.classList.remove("hidden");
     toast.innerHTML = `${text}${smallText ? `<span class="small">${smallText}</span>` : ""}`;
 
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
         toast.classList.add("hidden");
-    }, 5500);
+    }, duration);
 }
 
 function updateKeyboardOffset() {
