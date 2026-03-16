@@ -2089,21 +2089,34 @@ class MKChatEngine:
                 save_session_state(state, session_id=sid)
 
             elif len(matches) > 1:
-                items = order.get("items") or []
-                if not items:
-                    return ChatReply(ui["need_items"])
+                # If user gave a full first+last name, but local matches are only fuzzy/questionable,
+                # allow the order to continue as typed. This lets MyCustomers try to find the person.
+                typed_full_name = bool(cust_first and cust_last)
 
-                order_draft = self._make_order_draft(cust_first, cust_last, items)
+                strong_local_match = any(
+                    ((m.get("first_name") or "").strip().lower() == cust_first.lower())
+                    and ((m.get("last_name") or "").strip().lower() == cust_last.lower())
+                    for m in matches
+                )
 
-                state["pending"] = {
-                    "kind": "pick_customer",
-                    "candidates": matches[:3],
-                    "action": "order_customer_pick",
-                    "order_draft": order_draft,
-                }
-                save_session_state(state, session_id=sid)
+                if not typed_full_name or strong_local_match:
+                    items = order.get("items") or []
+                    if not items:
+                        return ChatReply(ui["need_items"])
 
-                return ChatReply(render_customer_picker(matches[:3]))
+                    order_draft = self._make_order_draft(cust_first, cust_last, items)
+
+                    state["pending"] = {
+                        "kind": "pick_customer",
+                        "candidates": matches[:3],
+                        "action": "order_customer_pick",
+                        "order_draft": order_draft,
+                    }
+                    save_session_state(state, session_id=sid)
+
+                    return ChatReply(render_customer_picker(matches[:3]))
+
+                # Otherwise: proceed with the full typed name and do not force a picker
 
             items = order.get("items") or []
             if not items:
