@@ -894,6 +894,28 @@ def render_customer_picker(matches: List[dict], intro: str = "I found multiple m
 
     return "\n".join(lines)
 
+def _looks_like_new_order_entry(text: str) -> bool:
+                t = (text or "").strip().lower()
+
+                has_order_verb = any(x in t for x in ("order ", "ordered ", "wants ", "want ", "needs ", "need "))
+                has_item_connector = any(x in t for x in (" and ", ","))
+                has_quantity = bool(re.search(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b", t))
+                has_product_hint = any(
+                    x in t for x in (
+                        "mask", "set", "cleanser", "cream", "lipstick", "foundation",
+                        "charcoal", "poppy", "repair", "cc cream", "satin hands"
+                    )
+                )
+
+                score = sum([
+                    has_order_verb,
+                    has_item_connector,
+                    has_quantity,
+                    has_product_hint,
+                ])
+
+                return score >= 2
+
 def looks_like_command(msg: str) -> bool:
     s = (msg or "").strip().lower()
     if not s:
@@ -1234,6 +1256,8 @@ class MKChatEngine:
         import re
         from crm_store import find_customers_by_name, get_customer_by_id, count_orders_for_customer, delete_customer_local
 
+    
+
         def _looks_like_full_customer_entry(text: str) -> bool:
             t = (text or "").strip()
 
@@ -1253,27 +1277,7 @@ class MKChatEngine:
             # if it looks like a bundle of customer fields, treat it as a customer entry
             return score >= 2
 
-        def _looks_like_new_order_entry(text: str) -> bool:
-            t = (text or "").strip().lower()
-
-            has_order_verb = any(x in t for x in ("order ", "ordered ", "wants ", "want ", "needs ", "need "))
-            has_item_connector = any(x in t for x in (" and ", ","))
-            has_quantity = bool(re.search(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b", t))
-            has_product_hint = any(
-                x in t for x in (
-                    "mask", "set", "cleanser", "cream", "lipstick", "foundation",
-                    "charcoal", "poppy", "repair", "cc cream", "satin hands"
-                )
-            )
-
-            score = sum([
-                has_order_verb,
-                has_item_connector,
-                has_quantity,
-                has_product_hint,
-            ])
-
-            return score >= 2
+        
 
         # -------------------------
         # CRM: delete customer (local only)
