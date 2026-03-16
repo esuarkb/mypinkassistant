@@ -1207,6 +1207,10 @@ class MKChatEngine:
         msg = (message or "").strip()
         intent_result = parse_intent(msg, state)
         print("[INTENT]", intent_result.intent, intent_result.confidence, intent_result.raw_text)
+        
+        # Intent override: some "recent_orders" phrasings are actually NEW order entry
+        if intent_result.intent == "recent_orders" and _looks_like_new_order_entry(msg):
+            intent_result.intent = "new_order"
 
         allow_pending_lookup_interrupt = bool(
             pending and intent_result.intent in ("customer_info", "recent_orders")
@@ -1247,6 +1251,28 @@ class MKChatEngine:
             ])
 
             # if it looks like a bundle of customer fields, treat it as a customer entry
+            return score >= 2
+
+        def _looks_like_new_order_entry(text: str) -> bool:
+            t = (text or "").strip().lower()
+
+            has_order_verb = any(x in t for x in ("order ", "ordered ", "wants ", "want ", "needs ", "need "))
+            has_item_connector = any(x in t for x in (" and ", ","))
+            has_quantity = bool(re.search(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b", t))
+            has_product_hint = any(
+                x in t for x in (
+                    "mask", "set", "cleanser", "cream", "lipstick", "foundation",
+                    "charcoal", "poppy", "repair", "cc cream", "satin hands"
+                )
+            )
+
+            score = sum([
+                has_order_verb,
+                has_item_connector,
+                has_quantity,
+                has_product_hint,
+            ])
+
             return score >= 2
 
         # -------------------------
