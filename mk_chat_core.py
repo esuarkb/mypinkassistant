@@ -2052,7 +2052,12 @@ class MKChatEngine:
             cust_first = (order.get("customer_first") or "").strip()
             cust_last = (order.get("customer_last") or "").strip()
 
-            if (not cust_first and not cust_last) and last_customer:
+            bad_pronoun_parse = (
+                cust_first.lower() in ("she", "he", "they", "her", "him", "them")
+                or cust_last.lower() == "ordered"
+            )
+
+            if ((not cust_first and not cust_last) or bad_pronoun_parse) and last_customer:
                 cust_first = (last_customer.get("First Name") or "").strip()
                 cust_last = (last_customer.get("Last Name") or "").strip()
 
@@ -2074,8 +2079,13 @@ class MKChatEngine:
 
             if len(matches) == 1:
                 resolved_customer_id = int(matches[0]["id"])
+
+                # Use the real matched customer name, not the raw parsed text
+                cust_first = (matches[0].get("first_name") or "").strip()
+                cust_last = (matches[0].get("last_name") or "").strip()
+
                 state["last_ref_customer_id"] = int(matches[0]["id"])
-                state["last_ref_customer_name"] = f"{matches[0].get('first_name','')} {matches[0].get('last_name','')}".strip()
+                state["last_ref_customer_name"] = f"{cust_first} {cust_last}".strip()
                 save_session_state(state, session_id=sid)
 
             elif len(matches) > 1:
