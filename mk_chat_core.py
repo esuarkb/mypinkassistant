@@ -2078,15 +2078,28 @@ class MKChatEngine:
                 )
 
             if len(matches) == 1:
-                resolved_customer_id = int(matches[0]["id"])
+                matched_first = (matches[0].get("first_name") or "").strip()
+                matched_last = (matches[0].get("last_name") or "").strip()
 
-                # Use the real matched customer name, not the raw parsed text
-                cust_first = (matches[0].get("first_name") or "").strip()
-                cust_last = (matches[0].get("last_name") or "").strip()
+                typed_full = " ".join([p for p in [cust_first, cust_last] if p]).strip().lower()
+                matched_full = f"{matched_first} {matched_last}".strip().lower()
 
-                state["last_ref_customer_id"] = int(matches[0]["id"])
-                state["last_ref_customer_name"] = f"{cust_first} {cust_last}".strip()
-                save_session_state(state, session_id=sid)
+                # If the user typed a full first+last name, only trust the local match
+                # if it is very close. Otherwise keep the typed name and let MyCustomers try it.
+                full_name_typed = bool(cust_first and cust_last)
+                strong_enough_match = (
+                    typed_full == matched_full
+                    or fuzz.WRatio(typed_full, matched_full) >= 90
+                )
+
+                if (not full_name_typed) or strong_enough_match:
+                    resolved_customer_id = int(matches[0]["id"])
+                    cust_first = matched_first
+                    cust_last = matched_last
+
+                    state["last_ref_customer_id"] = int(matches[0]["id"])
+                    state["last_ref_customer_name"] = f"{cust_first} {cust_last}".strip()
+                    save_session_state(state, session_id=sid)
 
             elif len(matches) > 1:
                 # If user gave a full first+last name, but local matches are only fuzzy/questionable,
