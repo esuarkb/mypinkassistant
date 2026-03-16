@@ -233,6 +233,11 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
         "foundation brush",
         "shimmer eye shadow stick",
         "undereye corrector",
+        "eye renewal cream",
+        "repair eye cream",
+        "volu-firm eye cream",
+        "volu firm eye cream",
+        "timewise repair eye cream",
         "eye cream",
         "roll-up bag",
         "great heights",
@@ -250,7 +255,11 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
     candidates = catalog
     if anchored:
         a_l = anchored.lower()
-        filtered = [c for c in catalog if a_l in c["product_name"].lower()]
+        words = a_l.split()
+        filtered = [
+            c for c in catalog
+            if all(w in c["product_name"].lower() for w in words)
+        ]
         if filtered:
             candidates = filtered
 
@@ -267,8 +276,24 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
 
 
 def auto_pick_match(catalog: List[dict], query: str) -> Tuple[Optional[dict], List[dict]]:
+    q = (query or "").strip().lower()
     matches = best_matches(catalog, query, limit=MATCH_LIMIT)
     if not matches:
+        return None, matches
+
+    # Broad / ambiguous product phrases should not auto-pick
+    broad_queries = {
+        "eye cream",
+        "cleanser",
+        "foundation",
+        "lipstick",
+        "mascara",
+        "serum",
+        "moisturizer",
+        "night cream",
+        "day cream",
+    }
+    if q in broad_queries:
         return None, matches
 
     top = matches[0]
