@@ -2133,12 +2133,14 @@ class MKChatEngine:
                     "top": top,
                     "matches": matches,
                 }
-                state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
+                if resolved_customer_id:
+                    state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
                 save_session_state(state, session_id=sid)
                 return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"]))
 
             state["pending"] = {"kind": "order_confirm", "order": order_draft}
-            state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
+            if resolved_customer_id:
+                state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
             save_session_state(state, session_id=sid)
             return ChatReply(self._format_order_confirm(order_draft, ui) + "\n\n" + ui["order_adjust_hint"])
 
