@@ -277,35 +277,42 @@ def main():
                         else:
                             mark_job_failed(job_id, f"Unknown job type: {job_type}")
 
-                    except Exception as e:
-                        raw_err = str(e)
-                        err_text = raw_err
+                        except Exception as e:
+                            raw_err = str(e)
+                            err_text = raw_err
 
-                        if "Timeout" in raw_err and "New Customer" in raw_err:
-                            err_text = (
-                                "Could not reach MyCustomers after login. "
-                                "Please verify your InTouch credentials in Settings and try again."
+                            if "Timeout" in raw_err and "New Customer" in raw_err:
+                                err_text = (
+                                    "Could not reach MyCustomers after login. "
+                                    "Please verify your InTouch credentials in Settings and try again."
+                                )
+
+                            elif "Change Delivery Status Icon" in raw_err:
+                                err_text = (
+                                    "MyPinkAssistant could not submit this order because Mary Kay needs the customer's "
+                                    "address to be confirmed in MyCustomers. Please open that customer in MyCustomers, "
+                                    "verify or re-save the address, and then try the order again."
+                                )
+
+                            customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
+                            item_desc = payload.get("Item Description", "") or payload.get("Product", "") or ""
+
+                            send_failure_text(
+                                f"🚨 MyPinkAssistant Worker Failure\n\n"
+                                f"Type: Job Failure\n"
+                                f"Consultant ID: {cid}\n"
+                                f"Job ID: {job_id}\n"
+                                f"Job Type: {job_type}\n"
+                                f"Customer: {customer_name or 'Unknown'}\n"
+                                f"Item: {item_desc or 'N/A'}\n"
+                                f"Error: {raw_err}"
                             )
 
-                        customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
-                        item_desc = payload.get("Item Description", "") or payload.get("Product", "") or ""
-
-                        send_failure_text(
-                            f"🚨 MyPinkAssistant Worker Failure\n\n"
-                            f"Type: Job Failure\n"
-                            f"Consultant ID: {cid}\n"
-                            f"Job ID: {job_id}\n"
-                            f"Job Type: {job_type}\n"
-                            f"Customer: {customer_name or 'Unknown'}\n"
-                            f"Item: {item_desc or 'N/A'}\n"
-                            f"Error: {raw_err}"
-                        )
-
-                        if job_type == "NEW_ORDER_ROW":
-                            for jid in job_ids:
-                                mark_job_failed(jid, err_text)
-                        else:
-                            mark_job_failed(job_id, err_text)
+                            if job_type == "NEW_ORDER_ROW":
+                                for jid in job_ids:
+                                    mark_job_failed(jid, err_text)
+                            else:
+                                mark_job_failed(job_id, err_text)
 
             finally:
                 # Always clean up and release the consultant lock
