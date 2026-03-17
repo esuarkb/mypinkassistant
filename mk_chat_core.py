@@ -1810,7 +1810,16 @@ class MKChatEngine:
 
                     state["pending"] = {"kind": "order_confirm", "order": order_draft}
                     save_session_state(state, session_id=sid)
-                    return ChatReply(self._format_order_confirm(order_draft, ui) + "\n\n" + ui["order_adjust_hint"])
+
+                    warning = self._get_order_warning_by_customer_id(consultant_id, order_draft.get("customer_id"))
+                    extra = f"\n\n{warning}" if warning else ""
+
+                    return ChatReply(
+                        self._format_order_confirm(order_draft, ui)
+                        + extra
+                        + "\n\n"
+                        + ui["order_adjust_hint"]
+                    )
 
                 return ChatReply("Okay — what would you like to do with that customer?")
 
@@ -2193,7 +2202,16 @@ class MKChatEngine:
             if resolved_customer_id:
                 state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
             save_session_state(state, session_id=sid)
-            return ChatReply(self._format_order_confirm(order_draft, ui) + "\n\n" + ui["order_adjust_hint"])
+
+            warning = self._get_order_warning_by_customer_id(consultant_id, order_draft.get("customer_id"))
+            extra = f"\n\n{warning}" if warning else ""
+
+            return ChatReply(
+                self._format_order_confirm(order_draft, ui)
+                + extra
+                + "\n\n"
+                + ui["order_adjust_hint"]
+            )
 
         return ChatReply(ui["cant_tell"])
 
@@ -2217,8 +2235,12 @@ class MKChatEngine:
                 state["last_customer"] = order["customer"]
                 save_session_state(state, session_id=sid)
 
+                warning = self._get_order_warning_by_customer_id(consultant_id, order.get("customer_id"))
+                extra = f"\n\n{warning}" if warning else ""
+
                 return ChatReply(
                     self._format_order_confirm(order, ui)
+                    + extra
                     + "\n\n"
                     + ui["order_adjust_hint"]
                 )
@@ -2334,6 +2356,67 @@ class MKChatEngine:
                 groups[key]["price"] = price
 
         return list(groups.values())
+
+    def _get_order_readiness_warning(self, customer_row: dict | None) -> str:
+        if not customer_row:
+            return ""
+
+        is_ready = customer_row.get("is_order_ready")
+        if is_ready in (1, True, "1", "true", "True"):
+            return ""
+
+        return (
+            "⚠️ This customer may be missing address or name information in MyCustomers. "
+            "If the order fails, please open the customer in MyCustomers, confirm the name and address details, and try again."
+        )
+
+    def _get_order_warning_by_customer_id(self, consultant_id: int, customer_id: int | None) -> str:
+        if not customer_id:
+            return ""
+
+        conn = db_connect()
+        cur = conn.cursor()
+        try:
+            if is_postgres():
+                cur.execute(
+                    f"""
+                    SELECT is_order_ready, missing_order_fields
+                    FROM customers
+                    WHERE consultant_id={PH} AND id={PH}
+                    LIMIT 1
+                    """,
+                    (int(consultant_id), int(customer_id)),
+                )
+            else:
+                cur.execute(
+                    f"""
+                    SELECT is_order_ready, missing_order_fields
+                    FROM customers
+                    WHERE consultant_id={PH} AND id={PH}
+                    LIMIT 1
+                    """,
+                    (int(consultant_id), int(customer_id)),
+                )
+
+            row = cur.fetchone()
+            if not row:
+                return ""
+
+            if isinstance(row, dict):
+                customer_row = row
+            else:
+                customer_row = {
+                    "is_order_ready": row[0],
+                    "missing_order_fields": row[1],
+                }
+
+            return self._get_order_readiness_warning(customer_row)
+        finally:
+            try:
+                cur.close()
+            except Exception:
+                pass
+            conn.close()
 
     def _format_order_confirm(self, order: dict, ui: dict) -> str:
         cust = order["customer"]

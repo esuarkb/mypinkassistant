@@ -210,6 +210,7 @@ function jobLabel(j) {
     if (!j) return "";
     if (j.type === "NEW_CUSTOMER") return "New customer";
     if (j.type === "NEW_ORDER_ROW") return "Order";
+    if (j.type === "IMPORT_CUSTOMERS") return "Customer import";
     return j.type;
 }
 

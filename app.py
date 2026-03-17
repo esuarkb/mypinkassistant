@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 
 from db import connect, is_postgres
 from db import get_system_setting, set_system_setting
-from mk_chat_core import MKChatEngine, save_session_state
+from mk_chat_core import MKChatEngine, save_session_state, insert_job
 from billing_routes import router as billing_router
 
 from auth_core import (
@@ -1186,6 +1186,21 @@ def settings_post(
     update_settings(cid, language, intouch_username, pw_to_save)
     return RedirectResponse("/settings", status_code=302)
 
+@app.post("/import-customers")
+def import_customers(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    c = get_consultant_full(cid) or {}
+    try:
+        require_active_subscription(c)
+    except PermissionError:
+        return RedirectResponse(billing_redirect_for_cid(cid), status_code=302)
+
+    insert_job("IMPORT_CUSTOMERS", {}, consultant_id=cid)
+    return RedirectResponse("/app", status_code=302)
 
 # -------------------------
 # Chat + Jobs API (protected)

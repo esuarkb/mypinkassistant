@@ -187,7 +187,6 @@
             <div class="subtle">Signed in as <span class="email">{{EMAIL}}</span></div>
 
             <form method="post" action="/settings" id="settingsForm" autocomplete="off">
-                <!-- Language toggle -->
                 <label>Language</label>
                 <div class="row" style="margin-top:8px">
                     <button type="button" class="toggle {{EN_ACTIVE}}" id="langEn">English</button>
@@ -205,14 +204,12 @@
                     Your InTouch password is encrypted and never shared.
                 </div>
 
-                <!-- ✅ Save button moved here -->
                 <div class="actions">
                     <button class="btn btnPrimary" type="submit">Save</button>
                 </div>
 
                 <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 
-                <!-- ✅ Referral section moved above Billing -->
                 <label>Referral Program!</label>
 
                 <div class="hint" style="margin-top:6px">
@@ -227,43 +224,57 @@
                 </div>
 
                 <div class="hint" id="copyRefMsg" style="margin-top:8px"></div>
-
-                <script>
-                    (function () {
-                        const btn = document.getElementById("copyRefBtn");
-                        const input = document.getElementById("refLink");
-                        const msg = document.getElementById("copyRefMsg");
-                        if (!btn || !input) return;
-
-                        btn.addEventListener("click", async function () {
-                            try {
-                                await navigator.clipboard.writeText(input.value);
-                                if (msg) msg.textContent = "Copied!";
-                            } catch (e) {
-                                input.select();
-                                document.execCommand("copy");
-                                if (msg) msg.textContent = "Copied!";
-                            }
-                            setTimeout(() => { if (msg) msg.textContent = ""; }, 2000);
-                        });
-                    })();
-                </script>
-
-                <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
-
-                <!-- ✅ Billing moved to bottom -->
-                <label>Billing</label>
-                <div class="row" style="margin-top:8px">
-                    <a class="btn btnGhost" href="/billing/portal">Manage subscription & billing</a>
-                </div>
-
-                <div class="hint">
-                    Update your payment method, view invoices, or cancel anytime.
-                </div>
-
             </form>
+
+            <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
+
+            <label>Import MyCustomers</label>
+            <div class="hint" style="margin-top:6px">
+                Import your current MyCustomers customer list into MyPinkAssistant.
+                This improves customer search and matching in chat.
+            </div>
+
+            <form method="post" action="/import-customers" id="importCustomersForm" style="margin:0">
+                <div class="actions">
+                    <button class="btn btnGhost" type="submit">Import MyCustomers</button>
+                </div>
+            </form>
+
+            <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
+
+            <label>Billing</label>
+            <div class="row" style="margin-top:8px">
+                <a class="btn btnGhost" href="/billing/portal">Manage subscription & billing</a>
+            </div>
+
+            <div class="hint">
+                Update your payment method, view invoices, or cancel anytime.
+            </div>
         </div>
     </div>
+
+    <script>
+        (function () {
+            const btn = document.getElementById("copyRefBtn");
+            const input = document.getElementById("refLink");
+            const msg = document.getElementById("copyRefMsg");
+            if (!btn || !input) return;
+
+            btn.addEventListener("click", async function () {
+                try {
+                    await navigator.clipboard.writeText(input.value);
+                    if (msg) msg.textContent = "Copied!";
+                } catch (e) {
+                    input.select();
+                    document.execCommand("copy");
+                    if (msg) msg.textContent = "Copied!";
+                }
+                setTimeout(() => {
+                    if (msg) msg.textContent = "";
+                }, 2000);
+            });
+        })();
+    </script>
 
     <script src="/web/settings.js"></script>
 </body>
