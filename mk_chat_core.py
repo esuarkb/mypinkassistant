@@ -773,13 +773,20 @@ def normalize_birthday(raw: str) -> str:
 
 def birthday_display(normalized: str) -> str:
     s = (normalized or "").strip()
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-        return ""
-    y, mo, d = map(int, s.split("-"))
-    month = calendar.month_name[mo]
-    if y == 2000:
+
+    # Full date
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        y, mo, d = map(int, s.split("-"))
+        month = calendar.month_name[mo]
+        return f"{month} {d}, {y}"
+
+    # Month/day only
+    if re.fullmatch(r"\d{2}-\d{2}", s):
+        mo, d = map(int, s.split("-"))
+        month = calendar.month_name[mo]
         return f"{month} {d}"
-    return f"{month} {d}, {y}"
+
+    return ""
 
 UI_EN = {
     "empty_prompt": "Say something like: “new customer Jane Doe …” or “order for Jane Doe: …”",

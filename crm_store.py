@@ -265,20 +265,25 @@ def format_customer_card(c: Dict[str, Any]) -> str:
     addr_parts = [p for p in [street, city, state, postal] if p]
     address = ", ".join(addr_parts) if addr_parts else "(none)"
 
-    # Birthday formatting: "YYYY-MM-DD" -> "December 12, 2012"
+    import re
+    import calendar
+
     bday_raw = (c.get("birthday") or "").strip()
     birthday = "(none)"
+
     if bday_raw:
-        try:
-            # handles "2012-12-12" and ISO strings
-            dt = datetime.fromisoformat(bday_raw.replace("Z", "+00:00"))
-            birthday = dt.strftime("%B %-d, %Y")  # mac/linux
-        except Exception:
-            try:
-                dt = datetime.strptime(bday_raw[:10], "%Y-%m-%d")
-                birthday = dt.strftime("%B %-d, %Y")
-            except Exception:
-                birthday = bday_raw  # fallback as-is
+        # Full date: YYYY-MM-DD
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", bday_raw):
+            y, mo, d = map(int, bday_raw.split("-"))
+            birthday = f"{calendar.month_name[mo]} {d}, {y}"
+
+        # Month/day only: MM-DD
+        elif re.fullmatch(r"\d{2}-\d{2}", bday_raw):
+            mo, d = map(int, bday_raw.split("-"))
+            birthday = f"{calendar.month_name[mo]} {d}"
+
+        else:
+            birthday = bday_raw  # fallback
 
     lines = [
         f"{full_name}",

@@ -3,6 +3,94 @@ from openpyxl import load_workbook
 
 from mk_chat_core import normalize_phone, normalize_state, normalize_birthday
 
+import re
+import calendar
+import datetime
+
+def _normalize_import_birthday(raw: str) -> str:
+    """
+    Import-safe birthday parser.
+
+    Returns:
+      - YYYY-MM-DD if year is present
+      - MM-DD if year is missing
+      - "" if invalid
+
+    Examples:
+      "August 26" -> "08-26"
+      "8/26" -> "08-26"
+      "08/26/82" -> "1982-08-26"
+      "1982-08-26" -> "1982-08-26"
+    """
+    s = (raw or "").strip()
+    if not s:
+        return ""
+
+    # Full ISO date
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        try:
+            y, mo, d = map(int, s.split("-"))
+            datetime.date(y, mo, d)
+            return f"{y:04d}-{mo:02d}-{d:02d}"
+        except Exception:
+            return ""
+
+    # Numeric formats: MM/DD, MM/DD/YY, MM/DD/YYYY
+    m = re.fullmatch(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", s)
+    if m:
+        mo = int(m.group(1))
+        d = int(m.group(2))
+        y_raw = m.group(3)
+
+        try:
+            if y_raw is None:
+                datetime.date(2000, mo, d)  # validate month/day only
+                return f"{mo:02d}-{d:02d}"
+            else:
+                y_i = int(y_raw)
+                if len(y_raw) == 2:
+                    y = 2000 + y_i if y_i <= 29 else 1900 + y_i
+                else:
+                    y = y_i
+                datetime.date(y, mo, d)
+                return f"{y:04d}-{mo:02d}-{d:02d}"
+        except Exception:
+            return ""
+
+    # Month-name formats: "August 26" or "August 26 1982"
+    s2 = re.sub(r"[.,]", " ", s)
+    s2 = re.sub(r"\s+", " ", s2).strip()
+
+    month_map = {name.lower(): i for i, name in enumerate(calendar.month_name) if name}
+    month_map.update({name.lower(): i for i, name in enumerate(calendar.month_abbr) if name})
+
+    parts = s2.split(" ")
+
+    if len(parts) >= 2 and parts[0].lower() in month_map:
+        mo = month_map[parts[0].lower()]
+        try:
+            d = int(parts[1])
+        except Exception:
+            return ""
+
+        try:
+            if len(parts) >= 3:
+                year_token = parts[2]
+                y_i = int(year_token)
+                if len(year_token) == 2:
+                    y = 2000 + y_i if y_i <= 29 else 1900 + y_i
+                else:
+                    y = y_i
+                datetime.date(y, mo, d)
+                return f"{y:04d}-{mo:02d}-{d:02d}"
+            else:
+                datetime.date(2000, mo, d)  # validate month/day only
+                return f"{mo:02d}-{d:02d}"
+        except Exception:
+            return ""
+
+    return ""
+
 def _missing_order_fields(customer: Dict[str, Any]) -> list[str]:
     missing = []
 
@@ -54,7 +142,7 @@ def parse_customer_export_xlsx(path: str) -> List[Dict[str, Any]]:
         customer = {
             "first_name": first,
             "last_name": last,
-            "birthday": normalize_birthday(get(row, "Birthday")),
+            "birthday": _normalize_import_birthday(get(row, "Birthday")),
             "phone": normalize_phone(get(row, "Phone")),
             "email": get(row, "Email").lower(),
             "street": street,
