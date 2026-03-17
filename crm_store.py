@@ -37,13 +37,22 @@ def _is_sqlite_cursor(cur) -> bool:
         return False
 
 
-def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
+def find_customers_by_name(
+    cur,
+    consultant_id: int,
+    name: str,
+    limit: int = 10,
+    include_removed: bool = False,
+):
     """
     Smarter customer search:
       - "Bonnie" (single token): match first OR last
       - "Kirk C" (last initial): first startswith kirk, last startswith c
       - "Kirk Cam" (partial last): first + last partials
       - fuzzy fallback if no SQL matches ("jnae" -> "jane")
+
+    By default, only active/source-of-truth customers are searched.
+    Pass include_removed=True for admin/delete flows if needed.
     Returns list of dicts, best matches first.
     """
     q = (name or "").strip()
@@ -77,15 +86,18 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
 
     last_init_starts = f"{last_initial}%"
 
+    active_clause = "" if include_removed else "AND COALESCE(source_status, 'active') = 'active'"
+
     # -------------------------
     # Primary SQL search
     # -------------------------
     if is_sqlite:
         if len(parts) == 1:
-            sql = """
-            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            sql = f"""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes, source_status
             FROM customers
             WHERE consultant_id = ?
+              {active_clause}
               AND (
                 LOWER(first_name) LIKE ?
                 OR LOWER(last_name) LIKE ?
@@ -99,10 +111,11 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
             params = (consultant_id, single_contains, single_contains, single_starts, single_starts, limit)
 
         elif last_initial:
-            sql = """
-            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            sql = f"""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes, source_status
             FROM customers
             WHERE consultant_id = ?
+              {active_clause}
               AND LOWER(first_name) LIKE ?
               AND LOWER(last_name) LIKE ?
             ORDER BY
@@ -113,10 +126,11 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
             params = (consultant_id, first_contains, last_init_starts, first_starts, limit)
 
         else:
-            sql = """
-            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            sql = f"""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes, source_status
             FROM customers
             WHERE consultant_id = ?
+              {active_clause}
               AND LOWER(first_name) LIKE ?
               AND LOWER(last_name) LIKE ?
             ORDER BY
@@ -129,10 +143,11 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
 
     else:
         if len(parts) == 1:
-            sql = """
-            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            sql = f"""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes, source_status
             FROM customers
             WHERE consultant_id = %s
+              {active_clause}
               AND (
                 LOWER(first_name) LIKE %s
                 OR LOWER(last_name) LIKE %s
@@ -146,10 +161,11 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
             params = (consultant_id, single_contains, single_contains, single_starts, single_starts, limit)
 
         elif last_initial:
-            sql = """
-            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            sql = f"""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes, source_status
             FROM customers
             WHERE consultant_id = %s
+              {active_clause}
               AND LOWER(first_name) LIKE %s
               AND LOWER(last_name) LIKE %s
             ORDER BY
@@ -160,10 +176,11 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
             params = (consultant_id, first_contains, last_init_starts, first_starts, limit)
 
         else:
-            sql = """
-            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            sql = f"""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes, source_status
             FROM customers
             WHERE consultant_id = %s
+              {active_clause}
               AND LOWER(first_name) LIKE %s
               AND LOWER(last_name) LIKE %s
             ORDER BY
@@ -185,19 +202,21 @@ def find_customers_by_name(cur, consultant_id: int, name: str, limit: int = 10):
     # -------------------------
     if is_sqlite:
         cur.execute(
-            """
-            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            f"""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes, source_status
             FROM customers
             WHERE consultant_id = ?
+              {active_clause}
             """,
             (consultant_id,),
         )
     else:
         cur.execute(
-            """
-            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes
+            f"""
+            SELECT id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, notes, source_status
             FROM customers
             WHERE consultant_id = %s
+              {active_clause}
             """,
             (consultant_id,),
         )

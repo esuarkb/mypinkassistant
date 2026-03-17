@@ -32,12 +32,19 @@ def import_customers_from_rows(cur, consultant_id: int, rows: List[Dict[str, Any
       2) email + exact first/last name
       3) otherwise insert new
 
+    Source-of-truth rule:
+      - all imported customers are marked active
+      - previously known customers not seen in this import are marked removed
+
     Works with both SQLite and Postgres.
     Returns summary counts.
     """
     inserted = 0
     updated = 0
     skipped = 0
+    removed = 0
+
+    seen_ids: set[int] = set()
 
     for r in rows:
         first_name = (r.get("first_name") or "").strip()
@@ -90,7 +97,26 @@ def import_customers_from_rows(cur, consultant_id: int, rows: List[Dict[str, Any
             )
             existing_id = _row_id(cur.fetchone())
 
-        # 3) Update existing exact match
+        # 3) Fallback: exact full-name match
+        if existing_id is None:
+            cur.execute(
+                f"""
+                SELECT id
+                FROM customers
+                WHERE consultant_id = {PH}
+                  AND LOWER(first_name) = LOWER({PH})
+                  AND LOWER(last_name) = LOWER({PH})
+                ORDER BY updated_at DESC, id DESC
+                LIMIT 1
+                """,
+                (consultant_id, first_name, last_name),
+            )
+            row = cur.fetchone()
+
+            if row:
+                existing_id = int(row[0])
+
+        # 4) Update existing exact match
         if existing_id is not None:
             cur.execute(
                 f"""
@@ -104,6 +130,7 @@ def import_customers_from_rows(cur, consultant_id: int, rows: List[Dict[str, Any
                     birthday = {PH},
                     is_order_ready = {PH},
                     missing_order_fields = {PH},
+                    source_status = 'active',
                     updated_at = {NOW_SQL}
                 WHERE id = {PH}
                   AND consultant_id = {PH}
@@ -123,51 +150,133 @@ def import_customers_from_rows(cur, consultant_id: int, rows: List[Dict[str, Any
                 ),
             )
             updated += 1
+            seen_ids.add(existing_id)
             continue
 
-        # 4) Insert new
+        # 5) Insert new
+        if is_postgres():
+            cur.execute(
+                f"""
+                INSERT INTO customers (
+                    consultant_id,
+                    first_name,
+                    last_name,
+                    email,
+                    phone,
+                    street,
+                    city,
+                    state,
+                    postal_code,
+                    birthday,
+                    notes,
+                    is_order_ready,
+                    missing_order_fields,
+                    source_status,
+                    created_at,
+                    updated_at
+                )
+                VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, 'active', {NOW_SQL}, {NOW_SQL})
+                RETURNING id
+                """,
+                (
+                    consultant_id,
+                    first_name,
+                    last_name,
+                    email,
+                    phone,
+                    street,
+                    city,
+                    state,
+                    postal_code,
+                    birthday,
+                    "",
+                    is_order_ready,
+                    missing_order_fields,
+                ),
+            )
+            new_id = _row_id(cur.fetchone())
+        else:
+            cur.execute(
+                f"""
+                INSERT INTO customers (
+                    consultant_id,
+                    first_name,
+                    last_name,
+                    email,
+                    phone,
+                    street,
+                    city,
+                    state,
+                    postal_code,
+                    birthday,
+                    notes,
+                    is_order_ready,
+                    missing_order_fields,
+                    source_status,
+                    created_at,
+                    updated_at
+                )
+                VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, 'active', {NOW_SQL}, {NOW_SQL})
+                """,
+                (
+                    consultant_id,
+                    first_name,
+                    last_name,
+                    email,
+                    phone,
+                    street,
+                    city,
+                    state,
+                    postal_code,
+                    birthday,
+                    "",
+                    is_order_ready,
+                    missing_order_fields,
+                ),
+            )
+            try:
+                new_id = int(cur.lastrowid)
+            except Exception:
+                new_id = None
+
+        inserted += 1
+        if new_id is not None:
+            seen_ids.add(new_id)
+
+    # 5) Mark unseen customers for this consultant as removed
+    if seen_ids:
+        placeholders = ", ".join([PH] * len(seen_ids))
+        params = [consultant_id] + list(seen_ids)
+
         cur.execute(
             f"""
-            INSERT INTO customers (
-                consultant_id,
-                first_name,
-                last_name,
-                email,
-                phone,
-                street,
-                city,
-                state,
-                postal_code,
-                birthday,
-                notes,
-                is_order_ready,
-                missing_order_fields,
-                created_at,
-                updated_at
-            )
-            VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {NOW_SQL}, {NOW_SQL})
+            UPDATE customers
+            SET source_status = 'removed',
+                updated_at = {NOW_SQL}
+            WHERE consultant_id = {PH}
+              AND id NOT IN ({placeholders})
+              AND source_status <> 'removed'
             """,
-            (
-                consultant_id,
-                first_name,
-                last_name,
-                email,
-                phone,
-                street,
-                city,
-                state,
-                postal_code,
-                birthday,
-                "",
-                is_order_ready,
-                missing_order_fields,
-            ),
+            params,
         )
-        inserted += 1
+        removed = cur.rowcount or 0
+    else:
+        cur.execute(
+            f"""
+            UPDATE customers
+            SET source_status = 'removed',
+                updated_at = {NOW_SQL}
+            WHERE consultant_id = {PH}
+              AND source_status <> 'removed'
+            """,
+            (consultant_id,),
+        )
+        removed = cur.rowcount or 0
 
     return {
         "inserted": inserted,
         "updated": updated,
         "skipped": skipped,
+        "removed": removed,
         "total": len(rows),
     }

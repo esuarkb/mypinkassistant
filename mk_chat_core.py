@@ -919,6 +919,60 @@ def render_customer_picker(matches: List[dict], intro: str = "I found multiple m
 
     return "\n".join(lines)
 
+def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[int, list[dict]]) -> str:
+    top = (matches or [])[:3]
+    lines = ["I found multiple matches. Reply with 1, 2, or 3 to choose which customer to delete:"]
+
+    for i, c in enumerate(top, start=1):
+        cid = int(c["id"])
+        full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+
+        email = (c.get("email") or "").strip() or "(none)"
+        phone = format_phone_display(c.get("phone") or "") or "(none)"
+
+        street = (c.get("street") or "").strip()
+        city = (c.get("city") or "").strip()
+        state = (c.get("state") or "").strip()
+        postal = (c.get("postal_code") or "").strip()
+
+        addr_parts = []
+        if street:
+            addr_parts.append(street)
+        if city:
+            addr_parts.append(city)
+        line2 = " ".join([p for p in [state, postal] if p]).strip()
+        if line2:
+            addr_parts.append(line2)
+
+        address = ", ".join(addr_parts) if addr_parts else "(none)"
+        birthday = birthday_display(c.get("birthday") or "") or "(none)"
+
+        lines.append(f"{i}. {full}")
+        lines.append(f"   • Email: {email}")
+        lines.append(f"   • Phone: {phone}")
+        lines.append(f"   • Address: {address}")
+        lines.append(f"   • Birthday: {birthday}")
+
+        recent_orders = recent_orders_map.get(cid) or []
+        if recent_orders:
+            lines.append("   • Recent orders:")
+            for o in recent_orders[:2]:
+                dt = (o.get("order_date_display") or o.get("order_date") or "").strip()
+                total = o.get("total")
+                total_txt = f"${float(total):.2f}" if isinstance(total, (int, float)) else ""
+                if dt and total_txt:
+                    lines.append(f"     - {dt} • {total_txt}")
+                elif dt:
+                    lines.append(f"     - {dt}")
+                else:
+                    lines.append("     - Order found")
+        else:
+            lines.append("   • Recent orders: none")
+
+        lines.append("")
+
+    return "\n".join(lines).rstrip()
+
 def _looks_like_new_order_entry(text: str) -> bool:
                 t = (text or "").strip().lower()
 
@@ -1341,7 +1395,13 @@ class MKChatEngine:
                         )
 
                     # delete by name
-                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=target, limit=10)
+                    matches = find_customers_by_name(
+                        cur,
+                        consultant_id=consultant_id,
+                        name=target,
+                        limit=10,
+                        include_removed=True,
+                    )
 
                 if len(matches) == 0:
                     return ChatReply(f"I couldn’t find {target} in your saved customers.")
@@ -1370,12 +1430,21 @@ class MKChatEngine:
                         f"Type DELETE to confirm, or `cancel`."
                     )
 
-                # Multiple matches -> picker
+                # Multiple matches -> richer delete picker
+                from crm_store import get_recent_orders_for_customer
+
                 top = matches[:3]
+                recent_orders_map = {}
+
+                with tx() as (conn, cur):
+                    for c in top:
+                        cid = int(c["id"])
+                        recent_orders_map[cid] = get_recent_orders_for_customer(cur, customer_id=cid, limit=2)
+
                 state["pending"] = {"kind": "pick_customer", "candidates": top, "action": "delete"}
                 save_session_state(state, session_id=sid)
 
-                return ChatReply(render_customer_picker(top))
+                return ChatReply(render_customer_delete_picker(top, recent_orders_map))
 
         ##
         # -------------------------
