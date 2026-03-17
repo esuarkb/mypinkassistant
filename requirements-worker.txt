@@ -7,3 +7,4 @@ httpx==0.28.1
 psycopg[binary]==3.2.13
 requests==2.32.5
 openpyxl
+rapidfuzz==3.9.6
