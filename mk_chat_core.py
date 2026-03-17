@@ -957,9 +957,16 @@ def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[i
         if recent_orders:
             lines.append("   • Recent orders:")
             for o in recent_orders[:2]:
-                dt = (o.get("order_date_display") or o.get("order_date") or "").strip()
+                raw_dt = o.get("order_date_display") or o.get("order_date") or ""
+
+                if hasattr(raw_dt, "strftime"):
+                    dt = raw_dt.strftime("%Y-%m-%d")
+                else:
+                    dt = str(raw_dt).strip() if raw_dt else ""
+
                 total = o.get("total")
                 total_txt = f"${float(total):.2f}" if isinstance(total, (int, float)) else ""
+
                 if dt and total_txt:
                     lines.append(f"     - {dt} • {total_txt}")
                 elif dt:

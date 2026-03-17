@@ -349,6 +349,7 @@ def get_customer_id_by_name(cur, consultant_id: int, first: str, last: str) -> O
             SELECT id
             FROM customers
             WHERE consultant_id = ?
+              AND COALESCE(source_status, 'active') = 'active'
               AND LOWER(first_name) = LOWER(?)
               AND LOWER(last_name) = LOWER(?)
             ORDER BY id DESC
@@ -359,6 +360,7 @@ def get_customer_id_by_name(cur, consultant_id: int, first: str, last: str) -> O
             SELECT id
             FROM customers
             WHERE consultant_id = %s
+              AND COALESCE(source_status, 'active') = 'active'
               AND LOWER(first_name) = LOWER(%s)
               AND LOWER(last_name) = LOWER(%s)
             ORDER BY id DESC
@@ -681,6 +683,7 @@ def get_top_customers(cur, consultant_id: int, limit: int = 5, start_date=None, 
         FROM customers c
         JOIN orders o ON o.customer_id = c.id
         WHERE c.consultant_id = ?
+          AND COALESCE(c.source_status, 'active') = 'active'
           {date_filter}
         GROUP BY c.id, c.first_name, c.last_name, c.phone, c.email
         ORDER BY total_spent DESC, c.last_name, c.first_name
@@ -699,6 +702,7 @@ def get_top_customers(cur, consultant_id: int, limit: int = 5, start_date=None, 
         FROM customers c
         JOIN orders o ON o.customer_id = c.id
         WHERE c.consultant_id = %s
+          AND COALESCE(c.source_status, 'active') = 'active'
           {date_filter}
         GROUP BY c.id, c.first_name, c.last_name, c.phone, c.email
         ORDER BY total_spent DESC, c.last_name, c.first_name
