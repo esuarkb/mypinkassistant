@@ -2314,9 +2314,11 @@ class MKChatEngine:
                     limit=3,
                 )
 
-            # If the user explicitly typed a name and we found nothing,
-            # do NOT silently fall back to the previous customer.
-            if has_explicit_name and len(matches) == 0:
+            # If the user explicitly typed a full first+last name and we found nothing locally,
+            # allow the order to continue as typed. MyCustomers can still try to find/create them.
+            full_name_typed = bool(cust_first and cust_last)
+
+            if has_explicit_name and len(matches) == 0 and not full_name_typed:
                 unresolved_name = customer_name_for_lookup or explicit_customer_hint
                 return ChatReply(f"I couldn’t find {unresolved_name} in your saved customers.")
 
