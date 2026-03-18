@@ -304,6 +304,56 @@ def auto_pick_match(catalog: List[dict], query: str) -> Tuple[Optional[dict], Li
 
     return None, matches
 
+def _extract_order_name_hint(message: str) -> tuple[str, str]:
+    """
+    Best-effort extraction of customer name from raw order text like:
+      - 'new order for Jerri beach bronze...'
+      - 'order for Cierra Guinn mascara'
+    Returns (first, last) or ("","") if no clear hint.
+    """
+    import re
+
+    msg = (message or "").strip()
+
+    # Capture text right after "new order for" or "order for"
+    m = re.search(r"\b(?:new\s+order|order)\s+for\s+(.+)$", msg, re.IGNORECASE)
+    if not m:
+        return "", ""
+
+    tail = m.group(1).strip()
+    if not tail:
+        return "", ""
+
+    # Split into words
+    words = tail.split()
+    if not words:
+        return "", ""
+
+    # Stop once we hit something that looks like product text
+    stop_words = {
+        "one", "two", "three", "four", "five",
+        "a", "an",
+        "and",
+        "ultimate", "mascara", "bronze", "beach", "foundation", "primer",
+        "cc", "cream", "brush", "charcoal", "repair", "set", "lipstick",
+        "ordered", "wants", "needs"
+    }
+
+    name_parts = []
+    for w in words:
+        wl = w.lower().strip(",")
+        if wl in stop_words:
+            break
+        name_parts.append(w.strip(","))
+        if len(name_parts) >= 2:
+            break
+
+    if not name_parts:
+        return "", ""
+
+    first = name_parts[0]
+    last = name_parts[1] if len(name_parts) >= 2 else ""
+    return first, last
 
 def llm_pick_from_candidates(client: OpenAI, item_text: str, candidates: List[dict]) -> Optional[int]:
     if not candidates:
@@ -884,6 +934,57 @@ def fix_qty_if_number_is_part_of_name(text: str, qty: int) -> int:
         return 1
     return qty
 
+def _split_order_for_prefix(message: str) -> tuple[str, str]:
+    """
+    Splits messages like:
+      'new order for Niiki satin hands, satin lips'
+      'order for Cierra mascara'
+    into:
+      ('Niiki', 'satin hands, satin lips')
+    or:
+      ('Cierra', 'mascara')
+    """
+    import re
+
+    msg = (message or "").strip()
+    m = re.search(r"\b(?:new\s+order|order)\s+for\s+(.+)$", msg, re.IGNORECASE)
+    if not m:
+        return "", ""
+
+    tail = m.group(1).strip()
+    if not tail:
+        return "", ""
+
+    words = tail.split()
+    if not words:
+        return "", ""
+
+    stop_words = {
+        "one", "two", "three", "four", "five",
+        "a", "an",
+        "and",
+        "ultimate", "mascara", "bronze", "beach", "foundation", "primer",
+        "cc", "cream", "brush", "charcoal", "repair", "set", "lipstick",
+        "satin", "hands", "lips", "ordered", "wants", "needs"
+    }
+
+    name_parts = []
+    item_start_idx = 0
+
+    for i, w in enumerate(words):
+        wl = w.lower().strip(",")
+        if wl in stop_words:
+            item_start_idx = i
+            break
+        name_parts.append(w.strip(","))
+        item_start_idx = i + 1
+        if len(name_parts) >= 2:
+            break
+
+    customer_hint = " ".join(name_parts).strip()
+    item_hint = " ".join(words[item_start_idx:]).strip()
+
+    return customer_hint, item_hint
 
 def propose_top(top: dict, current_qty: int) -> str:
     q = int(current_qty or 1)
@@ -2169,20 +2270,46 @@ class MKChatEngine:
             cust_first = (order.get("customer_first") or "").strip()
             cust_last = (order.get("customer_last") or "").strip()
 
+            explicit_customer_hint = ""
+            explicit_item_hint = ""
+
+            starts_explicit_order = (
+                lowered.startswith("new order for") or lowered.startswith("order for")
+            )
+
+            if starts_explicit_order:
+                explicit_customer_hint, explicit_item_hint = _split_order_for_prefix(msg)
+
+            # If parser missed the customer name but raw text clearly contains one,
+            # use the raw hint instead of falling back to last_customer.
+            if not cust_first and not cust_last and explicit_customer_hint:
+                hinted_parts = explicit_customer_hint.split()
+                cust_first = hinted_parts[0].strip() if len(hinted_parts) >= 1 else ""
+                cust_last = hinted_parts[1].strip() if len(hinted_parts) >= 2 else ""
+
+            has_explicit_name = bool(cust_first or cust_last or explicit_customer_hint)
+
             bad_pronoun_parse = (
                 cust_first.lower() in ("she", "he", "they", "her", "him", "them")
                 or cust_last.lower() == "ordered"
             )
 
-            if ((not cust_first and not cust_last) or bad_pronoun_parse) and last_customer:
+            # ONLY fallback if NO real name was provided,
+            # and this is NOT an explicit "new order for ..." style message.
+            if (not has_explicit_name or bad_pronoun_parse) and last_customer and not starts_explicit_order:
                 cust_first = (last_customer.get("First Name") or "").strip()
                 cust_last = (last_customer.get("Last Name") or "").strip()
 
             customer_name_for_lookup = " ".join([p for p in [cust_first, cust_last] if p]).strip()
 
+            # If the user explicitly started a new order for someone,
+            # do not fall back to the previous customer.
+            if starts_explicit_order and not customer_name_for_lookup:
+                return ChatReply("Who is this order for? Please tell me the customer name and paste the order again.")
+
             if not customer_name_for_lookup:
                 return ChatReply(ui["need_customer_for_order"])
-            
+
             # Resolve CRM customer match once and carry it through the order flow
             resolved_customer_id = None
 
@@ -2193,6 +2320,12 @@ class MKChatEngine:
                     name=customer_name_for_lookup,
                     limit=3,
                 )
+
+            # If the user explicitly typed a name and we found nothing,
+            # do NOT silently fall back to the previous customer.
+            if has_explicit_name and len(matches) == 0:
+                unresolved_name = customer_name_for_lookup or explicit_customer_hint
+                return ChatReply(f"I couldn’t find {unresolved_name} in your saved customers.")
 
             if len(matches) == 1:
                 matched_first = (matches[0].get("first_name") or "").strip()
@@ -2231,6 +2364,11 @@ class MKChatEngine:
 
                 if not typed_full_name or strong_local_match:
                     items = order.get("items") or []
+
+                    # If parser missed items too, try to rebuild from raw text tail
+                    if not items and explicit_item_hint:
+                        items = [{"text": explicit_item_hint, "qty": 1}]
+
                     if not items:
                         return ChatReply(ui["need_items"])
 
@@ -2249,6 +2387,11 @@ class MKChatEngine:
                 # Otherwise: proceed with the full typed name and do not force a picker
 
             items = order.get("items") or []
+
+            # If parser missed items but raw text clearly had an item tail, recover it.
+            if not items and explicit_item_hint:
+                items = [{"text": explicit_item_hint, "qty": 1}]
+
             if not items:
                 return ChatReply(ui["need_items"])
 

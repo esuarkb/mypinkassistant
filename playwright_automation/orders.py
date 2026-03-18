@@ -64,7 +64,7 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
 
     #Select from my Inventory instead of CDS
     page.get_by_text("My Inventory").click()
-    page.wait_for_timeout(800)
+    page.wait_for_timeout(1200)
 
 
 def add_sku_to_bag(page: Page, sku: str) -> None:
@@ -75,7 +75,7 @@ def add_sku_to_bag(page: Page, sku: str) -> None:
 
     #click add to Bag
     page.get_by_role("button", name="Add to Bag").click()
-    page.wait_for_timeout(100)
+    page.wait_for_timeout(300)
 
 
 def finalize_order(page: Page) -> None:
