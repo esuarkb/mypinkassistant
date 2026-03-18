@@ -458,7 +458,6 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) 
         "Rules:\n"
         "- State must be full name (e.g., Alabama).\n"
         "- Birthday may be provided as MM/DD, Month Day, or YYYY-MM-DD. Output as YYYY-MM-DD. If year missing, use 2000.\n"
-        "- If an order does not include a customer name, reuse the last customer if provided.\n"
         "- For shades/colors/variants (Normal/Dry, Combination/Oily), include them in item text if present.\n"
         "- If the user says a variant applies to multiple items (e.g., 'normal/dry both'), append that variant phrase to each affected item.\n"
         "- Do NOT treat numbers that are part of a product name as quantity (examples: '4-in-1 cleanser', '2-in-1', '3D').\n"
@@ -1428,10 +1427,6 @@ class MKChatEngine:
         if intent_result.intent == "recent_orders" and _looks_like_new_order_entry(msg):
             intent_result.intent = "new_order"
 
-        allow_pending_lookup_interrupt = bool(
-            pending and intent_result.intent in ("customer_info", "recent_orders")
-        )
-
         def _resolve_pronoun_guess(guess: str, state: dict) -> str:
             g = (guess or "").strip().lower()
 
@@ -1625,7 +1620,7 @@ class MKChatEngine:
         # -------------------------
         # CRM quick lookup: recent orders lookup (no LLM call)
         # -------------------------
-        if (not pending) or allow_pending_lookup_interrupt:
+        if not pending:
             if intent_result.intent == "recent_orders":
                     import re
                     from crm_store import get_recent_orders_for_customer, format_recent_orders
@@ -1810,7 +1805,7 @@ class MKChatEngine:
         # CRM quick lookup: customer info lookup (no LLM call)
         # -------------------------
         
-        if (not pending) or allow_pending_lookup_interrupt:
+        if not pending:
             if intent_result.intent == "customer_info":
                 import re
 
@@ -1965,7 +1960,6 @@ class MKChatEngine:
                         "Last Name": (c.get("last_name") or "").strip(),
                     }
 
-                    state["last_customer"] = order_draft["customer"]
                     save_session_state(state, session_id=sid)
 
                     # Try to auto-pick product matches first
@@ -2235,7 +2229,6 @@ class MKChatEngine:
                             )
 
                     state["pending"] = None
-                    state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
                     state["last_ref_customer_name"] = f"{cust_first} {cust_last}".strip()
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["order_confirmed"].format(first=cust_first, last=cust_last))
@@ -2419,14 +2412,12 @@ class MKChatEngine:
                     "top": top,
                     "matches": matches,
                 }
-                if resolved_customer_id:
-                    state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
+
                 save_session_state(state, session_id=sid)
                 return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"]))
 
             state["pending"] = {"kind": "order_confirm", "order": order_draft}
-            if resolved_customer_id:
-                state["last_customer"] = {"First Name": cust_first, "Last Name": cust_last}
+
             save_session_state(state, session_id=sid)
 
             warning = self._get_order_warning_by_customer_id(consultant_id, order_draft.get("customer_id"))
@@ -2458,7 +2449,6 @@ class MKChatEngine:
 
             if nxt is None:
                 state["pending"] = {"kind": "order_confirm", "order": order}
-                state["last_customer"] = order["customer"]
                 save_session_state(state, session_id=sid)
 
                 warning = self._get_order_warning_by_customer_id(consultant_id, order.get("customer_id"))
