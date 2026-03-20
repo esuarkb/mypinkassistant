@@ -168,6 +168,65 @@ def insert_job(job_type: str, payload: dict, consultant_id: int) -> int:
             pass
         conn.close()
 
+def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
+    """
+    Queue the first silent MyCustomers import after successful billing activation.
+    Returns True if a job was queued, else False.
+    """
+    cur.execute(
+        f"""
+        SELECT
+            billing_status,
+            intouch_username,
+            intouch_password_enc,
+            initial_customer_import_queued
+        FROM consultants
+        WHERE id = {PH}
+        LIMIT 1
+        """,
+        (consultant_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return False
+
+    if isinstance(row, dict):
+        billing_status = (row.get("billing_status") or "").strip().lower()
+        intouch_username = (row.get("intouch_username") or "").strip()
+        intouch_password_enc = (row.get("intouch_password_enc") or "").strip()
+        already_queued = int(row.get("initial_customer_import_queued") or 0)
+    else:
+        billing_status = (row[0] or "").strip().lower()
+        intouch_username = (row[1] or "").strip()
+        intouch_password_enc = (row[2] or "").strip()
+        already_queued = int(row[3] or 0)
+
+    if billing_status not in ("active", "trialing"):
+        return False
+
+    if already_queued:
+        return False
+
+    if not intouch_username or not intouch_password_enc:
+        return False
+
+    insert_job(
+        "IMPORT_CUSTOMERS",
+        {"silent_initial_sync": True},
+        consultant_id=consultant_id,
+    )
+
+    cur.execute(
+        f"""
+        UPDATE consultants
+        SET initial_customer_import_queued = 1
+        WHERE id = {PH}
+        """,
+        (consultant_id,),
+    )
+
+    return True
+
 
 # -------------------------
 # Catalog

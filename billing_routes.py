@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from emailer import send_welcome_email
+from mk_chat_core import maybe_queue_initial_customer_import
 
 from db import connect, is_postgres
 
@@ -103,6 +104,33 @@ def _update_consultant_by_email(
             pass
         conn.close()
 
+def _get_consultant_id_by_customer_id(customer_id: str) -> int:
+    customer_id = (customer_id or "").strip()
+    if not customer_id:
+        return 0
+
+    conn = connect()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"""
+            SELECT id
+            FROM consultants
+            WHERE stripe_customer_id={PH}
+            LIMIT 1
+            """,
+            (customer_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return 0
+        return int(row[0] if not isinstance(row, dict) else row["id"])
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn.close()
 
 def _update_consultant_by_customer_id(
     customer_id: str,
@@ -826,6 +854,21 @@ async def stripe_webhook(request: Request):
 
             # 1) mark the payer as active
             updated = _update_consultant_by_customer_id(customer_id, billing_status="active")
+
+            # 2) queue one-time silent initial MyCustomers import if eligible
+            consultant_id = _get_consultant_id_by_customer_id(customer_id)
+            if consultant_id:
+                conn = connect()
+                cur = conn.cursor()
+                try:
+                    maybe_queue_initial_customer_import(cur, consultant_id=consultant_id)
+                    conn.commit()
+                finally:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
+                    conn.close()
 
             # Guardrail A: only reward on an invoice that actually collected money
             amount_paid = int(obj.get("amount_paid") or 0)  # cents

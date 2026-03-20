@@ -2,6 +2,7 @@
 
 # app.py
 import os
+import json
 import time
 import secrets
 import hashlib
@@ -1245,7 +1246,7 @@ def jobs(request: Request):
     cur = conn.cursor()
     cur.execute(
         f"""
-        SELECT id, type, status, error, status_msg
+        SELECT id, type, status, error, status_msg, payload_json
         FROM jobs
         WHERE consultant_id = {PH}
         ORDER BY id DESC
@@ -1258,6 +1259,13 @@ def jobs(request: Request):
 
     out = []
     for r in rows:
+        payload_raw = _row_get(r, "payload_json", None) if _row_get(r, "payload_json", None) is not None else r[5]
+
+        try:
+            payload = json.loads(payload_raw or "{}")
+        except Exception:
+            payload = {}
+
         out.append(
             {
                 "id": _row_get(r, "id", None) if _row_get(r, "id", None) is not None else r[0],
@@ -1265,6 +1273,7 @@ def jobs(request: Request):
                 "status": _row_get(r, "status", "") if _row_get(r, "status", None) is not None else r[2],
                 "error": _row_get(r, "error", "") if _row_get(r, "error", None) is not None else (r[3] or ""),
                 "status_msg": _row_get(r, "status_msg", "") if _row_get(r, "status_msg", None) is not None else (r[4] or ""),
+                "payload": payload,  # ✅ THIS IS THE KEY ADD
             }
         )
     return {"jobs": out}

@@ -223,6 +223,15 @@ async function refreshJobs() {
 
         const j = jobs[0];
 
+        const payload = j.payload || {};
+        const silentInitialSync = !!payload.silent_initial_sync;
+
+        if (silentInitialSync) {
+            lastSeenJobId = j.id;
+            lastSeenStatus = j.status;
+            return;
+        }
+
         if (lastSeenJobId === null) {
             lastSeenJobId = j.id;
             lastSeenStatus = j.status;
