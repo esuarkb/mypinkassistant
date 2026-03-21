@@ -317,7 +317,9 @@ def main():
 
                     except Exception as e:
                         raw_err = str(e)
-                        err_text = raw_err
+
+                        # Default user-facing message should be safe and non-technical
+                        err_text = "Something went wrong submitting this. Please try again."
 
                         if "Timeout" in raw_err and "New Customer" in raw_err:
                             err_text = (
@@ -331,6 +333,9 @@ def main():
                                 "address to be confirmed in MyCustomers. Please open that customer in MyCustomers, "
                                 "verify or re-save the address, and then try the order again."
                             )
+
+                        elif "Invalid payload_json" in raw_err or "Unknown job type" in raw_err:
+                            err_text = "Something unexpected happened. Please try again."
 
                         customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
                         item_desc = payload.get("Item Description", "") or payload.get("Product", "") or ""
