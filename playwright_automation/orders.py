@@ -51,7 +51,7 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     except PlaywrightTimeoutError:
         raise RuntimeError(
             f"Customer not found: '{full_name}'. "
-            "Make sure they have been added to MyCustomers first!"
+            "Make sure they have been added to MyCustomers and please try again."
         )
 
     # Select customer from search results (first match if duplicates), loads customer page
@@ -67,28 +67,52 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     page.wait_for_timeout(1200)
 
 
-def add_sku_to_bag(page: Page, sku: str) -> None:
+#def add_sku_to_bag(page: Page, sku: str) -> None:
     
-    #search for SKU, small wait for search results to populate
-    page.get_by_role("searchbox", name="Note Title").fill(sku)
-    page.wait_for_timeout(1200)
+#    #search for SKU, small wait for search results to populate
+#    page.get_by_role("searchbox", name="Note Title").fill(sku)
+#    page.wait_for_timeout(1200)
 
     #click add to Bag
+#    page.get_by_role("button", name="Add to Bag").click()
+#    page.wait_for_timeout(300)
+
+def add_sku_to_bag(page: Page, sku: str) -> None:
+    # search for SKU and wait for results to populate
+    page.get_by_role("searchbox", name="Note Title").fill(sku)
+    # waits for the SKU to appear in search results
+    page.locator(f"text={sku}").first.wait_for(timeout=8000)
+
+    # click Add to Bag and give the UI a brief moment to update
+    # waits for the Add to Bag button to be enabled for the SKU
+    page.get_by_role("button", name="Add to Bag").wait_for(timeout=8000)
+    # click the Add to Bag button for the SKU
     page.get_by_role("button", name="Add to Bag").click()
+    # small wait to ensure the item is added to the bag before proceeding
     page.wait_for_timeout(300)
 
+# def finalize_order(page: Page) -> None:
+    #save and review order, then confirm delivery status change
+#    page.get_by_role("button", name="Save and Review").click()
+#    page.wait_for_timeout(3000)
+
+#    page.get_by_role("button", name="Change Delivery Status Icon").click()
+#    page.wait_for_timeout(1000)
+
+#    page.get_by_role("button", name="Yes, Confirm").click()
+#    ensure_orders_ready(page)
 
 def finalize_order(page: Page) -> None:
-    #save and review order, then confirm delivery status change
+    # save and review order, then confirm delivery status change
+    # waits for the Save and Review button to be enabled before clicking
     page.get_by_role("button", name="Save and Review").click()
-    page.wait_for_timeout(3000)
 
     page.get_by_role("button", name="Change Delivery Status Icon").click()
-    page.wait_for_timeout(1000)
 
+    # page.get_by_role("button", name="Yes, Confirm").wait_for(timeout=3000)
     page.get_by_role("button", name="Yes, Confirm").click()
-    ensure_orders_ready(page)
 
+    ensure_orders_ready(page)
 
 def process_order_batch(page: Page, rows: list[dict]) -> None:
     """
