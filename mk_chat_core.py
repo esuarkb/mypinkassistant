@@ -233,7 +233,7 @@ def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
 # -------------------------
 def load_catalog(path: Path) -> List[dict]:
     """
-    Loads catalog CSV with headers: sku (lowercase), product_name, price
+    Loads catalog CSV with headers: sku (lowercase), product_name, price, search_terms
     Filters obvious samples/collateral to improve matching.
     """
     import csv
@@ -248,6 +248,9 @@ def load_catalog(path: Path) -> List[dict]:
             sku = (row.get("sku") or "").strip()
             name = (row.get("product_name") or "").strip()
             price = row.get("price")
+
+            # ✅ NEW
+            search_terms = (row.get("search_terms") or "").strip()
 
             if not sku or not name:
                 continue
@@ -265,7 +268,13 @@ def load_catalog(path: Path) -> List[dict]:
             except ValueError:
                 price_val = None
 
-            items.append({"sku": sku, "product_name": name, "price": price_val})
+            items.append({
+                "sku": sku,
+                "product_name": name,
+                "price": price_val,
+                "search_terms": search_terms,   # ✅ NEW
+            })
+
     return items
 
 
@@ -302,7 +311,6 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
         "great heights",
         "sheer illusion",
         "cleanser",
-        "set",
     ]
 
     anchored = None
@@ -317,12 +325,18 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
         words = a_l.split()
         filtered = [
             c for c in catalog
-            if all(w in c["product_name"].lower() for w in words)
+            if all(
+                w in f"{c['product_name'].lower()} {(c.get('search_terms') or '').lower()}"
+                for w in words
+            )
         ]
         if filtered:
             candidates = filtered
 
-    names = [c["product_name"] for c in candidates]
+    names = [
+        f"{c['product_name']} {c.get('search_terms', '')}".strip()
+        for c in candidates
+    ]
     results = process.extract(q, names, scorer=fuzz.WRatio, limit=limit)
 
     matches: List[dict] = []
