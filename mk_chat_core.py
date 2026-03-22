@@ -2318,8 +2318,8 @@ class MKChatEngine:
         # -------------------------
         try:
             parsed = parse_with_openai(self.client, msg, last_customer)
-        except Exception as e:
-            return ChatReply(ui["parse_error"].format(err=str(e)))
+        except Exception:
+            return ChatReply("Sorry, I'm having some trouble reading that. Please try again with the customer or order details.")
 
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}

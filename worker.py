@@ -146,7 +146,7 @@ def _claim_more_order_rows_for_same_customer(cid: int, first_payload: dict):
         try:
             payload2 = json.loads(payload_json2)
         except Exception:
-            mark_job_failed(job_id2, "Invalid payload_json for order row")
+            mark_job_failed(job_id2, "Something unexpected happened. Please refresh the page and try again.")
             continue
 
         if not _same_customer(first_payload, payload2):
@@ -313,7 +313,7 @@ def main():
                         # Unknown job type
                         # -------------------------
                         else:
-                            mark_job_failed(job_id, f"Unknown job type: {job_type}")
+                            mark_job_failed(job_id, "Something unexpected happened. Please refresh the page and try again.")
 
                     except Exception as e:
                         raw_err = str(e)
