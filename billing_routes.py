@@ -376,8 +376,10 @@ def billing_start(request: Request):
         cur.execute(
             f"""
             SELECT email,
+                   first_name,
+                   last_name,
                    stripe_customer_id,
-                   stripe_subscription_id,   -- ✅ ADD THIS
+                   stripe_subscription_id,
                    billing_status,
                    referred_by_consultant_id
             FROM consultants
@@ -390,11 +392,16 @@ def billing_start(request: Request):
             return RedirectResponse("/onboard", status_code=302)
 
         email = (row[0] or "").strip().lower()
-        stripe_customer_id = (row[1] or "").strip()
-        stripe_subscription_id = (row[2] or "").strip()   # ✅ ADD THIS
-        billing_status = (row[3] or "").strip().lower()
+        first_name = (row[1] or "").strip()
+        last_name = (row[2] or "").strip()
+        stripe_customer_id = (row[3] or "").strip()
+        stripe_subscription_id = (row[4] or "").strip()
+        billing_status = (row[5] or "").strip().lower()
 
-        referred_by_consultant_id = row[4]
+        referred_by_consultant_id = row[6]
+        
+        full_name = f"{first_name} {last_name}".strip()
+        
         try:
             ref_id_int = int(referred_by_consultant_id) if referred_by_consultant_id is not None else 0
         except Exception:
@@ -416,10 +423,15 @@ def billing_start(request: Request):
 
         # ---- Create Stripe customer if we don't have one yet (locks email)
         if not stripe_customer_id:
-            cust = stripe.Customer.create(
-                email=email,
-                metadata={"consultant_id": str(cid_int), "source": "mypinkassistant"},
-            )
+            customer_kwargs = {
+                "email": email,
+                "metadata": {"consultant_id": str(cid_int), "source": "mypinkassistant"},
+            }
+
+            if full_name:
+                customer_kwargs["name"] = full_name
+
+            cust = stripe.Customer.create(**customer_kwargs)
             stripe_customer_id = cust["id"]
 
             cur.execute(
