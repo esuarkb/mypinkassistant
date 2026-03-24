@@ -171,6 +171,52 @@ def get_inventory_item(cur, *, consultant_id: int, sku: str) -> Optional[dict]:
     }
 
 
+def list_low_stock(cur, *, consultant_id: int) -> list[dict]:
+    """
+    Returns inventory rows where qty_on_hand < low_stock_threshold.
+    Only includes items where a threshold has been set.
+    """
+    cur.execute(
+        f"""
+        SELECT sku, qty_on_hand, low_stock_threshold
+        FROM inventory
+        WHERE consultant_id = {PH}
+          AND low_stock_threshold IS NOT NULL
+          AND qty_on_hand < low_stock_threshold
+        ORDER BY (low_stock_threshold - qty_on_hand) DESC
+        """,
+        (int(consultant_id),),
+    )
+    rows = cur.fetchall() or []
+
+    out = []
+    for r in rows:
+        if isinstance(r, dict):
+            out.append(r)
+        else:
+            out.append({
+                "sku": r[0],
+                "qty_on_hand": r[1],
+                "low_stock_threshold": r[2],
+            })
+
+    return out
+
+
+def has_any_thresholds(cur, *, consultant_id: int) -> bool:
+    """Returns True if the consultant has set at least one low_stock_threshold."""
+    cur.execute(
+        f"""
+        SELECT 1 FROM inventory
+        WHERE consultant_id = {PH}
+          AND low_stock_threshold IS NOT NULL
+        LIMIT 1
+        """,
+        (int(consultant_id),),
+    )
+    return cur.fetchone() is not None
+
+
 def list_inventory(cur, *, consultant_id: int) -> list[dict]:
     cur.execute(
         f"""

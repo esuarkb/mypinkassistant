@@ -1097,7 +1097,7 @@ def propose_top(top: dict, current_qty: int) -> str:
 
 def render_top5(matches: List[dict]) -> str:
     top = matches[:TOP5]
-    lines = ["Got it — pick the best match (reply 1-5), or type different search words and I’ll search again:"]
+    lines = ["Got it — select the best match (reply 1-5), or type different search words and I’ll search again:"]
     for i, m in enumerate(top, start=1):
         lines.append(f"{i}) {m['product_name']} {fmt_price(m.get('price'))}".strip())
     return "\n".join(lines)
@@ -1510,10 +1510,25 @@ def _looks_like_inventory_show(msg: str) -> bool:
 def _inventory_help_text() -> str:
     return (
         "Here are a few inventory things you can say:\n"
+        "\n"
+        "📦 View & update quantities:\n"
         "• show my inventory\n"
+        "• how many charcoal masks do I have\n"
         "• add 3 satin hands to inventory\n"
         "• remove 1 charcoal mask from inventory\n"
-        "• set satin hands inventory to 5"
+        "• set satin hands inventory to 5\n"
+        "\n"
+        "🎯 Set a desired quantity (your 'always keep on hand' level):\n"
+        "• keep 3 charcoal masks on hand\n"
+        "• charcoal mask par 3\n"
+        "• minimum 3 satin hands\n"
+        "\n"
+        "📋 Check what to reorder:\n"
+        "• what am I low on\n"
+        "• what should I order\n"
+        "\n"
+        "🖨️ Print your inventory:\n"
+        "• print my inventory"
     )
 
 def _looks_like_inventory_count(msg: str) -> bool:
@@ -1660,6 +1675,167 @@ def _format_inventory_item(row: dict | None, catalog_item: dict | None, requeste
     )
     return f"You have {qty} of {name} in inventory."
 
+
+def _looks_like_inventory_print(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    return any(phrase in s for phrase in (
+        "print my inventory",
+        "print inventory",
+        "inventory pdf",
+        "download inventory",
+        "export inventory",
+        "inventory report",
+    ))
+
+
+def _looks_like_low_stock_query(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    return any(phrase in s for phrase in (
+        "what am i low on",
+        "what's low",
+        "whats low",
+        "what is low",
+        "low on",
+        "running low",
+        "what should i order",
+        "what do i need to order",
+        "what do i need to reorder",
+        "what should i reorder",
+        "show low",
+        "low inventory",
+        "low stock",
+    ))
+
+
+def _format_low_stock_list(rows: list[dict], catalog: list[dict]) -> str:
+    if not rows:
+        return "You're all stocked up — nothing is below your desired on-hand levels."
+
+    by_sku = {str(c.get("sku") or "").strip(): c for c in catalog}
+    lines = ["Here's what you need to reorder:"]
+
+    for row in rows:
+        sku = str(row.get("sku") or "").strip()
+        qty = int(row.get("qty_on_hand") or 0)
+        threshold = int(row.get("low_stock_threshold") or 0)
+        needed = threshold - qty
+
+        cat = by_sku.get(sku) or {}
+        name = (cat.get("product_name") or sku or "Unknown product").strip()
+
+        lines.append(f"• {name} — you have {qty}, want {threshold} (need {needed} more)")
+
+    return "\n".join(lines)
+
+
+def _looks_like_inventory_threshold(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    has_qty = bool(re.search(r"\b\d+\b|\b(one|two|three|four|five|six|seven|eight|nine|ten)\b", s))
+    if not has_qty:
+        return False
+    return (
+        "on hand" in s
+        or bool(re.search(r"\bpar\b", s))
+        or "minimum" in s
+        or bool(re.search(r"\bmin\s+\d", s))
+    )
+
+
+def _parse_inventory_threshold(msg: str) -> tuple[int | None, str]:
+    """
+    Returns (qty, product_text) or (None, "")
+    Trigger words: "on hand", "par", "minimum" / "min"
+
+    on hand:
+    - keep 3 charcoal mask on hand
+    - 3 charcoal mask on hand
+    - I want (to) (always) have 3 charcoal mask on hand
+    - set charcoal mask to 3 on hand
+
+    par:
+    - charcoal mask par 3
+    - par 3 charcoal mask
+    - set charcoal mask (to) par 3
+
+    minimum / min:
+    - minimum 3 charcoal mask
+    - charcoal mask minimum 3
+    - set minimum charcoal mask to 3
+    """
+    s = (msg or "").strip()
+
+    # ---- on hand ----
+    # "keep / want (to) (always) have <qty> <product> on hand"
+    m = re.match(
+        r"^\s*(?:keep|(?:i\s+)?want\s+(?:to\s+)?(?:always\s+)?have)\s+(\w+)\s+(.+?)\s+on\s+hand\s*$",
+        s, re.IGNORECASE,
+    )
+    if m:
+        qty = _parse_small_number(m.group(1))
+        if qty is not None:
+            return qty, m.group(2).strip()
+
+    # "set <product> to <qty> on hand"
+    m = re.match(r"^\s*set\s+(.+?)\s+to\s+(\w+)\s+on\s+hand\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        if qty is not None:
+            return qty, m.group(1).strip()
+
+    # "<qty> <product> on hand"
+    m = re.match(r"^\s*(\w+)\s+(.+?)\s+on\s+hand\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(1))
+        if qty is not None:
+            return qty, m.group(2).strip()
+
+    # ---- par ----
+    # "set <product> (to) par <qty>"
+    m = re.match(r"^\s*set\s+(.+?)\s+(?:to\s+)?par\s+(\w+)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        if qty is not None:
+            return qty, m.group(1).strip()
+
+    # "<product> par <qty>"
+    m = re.match(r"^\s*(.+?)\s+par\s+(\w+)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        if qty is not None:
+            return qty, m.group(1).strip()
+
+    # "par <qty> <product>"
+    m = re.match(r"^\s*par\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(1))
+        if qty is not None:
+            return qty, m.group(2).strip()
+
+    # ---- minimum / min ----
+    # "set minimum <product> to <qty>"
+    m = re.match(r"^\s*set\s+(?:minimum|min)\s+(.+?)\s+to\s+(\w+)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        if qty is not None:
+            return qty, m.group(1).strip()
+
+    # "minimum <qty> <product>"
+    m = re.match(r"^\s*(?:minimum|min)\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(1))
+        if qty is not None:
+            return qty, m.group(2).strip()
+
+    # "<product> minimum <qty>"
+    m = re.match(r"^\s*(.+?)\s+(?:minimum|min)\s+(\w+)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        if qty is not None:
+            return qty, m.group(1).strip()
+
+    return None, ""
+
+
 # -------------------------
 # Chat Engine
 # -------------------------
@@ -1735,6 +1911,68 @@ class MKChatEngine:
                 "• set satin hands inventory to 5"
             )
         
+        # -------------------------
+        # Inventory: print / PDF report
+        # -------------------------
+        if _looks_like_inventory_print(msg):
+            import os
+            base_url = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
+            link = f"{base_url}/inventory/print" if base_url else "/inventory/print"
+            return ChatReply(f"Here's your inventory report: {link}")
+
+        # -------------------------
+        # Inventory: low stock / what should I order
+        # -------------------------
+        if _looks_like_low_stock_query(msg):
+            from inventory_store import list_low_stock, has_any_thresholds
+            with tx() as (conn, cur):
+                if not has_any_thresholds(cur, consultant_id=consultant_id):
+                    return ChatReply(
+                        "You haven't set any desired on-hand levels yet.\n"
+                        "Try: \"keep 3 charcoal mask on hand\" and I'll track that for you."
+                    )
+                rows = list_low_stock(cur, consultant_id=consultant_id)
+            return ChatReply(_format_low_stock_list(rows, catalog))
+
+        # -------------------------
+        # Inventory: set desired on-hand threshold
+        # -------------------------
+        if _looks_like_inventory_threshold(msg):
+            qty, product_text = _parse_inventory_threshold(msg)
+            if qty is not None and product_text:
+                exact = _find_exact_catalog_match(catalog, product_text)
+                if exact:
+                    chosen = exact
+                else:
+                    matches = best_matches(catalog, product_text, limit=MATCH_LIMIT)
+                    if not matches:
+                        return ChatReply("I couldn't match that product in the catalog. Try rewording it.")
+                    top = matches[0]
+                    if int(top.get("score") or 0) >= 100:
+                        chosen = top
+                    else:
+                        state["pending"] = {
+                            "kind": "inventory_threshold_top5",
+                            "qty": int(qty),
+                            "product_text": product_text,
+                            "matches": matches[:MATCH_LIMIT],
+                        }
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(render_top5(matches))
+
+                sku = (chosen.get("sku") or "").strip()
+                product_name = (chosen.get("product_name") or "").strip()
+                with tx() as (conn, cur):
+                    upsert_inventory_quantity(
+                        cur,
+                        consultant_id=consultant_id,
+                        sku=sku,
+                        low_stock_threshold=int(qty),
+                    )
+                return ChatReply(
+                    f"Got it — I'll flag {product_name} when you have fewer than {qty} on hand."
+                )
+
         # -------------------------
         # Inventory commands
         # -------------------------
@@ -2458,6 +2696,37 @@ class MKChatEngine:
                         f"Set {product_name} inventory to {qty}. "
                         f"You currently have {current_qty} on hand."
                     )
+
+            if kind == "inventory_threshold_top5":
+                choice = (msg or "").strip()
+                matches = pending.get("matches") or []
+
+                if not choice.isdigit():
+                    return ChatReply("Pick the best match with 1-5, or type cancel.")
+
+                idx = int(choice)
+                if idx < 1 or idx > min(TOP5, len(matches)):
+                    return ChatReply("Please reply with 1, 2, 3, 4, or 5 — or type cancel.")
+
+                chosen = matches[idx - 1]
+                qty = int(pending.get("qty") or 0)
+                sku = (chosen.get("sku") or "").strip()
+                product_name = (chosen.get("product_name") or "").strip()
+
+                with tx() as (conn, cur):
+                    upsert_inventory_quantity(
+                        cur,
+                        consultant_id=consultant_id,
+                        sku=sku,
+                        low_stock_threshold=qty,
+                    )
+
+                state["pending"] = None
+                save_session_state(state, session_id=sid)
+
+                return ChatReply(
+                    f"Got it — I'll flag {product_name} when you have fewer than {qty} on hand."
+                )
 
             if kind == "customer_confirm":
                 if yes(msg):

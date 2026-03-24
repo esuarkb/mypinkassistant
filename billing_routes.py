@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import time
+import logging
 import stripe
 
 from fastapi import APIRouter, HTTPException, Request
@@ -519,7 +520,8 @@ def billing_success(request: Request, session_id: str = ""):
             expand=["customer", "subscription", "customer_details"],
         )
     except Exception as e:
-        return HTMLResponse(f"Stripe error: {e}", status_code=400)
+        logging.error("Stripe session fetch error: %s", repr(e))
+        return HTMLResponse("Something went wrong. Please try again.", status_code=400)
 
     if (s.get("mode") or "").strip() != "subscription":
         return HTMLResponse("Invalid checkout session mode.", status_code=400)
@@ -725,7 +727,8 @@ def billing_portal(request: Request):
             return_url=f"{APP_BASE_URL}/billing/return",
         )
     except Exception as e:
-        return HTMLResponse(f"Stripe portal error: {e}", status_code=400)
+        logging.error("Stripe portal error: %s", repr(e))
+        return HTMLResponse("Something went wrong. Please try again.", status_code=400)
 
     return RedirectResponse(session.url, status_code=303)
 
@@ -768,7 +771,8 @@ def create_checkout_session(body: CheckoutRequest):
         )
         return {"url": session.url}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logging.error("Stripe checkout error: %s", repr(e))
+        raise HTTPException(status_code=400, detail="Something went wrong. Please try again.")
 
 
 # -------------------------
@@ -793,8 +797,8 @@ async def stripe_webhook(request: Request):
             secret=webhook_secret,
         )
     except Exception as e:
-        print("[Webhook] Verify failed:", repr(e))
-        return JSONResponse({"ok": False, "error": f"verify failed: {e}"}, status_code=400)
+        logging.error("[Webhook] Verify failed: %s", repr(e))
+        return JSONResponse({"ok": False}, status_code=400)
 
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
@@ -943,5 +947,5 @@ async def stripe_webhook(request: Request):
         return {"ok": True}
 
     except Exception as e:
-        print("[Webhook] handler error:", repr(e))
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        logging.error("[Webhook] handler error: %s", repr(e))
+        return JSONResponse({"ok": False}, status_code=500)

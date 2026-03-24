@@ -780,15 +780,15 @@ def delete_customer_local(cur, consultant_id: int, customer_id: int, delete_orde
         if is_sqlite:
             cur.execute("""
                 DELETE FROM order_items
-                WHERE order_id IN (SELECT id FROM orders WHERE customer_id = ?)
-            """, (customer_id,))
-            cur.execute("DELETE FROM orders WHERE customer_id = ?", (customer_id,))
+                WHERE order_id IN (SELECT id FROM orders WHERE customer_id = ? AND consultant_id = ?)
+            """, (customer_id, consultant_id))
+            cur.execute("DELETE FROM orders WHERE customer_id = ? AND consultant_id = ?", (customer_id, consultant_id))
         else:
             cur.execute("""
                 DELETE FROM order_items
-                WHERE order_id IN (SELECT id FROM orders WHERE customer_id = %s)
-            """, (customer_id,))
-            cur.execute("DELETE FROM orders WHERE customer_id = %s", (customer_id,))
+                WHERE order_id IN (SELECT id FROM orders WHERE customer_id = %s AND consultant_id = %s)
+            """, (customer_id, consultant_id))
+            cur.execute("DELETE FROM orders WHERE customer_id = %s AND consultant_id = %s", (customer_id, consultant_id))
 
     # Delete customer
     if is_sqlite:

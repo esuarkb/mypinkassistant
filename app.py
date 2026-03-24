@@ -6,6 +6,7 @@ import json
 import time
 import secrets
 import hashlib
+import logging
 #from turtle import color
 import requests
 from pathlib import Path
@@ -19,6 +20,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from db import connect, is_postgres
 from db import get_system_setting, set_system_setting
@@ -41,7 +45,10 @@ BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
 PAGES_DIR = BASE_DIR / "pages"
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.include_router(billing_router)
 
 # -------------------------
@@ -436,6 +443,11 @@ def is_profile_complete(c: dict) -> bool:
 
 
 
+def _esc(value: str) -> str:
+    import html
+    return html.escape(str(value or ""))
+
+
 def render_page(filename: str, replaces: dict | None = None) -> HTMLResponse:
     path = PAGES_DIR / filename
     if not path.exists():
@@ -646,6 +658,7 @@ def login_get(request: Request):
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 @app.post("/login")
+@limiter.limit("5/minute")
 def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
     email_norm = (email or "").strip().lower()
 
@@ -731,7 +744,8 @@ def forgot_get():
 
 
 @app.post("/forgot", response_class=HTMLResponse)
-def forgot_post(email: str = Form(...)):
+@limiter.limit("5/minute")
+def forgot_post(request: Request, email: str = Form(...)):
     try:
         cid = _find_consultant_by_email(email)
         if cid and APP_BASE_URL:
@@ -923,6 +937,7 @@ def reset_password_post(
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 @app.post("/onboard")
+@limiter.limit("10/minute")
 def onboard_post(
     request: Request,
     first_name: str = Form(...),
@@ -1158,15 +1173,15 @@ def settings_get(request: Request):
     referral_link = f"{base}/r/{code}"
 
     replaces = {
-        "{{EMAIL}}": (c.get("email") or ""),
-        "{{INTOUCH_USERNAME}}": (c.get("intouch_username") or ""),
+        "{{EMAIL}}": _esc(c.get("email") or ""),
+        "{{INTOUCH_USERNAME}}": _esc(c.get("intouch_username") or ""),
         "{{LANG_VALUE}}": lang,
         "{{EN_ACTIVE}}": "active" if lang == "en" else "",
         "{{ES_ACTIVE}}": "active" if lang == "es" else "",
 
         # new:
-        "{{REFERRAL_CODE}}": code,
-        "{{REFERRAL_LINK}}": referral_link,
+        "{{REFERRAL_CODE}}": _esc(code),
+        "{{REFERRAL_LINK}}": _esc(referral_link),
     }
     return render_page("settings.html", replaces=replaces)
 
@@ -1186,6 +1201,138 @@ def settings_post(
     pw_to_save = None if (intouch_password or "").strip() == "" else intouch_password
     update_settings(cid, language, intouch_username, pw_to_save)
     return RedirectResponse("/settings", status_code=302)
+
+@app.get("/inventory/print", response_class=HTMLResponse)
+def inventory_print(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    c = get_consultant(cid)
+    if not c:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=302)
+
+    from inventory_store import list_inventory
+    from mk_chat_core import load_catalog, get_catalog_path_for_language
+    from db import tx
+    from datetime import date
+
+    consultant_name = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+    lang = (c.get("language") or "en").strip().lower()
+    catalog_path = get_catalog_path_for_language(lang)
+    catalog = load_catalog(catalog_path)
+
+    with tx() as (conn, cur):
+        inv_rows = list_inventory(cur, consultant_id=int(cid))
+
+    # Build lookup: sku -> inventory row
+    inv_by_sku = {str(r.get("sku") or "").strip(): r for r in inv_rows}
+
+    today = date.today().strftime("%B %d, %Y")
+
+    # Build table rows for the full catalog
+    rows_html = []
+    for item in catalog:
+        sku = (item.get("sku") or "").strip()
+        name = _esc(item.get("product_name") or "")
+        retail = item.get("price")
+        retail_txt = f"${retail:.2f}" if isinstance(retail, (int, float)) else "—"
+        wholesale_txt = f"${retail * 0.5:.2f}" if isinstance(retail, (int, float)) else "—"
+
+        inv = inv_by_sku.get(sku) or {}
+        qty = inv.get("qty_on_hand")
+        threshold = inv.get("low_stock_threshold")
+
+        qty_txt = str(int(qty)) if qty is not None else ""
+        threshold_txt = str(int(threshold)) if threshold is not None else ""
+
+        low = qty is not None and threshold is not None and int(qty) < int(threshold)
+        row_class = ' class="low"' if low else ""
+        on_hand_class = ' class="low-cell"' if low else ""
+
+        rows_html.append(
+            f'<tr{row_class} data-has-qty="{1 if qty else 0}">'
+            f"<td>{name}</td>"
+            f"<td>{retail_txt}</td>"
+            f"<td>{wholesale_txt}</td>"
+            f'<td{on_hand_class}>{qty_txt}</td>'
+            f"<td>{threshold_txt}</td>"
+            f"</tr>"
+        )
+
+    table_rows = "\n".join(rows_html)
+    consultant_esc = _esc(consultant_name)
+
+    html = f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Inventory Report — {consultant_esc}</title>
+  <style>
+    body {{ font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #111; margin: 0; padding: 20px; }}
+    h1 {{ font-size: 18px; margin: 0 0 4px; }}
+    .meta {{ color: #666; font-size: 12px; margin-bottom: 16px; }}
+    .controls {{ margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }}
+    .controls label {{ font-size: 13px; cursor: pointer; }}
+    .btn-print {{ background: #d63384; color: #fff; border: none; padding: 7px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }}
+    .btn-print:hover {{ background: #b02a6f; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th {{ background: #f5f5f7; text-align: left; padding: 7px 10px; font-size: 12px; border-bottom: 2px solid #ddd; }}
+    td {{ padding: 6px 10px; border-bottom: 1px solid #eee; }}
+    tr.low td.low-cell {{ color: #c0392b; font-weight: 700; }}
+    tr.low {{ background: #fff5f5; }}
+    .hidden {{ display: none; }}
+    @media print {{
+      .controls {{ display: none; }}
+      body {{ padding: 10px; }}
+      tr.low td.low-cell {{ color: #c0392b; }}
+    }}
+  </style>
+</head>
+<body>
+  <h1>Inventory Report — {consultant_esc}</h1>
+  <div class="meta">{today}</div>
+  <div class="controls">
+    <label>
+      <input type="radio" name="view" value="all" checked onchange="filterRows(this.value)"> Full Catalog
+    </label>
+    <label>
+      <input type="radio" name="view" value="onhand" onchange="filterRows(this.value)"> On Hand Only
+    </label>
+    <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
+  </div>
+  <table id="inv-table">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Retail</th>
+        <th>Wholesale (50%)</th>
+        <th>On Hand</th>
+        <th>Desired On Hand</th>
+      </tr>
+    </thead>
+    <tbody>
+      {table_rows}
+    </tbody>
+  </table>
+  <script>
+    function filterRows(view) {{
+      document.querySelectorAll('#inv-table tbody tr').forEach(function(row) {{
+        if (view === 'onhand') {{
+          row.classList.toggle('hidden', row.dataset.hasQty === '0');
+        }} else {{
+          row.classList.remove('hidden');
+        }}
+      }});
+    }}
+  </script>
+</body>
+</html>"""
+
+    return HTMLResponse(html)
+
 
 @app.post("/import-customers")
 def import_customers(request: Request):
@@ -1226,7 +1373,8 @@ async def chat(request: Request):
         reply_obj = engine.handle_message(message, consultant_id=cid)
         return {"reply": reply_obj.reply}
     except Exception as e:
-        return {"reply": f"❌ Server error: {e}"}
+        logging.error("Chat handler error: %s", repr(e))
+        return {"reply": "Something went wrong. Please try again."}
 
 
 @app.get("/jobs")
