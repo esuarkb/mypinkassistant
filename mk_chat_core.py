@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from crm_store import find_customers_by_name, format_customer_card
 from intent_router import parse_intent
+from inventory_store import (
+    upsert_inventory_quantity,
+    get_inventory_item,
+    list_inventory,
+)
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -675,6 +680,24 @@ def normalize_state(state: str) -> str:
         return STATE_MAP.get(s.upper(), s)
     return s
 
+NUMBER_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
+
+def _parse_small_number(text: str) -> Optional[int]:
+    s = (text or "").strip().lower()
+    if s.isdigit():
+        return int(s)
+    return NUMBER_WORDS.get(s)
 
 STREET_SUFFIXES = (
     "st", "street", "rd", "road", "ave", "avenue", "blvd", "boulevard",
@@ -1074,7 +1097,7 @@ def propose_top(top: dict, current_qty: int) -> str:
 
 def render_top5(matches: List[dict]) -> str:
     top = matches[:TOP5]
-    lines = ["Got it — pick the best match (reply 1-5), or type what you meant and I’ll search again:"]
+    lines = ["Got it — pick the best match (reply 1-5), or type different search words and I’ll search again:"]
     for i, m in enumerate(top, start=1):
         lines.append(f"{i}) {m['product_name']} {fmt_price(m.get('price'))}".strip())
     return "\n".join(lines)
@@ -1451,6 +1474,191 @@ def parse_qty_change(msg: str) -> Optional[int]:
 
     return None
 
+def _looks_like_inventory_add(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    return "inventory" in s and (s.startswith("add ") or s.startswith("remove ") or s.startswith("set "))
+
+def _normalize_inventory_command_text(msg: str) -> str:
+    s = (msg or "").strip().lower()
+
+    # Remove common inventory phrases anywhere in the message
+    replacements = [
+        "to my inventory",
+        "from my inventory",
+        "my inventory",
+        "to inventory",
+        "from inventory",
+        "inventory",
+    ]
+
+    for phrase in replacements:
+        s = s.replace(phrase, " ")
+
+    # Clean extra spaces
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def _looks_like_inventory_show(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    return s in (
+        "show my inventory",
+        "show inventory",
+        "my inventory",
+        "inventory",
+    )
+
+def _inventory_help_text() -> str:
+    return (
+        "Here are a few inventory things you can say:\n"
+        "• show my inventory\n"
+        "• add 3 satin hands to inventory\n"
+        "• remove 1 charcoal mask from inventory\n"
+        "• set satin hands inventory to 5"
+    )
+
+def _looks_like_inventory_count(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    return ("how many" in s and " do i have" in s) or s.endswith(" in inventory")
+
+
+def _parse_inventory_write(msg: str) -> tuple[str | None, int | None, str]:
+    """
+    Returns (action, qty, product_text)
+    action = add | remove | set | None
+
+    Requires the original message to contain 'inventory' somewhere.
+    After inventory words are removed, supports:
+    - add <qty> <product>
+    - remove <qty> <product>
+    - set <product> to <qty>
+    """
+    raw = (msg or "").strip()
+    if "inventory" not in raw.lower():
+        return (None, None, "")
+
+    s = _normalize_inventory_command_text(raw)
+
+    m = re.match(r"^\s*add\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(1))
+        if qty is not None:
+            return ("add", qty, m.group(2).strip())
+
+    m = re.match(r"^\s*remove\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(1))
+        if qty is not None:
+            return ("remove", qty, m.group(2).strip())
+
+    m = re.match(r"^\s*set\s+(.+?)\s+to\s+(\w+)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        if qty is not None:
+            return ("set", qty, m.group(1).strip())
+
+    return (None, None, "")
+
+def _looks_like_bare_inventory_write(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+
+    # Ignore if they already clearly said inventory
+    if "inventory" in s:
+        return False
+
+    m = re.match(r"^\s*(add|remove)\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        return qty is not None
+
+    m = re.match(r"^\s*set\s+(.+?)\s+to\s+(\w+)\s*$", s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        return qty is not None
+
+    return False
+
+def _parse_inventory_lookup_text(msg: str) -> str:
+    s = (msg or "").strip()
+
+    m = re.match(r"^\s*how\s+many\s+(.+?)\s+do\s+i\s+have\s*$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    m = re.match(r"^\s*(.+?)\s+in\s+inventory\s*$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    return ""
+
+def _format_inventory_list(rows: List[dict], catalog: List[dict]) -> str:
+    if not rows:
+        return "Your inventory is empty."
+
+    by_sku = {str(c.get("sku") or "").strip(): c for c in catalog}
+    lines = ["Here is your current inventory:"]
+
+    shown_any = False
+
+    for row in rows:
+        sku = str(row.get("sku") or "").strip()
+        qty = int(row.get("qty_on_hand") or 0)
+
+        # Hide zero or negative inventory items
+        if qty <= 0:
+            continue
+
+        shown_any = True
+
+        cat = by_sku.get(sku) or {}
+        name = (cat.get("product_name") or sku or "Unknown product").strip()
+        retail = cat.get("price")
+        retail_txt = fmt_price(retail)
+
+        if retail_txt:
+            lines.append(f"• {name} {retail_txt} — {qty} on hand")
+        else:
+            lines.append(f"• {name} — {qty} on hand")
+
+    if not shown_any:
+        return "We have not yet added any items to your inventory."
+
+    return "\n".join(lines)
+
+def _normalize_match_text(text: str) -> str:
+    s = (text or "").strip().lower()
+    s = re.sub(r"[^a-z0-9\s]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _find_exact_catalog_match(catalog: List[dict], product_text: str) -> Optional[dict]:
+    target = _normalize_match_text(product_text)
+    if not target:
+        return None
+
+    for c in catalog:
+        name_norm = _normalize_match_text(c.get("product_name") or "")
+        if target == name_norm:
+            return c
+
+        raw_terms = (c.get("search_terms") or "").strip()
+        if raw_terms:
+            for term in raw_terms.split("|"):
+                if target == _normalize_match_text(term):
+                    return c
+
+    return None
+
+def _format_inventory_item(row: dict | None, catalog_item: dict | None, requested_text: str) -> str:
+    if not row:
+        return f"You have 0 of {requested_text} in inventory."
+
+    qty = int(row.get("qty_on_hand") or 0)
+    name = (
+        (catalog_item or {}).get("product_name")
+        or requested_text
+    )
+    return f"You have {qty} of {name} in inventory."
 
 # -------------------------
 # Chat Engine
@@ -1512,8 +1720,122 @@ class MKChatEngine:
 
         if not msg:
             return ChatReply(ui["empty_prompt"])
-
+        
         lowered = msg.lower()
+        
+        # -------------------------
+        # Bare inventory-style write guardrail
+        # -------------------------
+        if _looks_like_bare_inventory_write(msg):
+            return ChatReply(
+                "That looks like an inventory update.\n"
+                "Try again using the word 'inventory':\n"
+                "• add 3 satin hands to inventory\n"
+                "• remove 1 satin hands from inventory\n"
+                "• set satin hands inventory to 5"
+            )
+        
+        # -------------------------
+        # Inventory commands
+        # -------------------------
+        if "inventory" in lowered:
+            action, qty, product_text = _parse_inventory_write(msg)
+
+            if action and qty is not None and product_text:
+                exact = _find_exact_catalog_match(catalog, product_text)
+                if exact:
+                    chosen = exact
+                    matches = [exact]
+                else:
+                    matches = best_matches(catalog, product_text, limit=MATCH_LIMIT)
+                    if not matches:
+                        return ChatReply("I couldn’t match that product in the catalog. Try rewording it.")
+
+                    top = matches[0]
+                    if int(top.get("score") or 0) >= 100:
+                        chosen = top
+                    else:
+                        state["pending"] = {
+                            "kind": "inventory_pick_top5",
+                            "action": action,
+                            "qty": int(qty),
+                            "product_text": product_text,
+                            "matches": matches[:MATCH_LIMIT],
+                        }
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(render_top5(matches))
+
+                sku = (chosen.get("sku") or "").strip()
+                product_name = (chosen.get("product_name") or "").strip()
+
+                with tx() as (conn, cur):
+                    if action == "add":
+                        upsert_inventory_quantity(
+                            cur,
+                            consultant_id=consultant_id,
+                            sku=sku,
+                            qty_delta=int(qty),
+                        )
+
+                    elif action == "remove":
+                        upsert_inventory_quantity(
+                            cur,
+                            consultant_id=consultant_id,
+                            sku=sku,
+                            qty_delta=-int(qty),
+                        )
+
+                    else:  # set
+                        upsert_inventory_quantity(
+                            cur,
+                            consultant_id=consultant_id,
+                            sku=sku,
+                            set_qty=int(qty),
+                        )
+
+                    row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
+                    current_qty = int((row or {}).get("qty_on_hand") or 0)
+
+                    if action == "add":
+                        reply = (
+                            f"Added {qty} of {product_name} to your inventory. "
+                            f"You currently have {current_qty} on hand."
+                        )
+                    elif action == "remove":
+                        reply = (
+                            f"Removed {qty} of {product_name} from your inventory. "
+                            f"You currently have {current_qty} on hand."
+                        )
+                    else:
+                        reply = (
+                            f"Set {product_name} inventory to {qty}. "
+                            f"You currently have {current_qty} on hand."
+                        )
+
+                return ChatReply(reply)
+
+            if _looks_like_inventory_show(msg):
+                with tx() as (conn, cur):
+                    rows = list_inventory(cur, consultant_id=consultant_id)
+                return ChatReply(_format_inventory_list(rows, catalog))
+
+            if _looks_like_inventory_count(msg):
+                product_text = _parse_inventory_lookup_text(msg)
+                if product_text:
+                    picked, matches = auto_pick_match(catalog, product_text)
+                    chosen = picked or (matches[0] if matches else None)
+
+                    if not chosen:
+                        return ChatReply("I couldn’t match that product in the catalog. Try rewording it.")
+
+                    sku = (chosen.get("sku") or "").strip()
+
+                    with tx() as (conn, cur):
+                        row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
+
+                    return ChatReply(_format_inventory_item(row, chosen, product_text))
+
+            return ChatReply(_inventory_help_text())
 
         import re
         from crm_store import find_customers_by_name, get_customer_by_id, count_orders_for_customer, delete_customer_local
@@ -2073,6 +2395,69 @@ class MKChatEngine:
                     )
 
                 return ChatReply("Okay — what would you like to do with that customer?")
+
+            if kind == "inventory_pick_top5":
+                choice = (msg or "").strip()
+                matches = pending.get("matches") or []
+
+                if not choice.isdigit():
+                    return ChatReply("Pick the best match with 1-5, or type cancel.")
+
+                idx = int(choice)
+                if idx < 1 or idx > min(TOP5, len(matches)):
+                    return ChatReply("Please reply with 1, 2, 3, 4, or 5 — or type cancel.")
+
+                chosen = matches[idx - 1]
+                action = pending.get("action")
+                qty = int(pending.get("qty") or 0)
+
+                sku = (chosen.get("sku") or "").strip()
+                product_name = (chosen.get("product_name") or "").strip()
+
+                with tx() as (conn, cur):
+                    if action == "add":
+                        upsert_inventory_quantity(
+                            cur,
+                            consultant_id=consultant_id,
+                            sku=sku,
+                            qty_delta=int(qty),
+                        )
+                    elif action == "remove":
+                        upsert_inventory_quantity(
+                            cur,
+                            consultant_id=consultant_id,
+                            sku=sku,
+                            qty_delta=-int(qty),
+                        )
+                    else:
+                        upsert_inventory_quantity(
+                            cur,
+                            consultant_id=consultant_id,
+                            sku=sku,
+                            set_qty=int(qty),
+                        )
+
+                    row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
+                    current_qty = int((row or {}).get("qty_on_hand") or 0)
+
+                state["pending"] = None
+                save_session_state(state, session_id=sid)
+
+                if action == "add":
+                    return ChatReply(
+                        f"Added {qty} of {product_name} to your inventory. "
+                        f"You currently have {current_qty} on hand."
+                    )
+                elif action == "remove":
+                    return ChatReply(
+                        f"Removed {qty} of {product_name} from your inventory. "
+                        f"You currently have {current_qty} on hand."
+                    )
+                else:
+                    return ChatReply(
+                        f"Set {product_name} inventory to {qty}. "
+                        f"You currently have {current_qty} on hand."
+                    )
 
             if kind == "customer_confirm":
                 if yes(msg):

@@ -100,7 +100,7 @@ support@mypinkassistant.com
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
-        New order for Jane Doe; she wants a poppy lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
+        New order for Jane Doe; she wants a red lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
       </p>
       <p style="margin:0 0 16px 0;color:#111;">
         I’ll confirm each item before submitting, and you can always add/remove before final approval.
