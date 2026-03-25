@@ -1388,6 +1388,48 @@ def import_customers(request: Request):
     insert_job("IMPORT_CUSTOMERS", {}, consultant_id=cid)
     return RedirectResponse("/app", status_code=302)
 
+
+@app.post("/import-inventory-orders")
+def import_inventory_orders_route(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    c = get_consultant_full(cid) or {}
+    try:
+        require_active_subscription(c)
+    except PermissionError:
+        return RedirectResponse(billing_redirect_for_cid(cid), status_code=302)
+
+    insert_job("IMPORT_INVENTORY_ORDERS", {"date_range": "days90"}, consultant_id=cid)
+    return RedirectResponse("/app", status_code=302)
+
+
+@app.post("/reset-inventory-import-history")
+def reset_inventory_import_history(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    from inventory_import_store import ensure_import_table
+    from db import connect, is_postgres
+    ensure_import_table()
+    PH = "%s" if is_postgres() else "?"
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"DELETE FROM inventory_intouch_imports WHERE consultant_id = {PH}",
+            (int(cid),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return RedirectResponse("/settings", status_code=302)
+
+
 # -------------------------
 # Chat + Jobs API (protected)
 # -------------------------

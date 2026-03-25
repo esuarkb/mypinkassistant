@@ -377,7 +377,8 @@ def update_settings(cid: int, language: str, intouch_username: str, intouch_pass
             cur.execute(
                 f"""
                 UPDATE consultants
-                SET language={PH}, intouch_username={PH}, intouch_password_enc={PH}
+                SET language={PH}, intouch_username={PH}, intouch_password_enc={PH},
+                    consecutive_login_failures=0, last_login_failure_at=NULL
                 WHERE id={PH}
                 """,
                 (language, iu, enc, cid),

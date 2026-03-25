@@ -221,6 +221,15 @@ def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
         consultant_id=consultant_id,
     )
 
+    # Seed the inventory watermark: marks the consultant's most recent
+    # Cosmetic order as "seen" without importing SKUs, so nightly imports
+    # only pick up orders placed after signup.
+    insert_job(
+        "IMPORT_INVENTORY_ORDERS",
+        {"date_range": "lastTwelveMonths", "seed_only": True},
+        consultant_id=consultant_id,
+    )
+
     cur.execute(
         f"""
         UPDATE consultants
@@ -1703,14 +1712,14 @@ def _find_exact_catalog_match(catalog: List[dict], product_text: str) -> Optiona
 
 def _format_inventory_item(row: dict | None, catalog_item: dict | None, requested_text: str) -> str:
     if not row:
-        return f"You have 0 of {requested_text} in inventory."
+        return f"You have 0 {requested_text} in inventory."
 
     qty = int(row.get("qty_on_hand") or 0)
     name = (
         (catalog_item or {}).get("product_name")
         or requested_text
     )
-    return f"You have {qty} of {name} in inventory."
+    return f"You have {qty} {name} in inventory."
 
 
 def _looks_like_inventory_print(msg: str) -> bool:

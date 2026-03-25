@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS consultants (
   language TEXT NOT NULL DEFAULT 'en',
   intouch_username TEXT NOT NULL DEFAULT '',
   intouch_password_enc TEXT NOT NULL DEFAULT '',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  consecutive_login_failures INT NOT NULL DEFAULT 0,
+  last_login_failure_at TIMESTAMPTZ NULL
 );
 
 -- password resets
@@ -116,6 +118,14 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_sku ON order_items(sku);
+
+CREATE TABLE IF NOT EXISTS inventory_intouch_imports (
+  id BIGSERIAL PRIMARY KEY,
+  consultant_id BIGINT NOT NULL,
+  order_no TEXT NOT NULL,
+  imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (consultant_id, order_no)
+);
 """
 
 

@@ -9,8 +9,9 @@ import traceback
 from dotenv import load_dotenv
 load_dotenv()
 
+from datetime import datetime, timezone
 from pathlib import Path
-from db import connect
+from db import connect, is_postgres
 
 from playwright_automation.customer_export import download_customer_export
 from customer_import_parser import parse_customer_export_xlsx
@@ -79,6 +80,9 @@ from worker_queue import (
 from playwright_automation.login import login_intouch
 from playwright_automation.new_customer import create_customer_basic
 from playwright_automation.orders import process_order_batch
+from playwright_automation.inventory_import import import_inventory_orders
+from inventory_import_store import ensure_import_table
+ensure_import_table()
 
 # How long to keep the browser open after the last job (seconds)
 IDLE_GRACE_SECONDS = 90
@@ -159,6 +163,46 @@ def _claim_more_order_rows_for_same_customer(cid: int, first_payload: dict):
     return out
 
 
+PH_W = "%s" if is_postgres() else "?"
+
+
+def _record_login_failure(cid: int) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE consultants
+            SET consecutive_login_failures = consecutive_login_failures + 1,
+                last_login_failure_at = {PH_W}
+            WHERE id = {PH_W}
+            """,
+            (now, cid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _reset_login_failures(cid: int) -> None:
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            UPDATE consultants
+            SET consecutive_login_failures = 0,
+                last_login_failure_at = NULL
+            WHERE id = {PH_W}
+            """,
+            (cid,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def main():
     print(f"✅ Worker starting: {WORKER_ID}")
     #send_failure_text("✅ Test alert from MyPinkAssistant worker")
@@ -204,6 +248,7 @@ def main():
                 # Login once for this consultant session
                 try:
                     login_intouch(page, username, password)
+                    _reset_login_failures(cid)
                 except Exception as e:
                     err = str(e)
 
@@ -211,6 +256,8 @@ def main():
                         "InTouch login failed. Please check your InTouch username/password in Settings "
                         "and try again."
                     )
+
+                    _record_login_failure(cid)
 
                     send_failure_text(
                         f"🚨 MyPinkAssistant Worker Failure\n\n"
@@ -308,6 +355,30 @@ def main():
                                 job_id,
                                 f"Customer import complete! Added {summary['inserted']}, updated {summary['updated']}."
                             )
+
+                        # -------------------------
+                        # IMPORT_INVENTORY_ORDERS
+                        # -------------------------
+                        elif job_type == "IMPORT_INVENTORY_ORDERS":
+                            date_range = payload.get("date_range", "days90")
+                            seed_only = bool(payload.get("seed_only", False))
+                            result = import_inventory_orders(
+                                page,
+                                consultant_id=cid,
+                                username=username,
+                                password=password,
+                                date_range=date_range,
+                                seed_only=seed_only,
+                            )
+                            if seed_only:
+                                mark_job_done(job_id, "Inventory watermark set — new orders will be imported nightly.")
+                            else:
+                                n = len(result["imported"])
+                                skus = len(result["sku_totals"])
+                                mark_job_done(
+                                    job_id,
+                                    f"Inventory import complete — {n} new order(s), {skus} SKU(s) added."
+                                )
 
                         # -------------------------
                         # Unknown job type

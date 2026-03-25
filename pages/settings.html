@@ -242,6 +242,24 @@
 
             <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 
+            <label><strong>Import InTouch Orders</strong></label>
+            <div class="hint" style="margin-top:6px">
+                Import your recent Cosmetic orders from InTouch and add them to your personal inventory.
+                Only new orders (not previously imported) will be processed.
+            </div>
+            <form method="post" action="/import-inventory-orders" style="margin:8px 0 0">
+                <div class="actions">
+                    <button class="btn btnGhost" type="submit" style="font-size: inherit">Import InTouch Orders</button>
+                </div>
+            </form>
+            <form method="post" action="/reset-inventory-import-history" style="margin:6px 0 0" onsubmit="return confirm('Clear all import history? The next import will re-process all orders in the last 90 days.')">
+                <div class="actions">
+                    <button class="btn btnGhost" type="submit" style="font-size: inherit; opacity: 0.6">Reset Import History (testing)</button>
+                </div>
+            </form>
+
+            <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
+
             <label><strong>Inventory Report</strong></label>
             <div class="hint" style="margin-top:6px">
                 Print or save a PDF of your current inventory, including retail and wholesale prices.
