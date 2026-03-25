@@ -505,7 +505,7 @@ def extract_json_object(s: str) -> Optional[dict]:
         return None
 
 
-def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) -> dict:
+def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -> dict:
     system_prompt = (
         "You extract structured data from user text.\n"
         "Return ONLY valid JSON.\n\n"
@@ -544,8 +544,8 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[dict]) 
     )
 
     last_ctx = ""
-    if last_customer and last_customer.get("First Name") and last_customer.get("Last Name"):
-        last_ctx = f"Last customer: {last_customer['First Name']} {last_customer['Last Name']}\n"
+    if last_customer and last_customer.strip():
+        last_ctx = f"Last customer: {last_customer.strip()}\n"
 
     resp = client.responses.create(
         model=MODEL,
@@ -1874,7 +1874,7 @@ class MKChatEngine:
 
         catalog = self._catalog_cache[language]
 
-        last_customer = state.get("last_customer")
+        last_customer = (state.get("last_ref_customer_name") or "").strip() or None
         pending = state.get("pending")
         msg = (message or "").strip()
         intent_result = parse_intent(msg, state)
