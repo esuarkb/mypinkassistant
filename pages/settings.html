@@ -68,7 +68,6 @@
             text-decoration: none;
             color: var(--text);
             font-weight: 600;
-            font-size: inherit;
             background: #fff;
             cursor: pointer
         }
@@ -229,7 +228,7 @@
 
             <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 
-            <label>Import MyCustomers</label>
+            <label><strong>Import MyCustomers</strong></label>
             <div class="hint" style="margin-top:6px">
                 Import your current MyCustomers customer list into MyPinkAssistant.
                 This improves customer search and matching in chat.
@@ -237,13 +236,13 @@
 
             <form method="post" action="/import-customers" id="importCustomersForm" style="margin:0">
                 <div class="actions">
-                    <button class="btn btnGhost" type="submit">Import MyCustomers</button>
+                    <button class="btn btnGhost" type="submit" style="font-size: inherit">Import MyCustomers</button>
                 </div>
             </form>
 
             <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 
-            <label>Inventory Report</label>
+            <label><strong>Inventory Report</strong></label>
             <div class="hint" style="margin-top:6px">
                 Print or save a PDF of your current inventory, including retail and wholesale prices.
             </div>
@@ -253,13 +252,12 @@
 
             <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 
-            <label>Billing</label>
+            <label><strong>Billing</strong></label>
+            <div class="hint" style="margin-top:6px">
+                Update your payment method, view invoices, or cancel anytime.
+            </div>
             <div class="row" style="margin-top:8px">
                 <a class="btn btnGhost" href="/billing/portal">Manage subscription & billing</a>
-            </div>
-
-            <div class="hint">
-                Update your payment method, view invoices, or cancel anytime.
             </div>
         </div>
     </div>
