@@ -277,7 +277,8 @@ def load_catalog(path: Path) -> List[dict]:
                 "sku": sku,
                 "product_name": name,
                 "price": price_val,
-                "search_terms": search_terms,   # ✅ NEW
+                "search_terms": search_terms,
+                "search_string": f"{name} {search_terms}".strip(),
             })
 
     return items
@@ -289,9 +290,16 @@ def fmt_price(p: Any) -> str:
     return ""
 
 
-def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
+_SEARCH_STOP_WORDS = {"mary", "kay"}
+
+def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int = 30) -> List[dict]:
     q = (query or "").lower().strip()
     q_compact = re.sub(r"\s+", " ", q)
+
+    # Strip noise words that appear in most product names and hurt WRatio scoring
+    q_words = [w for w in q_compact.split() if w not in _SEARCH_STOP_WORDS]
+    if q_words:
+        q = " ".join(q_words)
 
     anchors = [
         "4-in-1",
@@ -338,14 +346,24 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5) -> List[dict]:
         if filtered:
             candidates = filtered
 
-    names = [
-        f"{c['product_name']} {c.get('search_terms', '')}".strip()
-        for c in candidates
-    ]
+    # Pre-filter: keep only candidates that contain at least one significant
+    # query word (3+ chars) as a whole word. This prevents short queries like
+    # "charcoal" from matching unrelated products via character-level fuzz.
+    sig_tokens = [t for t in re.split(r"\s+", q) if len(t) >= 3]
+    if sig_tokens:
+        pattern = "|".join(re.escape(t) for t in sig_tokens)
+        candidates = [
+            c for c in candidates
+            if re.search(rf"\b(?:{pattern})\b", c["search_string"], re.IGNORECASE)
+        ]
+
+    names = [c["search_string"] for c in candidates]
     results = process.extract(q, names, scorer=fuzz.WRatio, limit=limit)
 
     matches: List[dict] = []
     for name, score, idx in results:
+        if score < min_score:
+            continue
         c = candidates[idx]
         matches.append(
             {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score}
@@ -464,6 +482,7 @@ def llm_pick_from_candidates(client: OpenAI, item_text: str, candidates: List[di
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
+            timeout=30,
         )
         txt = (resp.output[0].content[0].text or "").strip()
         data = extract_json_object(txt) or {}
@@ -553,6 +572,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": last_ctx + text},
         ],
+        timeout=30,
     )
 
     output_text = ""
@@ -1097,9 +1117,14 @@ def propose_top(top: dict, current_qty: int) -> str:
 
 def render_top5(matches: List[dict]) -> str:
     top = matches[:TOP5]
-    lines = ["Got it — select the best match (reply 1-5), or type different search words and I’ll search again:"]
+    n = len(top)
+    reply_range = "1" if n == 1 else f"1-{n}"
+    lines = [f"Got it \u2014 select the best match (reply {reply_range}), or type different search words and I’ll search again:"]
     for i, m in enumerate(top, start=1):
-        lines.append(f"{i}) {m['product_name']} {fmt_price(m.get('price'))}".strip())
+        name = m["product_name"]
+        price = fmt_price(m.get("price"))
+        score = int(m.get("score") or 0)
+        lines.append(f"{i}) {name} {price} [{score}%]")
     return "\n".join(lines)
 
 def render_customer_picker(matches: List[dict], intro: str = "I found multiple matches — reply with 1, 2, or 3:") -> str:
@@ -1580,6 +1605,10 @@ def _looks_like_bare_inventory_write(msg: str) -> bool:
     if "inventory" in s:
         return False
 
+    # Ignore threshold-setting phrases — those are handled separately
+    if "on hand" in s or bool(re.search(r"\bpar\b", s)) or "minimum" in s:
+        return False
+
     m = re.match(r"^\s*(add|remove)\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
     if m:
         qty = _parse_small_number(m.group(2))
@@ -1790,12 +1819,13 @@ def _parse_inventory_threshold(msg: str) -> tuple[int | None, str]:
             return qty, m.group(2).strip()
 
     # ---- par ----
-    # "set <product> (to) par <qty>"
-    m = re.match(r"^\s*set\s+(.+?)\s+(?:to\s+)?par\s+(\w+)\s*$", s, re.IGNORECASE)
+    # "set <product> (inventory) (to) par (to) <qty>"
+    m = re.match(r"^\s*set\s+(.+?)\s+(?:inventory\s+)?(?:to\s+)?par\s+(?:to\s+)?(\w+)\s*$", s, re.IGNORECASE)
     if m:
         qty = _parse_small_number(m.group(2))
         if qty is not None:
-            return qty, m.group(1).strip()
+            product = re.sub(r"\binventory\b", "", m.group(1), flags=re.IGNORECASE).strip()
+            return qty, product
 
     # "<product> par <qty>"
     m = re.match(r"^\s*(.+?)\s+par\s+(\w+)\s*$", s, re.IGNORECASE)
@@ -1952,13 +1982,14 @@ class MKChatEngine:
                         chosen = top
                     else:
                         state["pending"] = {
-                            "kind": "inventory_threshold_top5",
+                            "kind": "inventory_threshold_confirm_top",
                             "qty": int(qty),
                             "product_text": product_text,
+                            "top": top,
                             "matches": matches[:MATCH_LIMIT],
                         }
                         save_session_state(state, session_id=sid)
-                        return ChatReply(render_top5(matches))
+                        return ChatReply(propose_top(top, current_qty=1))
 
                 sku = (chosen.get("sku") or "").strip()
                 product_name = (chosen.get("product_name") or "").strip()
@@ -1994,14 +2025,15 @@ class MKChatEngine:
                         chosen = top
                     else:
                         state["pending"] = {
-                            "kind": "inventory_pick_top5",
+                            "kind": "inventory_confirm_top",
                             "action": action,
                             "qty": int(qty),
                             "product_text": product_text,
+                            "top": top,
                             "matches": matches[:MATCH_LIMIT],
                         }
                         save_session_state(state, session_id=sid)
-                        return ChatReply(render_top5(matches))
+                        return ChatReply(propose_top(top, current_qty=1))
 
                 sku = (chosen.get("sku") or "").strip()
                 product_name = (chosen.get("product_name") or "").strip()
@@ -2634,6 +2666,46 @@ class MKChatEngine:
 
                 return ChatReply("Okay — what would you like to do with that customer?")
 
+            if kind == "inventory_confirm_top":
+                top = pending["top"]
+                matches = pending.get("matches") or []
+                action = pending.get("action")
+                qty = int(pending.get("qty") or 0)
+
+                if yes(msg):
+                    sku = (top.get("sku") or "").strip()
+                    product_name = (top.get("product_name") or "").strip()
+                    with tx() as (conn, cur):
+                        if action == "add":
+                            upsert_inventory_quantity(cur, consultant_id=consultant_id, sku=sku, qty_delta=qty)
+                        elif action == "remove":
+                            upsert_inventory_quantity(cur, consultant_id=consultant_id, sku=sku, qty_delta=-qty)
+                        else:
+                            upsert_inventory_quantity(cur, consultant_id=consultant_id, sku=sku, set_qty=qty)
+                        row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
+                        current_qty = int((row or {}).get("qty_on_hand") or 0)
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    if action == "add":
+                        return ChatReply(f"Added {qty} of {product_name} to your inventory. You currently have {current_qty} on hand.")
+                    elif action == "remove":
+                        return ChatReply(f"Removed {qty} of {product_name} from your inventory. You currently have {current_qty} on hand.")
+                    else:
+                        return ChatReply(f"Set {product_name} inventory to {qty}. You currently have {current_qty} on hand.")
+
+                if no(msg):
+                    state["pending"] = {
+                        "kind": "inventory_pick_top5",
+                        "action": action,
+                        "qty": qty,
+                        "product_text": pending.get("product_text", ""),
+                        "matches": matches,
+                    }
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(render_top5(matches))
+
+                return ChatReply("Reply yes or no.")
+
             if kind == "inventory_pick_top5":
                 choice = (msg or "").strip()
                 matches = pending.get("matches") or []
@@ -2696,6 +2768,32 @@ class MKChatEngine:
                         f"Set {product_name} inventory to {qty}. "
                         f"You currently have {current_qty} on hand."
                     )
+
+            if kind == "inventory_threshold_confirm_top":
+                top = pending["top"]
+                matches = pending.get("matches") or []
+                qty = int(pending.get("qty") or 0)
+
+                if yes(msg):
+                    sku = (top.get("sku") or "").strip()
+                    product_name = (top.get("product_name") or "").strip()
+                    with tx() as (conn, cur):
+                        upsert_inventory_quantity(cur, consultant_id=consultant_id, sku=sku, low_stock_threshold=qty)
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(f"Got it \u2014 I'll flag {product_name} when you have fewer than {qty} on hand.")
+
+                if no(msg):
+                    state["pending"] = {
+                        "kind": "inventory_threshold_top5",
+                        "qty": qty,
+                        "product_text": pending.get("product_text", ""),
+                        "matches": matches,
+                    }
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(render_top5(matches))
+
+                return ChatReply("Reply yes or no.")
 
             if kind == "inventory_threshold_top5":
                 choice = (msg or "").strip()
@@ -2944,7 +3042,7 @@ class MKChatEngine:
                             source="chat",
                         )
 
-                    # 2) Keep existing behavior: create jobs for worker/playwright
+                    # 2) Queue jobs for worker/playwright
                     for line in order["lines"]:
                         sku = line["chosen"]["sku"]
                         qty = int(line["qty"])
@@ -2953,6 +3051,18 @@ class MKChatEngine:
                                 "NEW_ORDER_ROW",
                                 {"First Name": cust_first, "Last Name": cust_last, "SKU": sku},
                                 consultant_id=consultant_id,
+                            )
+
+                    # 3) Decrement personal inventory for each ordered item
+                    with tx() as (conn, cur):
+                        for line in order["lines"]:
+                            sku = line["chosen"]["sku"]
+                            qty = int(line["qty"])
+                            upsert_inventory_quantity(
+                                cur,
+                                consultant_id=consultant_id,
+                                sku=sku,
+                                qty_delta=-qty,
                             )
 
                     state["pending"] = None
@@ -2973,7 +3083,7 @@ class MKChatEngine:
         try:
             parsed = parse_with_openai(self.client, msg, last_customer)
         except Exception:
-            return ChatReply("Sorry, I'm having some trouble reading that. Please try again with the customer or order details.")
+            return ChatReply("I'm having a little trouble right now, please try again in a moment.")
 
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}

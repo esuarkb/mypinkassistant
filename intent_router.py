@@ -170,6 +170,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
+            timeout=30,
         )
 
         txt = ""
