@@ -1239,7 +1239,6 @@ def inventory_print(request: Request):
         name = _esc(item.get("product_name") or "")
         retail = item.get("price")
         retail_txt = f"${retail:.2f}" if isinstance(retail, (int, float)) else "—"
-        wholesale_txt = f"${retail * 0.5:.2f}" if isinstance(retail, (int, float)) else "—"
 
         inv = inv_by_sku.get(sku) or {}
         qty = inv.get("qty_on_hand")
@@ -1256,7 +1255,6 @@ def inventory_print(request: Request):
             f'<tr{row_class} data-has-qty="{1 if qty else 0}">'
             f"<td>{name}</td>"
             f"<td>{retail_txt}</td>"
-            f"<td>{wholesale_txt}</td>"
             f'<td{on_hand_class}>{qty_txt}</td>'
             f"<td>{threshold_txt}</td>"
             f"</tr>"
@@ -1278,7 +1276,7 @@ def inventory_print(request: Request):
     .controls label {{ font-size: 13px; cursor: pointer; }}
     .btn-print {{ background: #d63384; color: #fff; border: none; padding: 7px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }}
     .btn-print:hover {{ background: #b02a6f; }}
-    table {{ width: 100%; border-collapse: collapse; }}
+    table {{ width: auto; border-collapse: collapse; white-space: nowrap; }}
     th {{ background: #f5f5f7; text-align: left; padding: 7px 10px; font-size: 12px; border-bottom: 2px solid #ddd; }}
     td {{ padding: 6px 10px; border-bottom: 1px solid #eee; }}
     tr.low td.low-cell {{ color: #c0392b; font-weight: 700; }}
@@ -1296,38 +1294,27 @@ def inventory_print(request: Request):
   <div class="meta">{today}</div>
   <div class="controls">
     <label>
-      <input type="radio" name="view" value="all" checked onchange="filterRows(this.value)"> Full Catalog
+      <input type="radio" name="view" value="all" checked id="view-all"> Full Catalog
     </label>
     <label>
-      <input type="radio" name="view" value="onhand" onchange="filterRows(this.value)"> On Hand Only
+      <input type="radio" name="view" value="onhand" id="view-onhand"> On Hand Only
     </label>
-    <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
+    <button class="btn-print" id="btn-print">Print / Save PDF</button>
   </div>
   <table id="inv-table">
     <thead>
       <tr>
         <th>Product</th>
         <th>Retail</th>
-        <th>Wholesale (50%)</th>
         <th>On Hand</th>
-        <th>Desired On Hand</th>
+        <th>Par</th>
       </tr>
     </thead>
     <tbody>
       {table_rows}
     </tbody>
   </table>
-  <script>
-    function filterRows(view) {{
-      document.querySelectorAll('#inv-table tbody tr').forEach(function(row) {{
-        if (view === 'onhand') {{
-          row.classList.toggle('hidden', row.dataset.hasQty === '0');
-        }} else {{
-          row.classList.remove('hidden');
-        }}
-      }});
-    }}
-  </script>
+  <script src="/web/print.js"></script>
 </body>
 </html>"""
 
