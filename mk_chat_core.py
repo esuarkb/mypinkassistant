@@ -1544,9 +1544,7 @@ def _inventory_help_text() -> str:
         "• set satin hands inventory to 5\n"
         "\n"
         "🎯 Set a desired quantity (your 'always keep on hand' level):\n"
-        "• keep 3 charcoal masks on hand\n"
-        "• charcoal mask par 3\n"
-        "• minimum 3 satin hands\n"
+        "• set charcoal mask par to 3\n"
         "\n"
         "📋 Check what to reorder:\n"
         "• what am I low on\n"
@@ -1558,7 +1556,13 @@ def _inventory_help_text() -> str:
 
 def _looks_like_inventory_count(msg: str) -> bool:
     s = (msg or "").strip().lower()
-    return ("how many" in s and " do i have" in s) or s.endswith(" in inventory")
+    if "how many" in s and " do i have" in s:
+        return True
+    if s.endswith(" in inventory"):
+        return True
+    if "how many" in s and "inventory" in s:
+        return True
+    return False
 
 
 def _parse_inventory_write(msg: str) -> tuple[str | None, int | None, str]:
@@ -1629,6 +1633,10 @@ def _parse_inventory_lookup_text(msg: str) -> str:
         return m.group(1).strip()
 
     m = re.match(r"^\s*(.+?)\s+in\s+inventory\s*$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    m = re.match(r"^\s*how\s+many\s+(.+?)\s+(?:in\s+)?inventory\s*$", s, re.IGNORECASE)
     if m:
         return m.group(1).strip()
 
@@ -1949,6 +1957,30 @@ class MKChatEngine:
             base_url = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
             link = f"{base_url}/inventory/print" if base_url else "/inventory/print"
             return ChatReply(f"Here's your inventory report: {link}")
+
+        # -------------------------
+        # Inventory: quantity count query (early — before intent routing so
+        # "how many X do I have" isn't misclassified as new_order)
+        # -------------------------
+        if _looks_like_inventory_count(msg):
+            product_text = _parse_inventory_lookup_text(msg)
+            if product_text:
+                picked, matches = auto_pick_match(catalog, product_text)
+                chosen = picked or (matches[0] if matches else None)
+                if not chosen:
+                    return ChatReply("I couldn't match that product in the catalog. Try rewording it.")
+                sku = (chosen.get("sku") or "").strip()
+                with tx() as (conn, cur):
+                    row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
+                return ChatReply(_format_inventory_item(row, chosen, product_text))
+
+        # -------------------------
+        # Inventory: show full list (early — same reason)
+        # -------------------------
+        if _looks_like_inventory_show(msg):
+            with tx() as (conn, cur):
+                rows = list_inventory(cur, consultant_id=consultant_id)
+            return ChatReply(_format_inventory_list(rows, catalog))
 
         # -------------------------
         # Inventory: low stock / what should I order
