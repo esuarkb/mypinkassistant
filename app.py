@@ -1251,12 +1251,22 @@ def inventory_print(request: Request):
         row_class = ' class="low"' if low else ""
         on_hand_class = ' class="low-cell"' if low else ""
 
+        qty_val = int(qty) if qty is not None else ""
+        threshold_val = int(threshold) if threshold is not None else ""
+        sku_esc = _esc(sku)
+
         rows_html.append(
-            f'<tr{row_class} data-has-qty="{1 if qty else 0}">'
+            f'<tr{row_class} data-has-qty="{1 if qty else 0}" data-sku="{sku_esc}">'
             f"<td>{name}</td>"
             f"<td>{retail_txt}</td>"
-            f'<td{on_hand_class}>{qty_txt}</td>'
-            f"<td>{threshold_txt}</td>"
+            f'<td{on_hand_class}>'
+            f'<span class="dv">{qty_txt}</span>'
+            f'<input class="ev inv-input hidden" type="number" min="0" data-field="qty" value="{qty_val}">'
+            f"</td>"
+            f"<td>"
+            f'<span class="dv">{threshold_txt}</span>'
+            f'<input class="ev inv-input hidden" type="number" min="0" data-field="par" value="{threshold_val}">'
+            f"</td>"
             f"</tr>"
         )
 
@@ -1276,6 +1286,7 @@ def inventory_print(request: Request):
     .controls label {{ font-size: 13px; cursor: pointer; }}
     .btn-print {{ background: #d63384; color: #fff; border: none; padding: 7px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }}
     .btn-print:hover {{ background: #b02a6f; }}
+    .inv-input {{ width: 60px; padding: 3px 6px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }}
     table {{ width: auto; border-collapse: collapse; white-space: nowrap; }}
     th {{ background: #f5f5f7; text-align: left; padding: 7px 10px; font-size: 12px; border-bottom: 2px solid #ddd; }}
     td {{ padding: 6px 10px; border-bottom: 1px solid #eee; }}
@@ -1299,6 +1310,9 @@ def inventory_print(request: Request):
     <label>
       <input type="radio" name="view" value="onhand" id="view-onhand"> On Hand Only
     </label>
+    <label>
+      <input type="radio" name="view" value="enter" id="view-enter"> Enter Inventory
+    </label>
     <button class="btn-print" id="btn-print">Print / Save PDF</button>
   </div>
   <table id="inv-table">
@@ -1319,6 +1333,43 @@ def inventory_print(request: Request):
 </html>"""
 
     return HTMLResponse(html)
+
+
+@app.post("/inventory/bulk-save")
+async def inventory_bulk_save(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return JSONResponse({"ok": False}, status_code=401)
+
+    from inventory_store import upsert_inventory_quantity
+    from db import tx
+
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid request"}, status_code=400)
+
+    with tx() as (conn, cur):
+        for item in (data or []):
+            sku = (item.get("sku") or "").strip()
+            if not sku:
+                continue
+            qty = item.get("qty")
+            par = item.get("par")
+            if qty is None and par is None:
+                continue
+            set_qty = int(qty) if qty is not None and str(qty).strip() != "" else None
+            set_par = int(par) if par is not None and str(par).strip() != "" else None
+            upsert_inventory_quantity(
+                cur,
+                consultant_id=int(cid),
+                sku=sku,
+                set_qty=set_qty,
+                low_stock_threshold=set_par,
+            )
+
+    return JSONResponse({"ok": True})
 
 
 @app.post("/import-customers")
