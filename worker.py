@@ -351,11 +351,13 @@ def main():
                             f"Error: {raw_err}"
                         )
 
+                        print(f"[Worker] Job {job_id} type={job_type} FAILED: {raw_err}")
+
                         if job_type == "NEW_ORDER_ROW":
                             for jid in job_ids:
-                                mark_job_failed(jid, err_text)
+                                mark_job_failed(jid, raw_err, err_text)
                         else:
-                            mark_job_failed(job_id, err_text)
+                            mark_job_failed(job_id, raw_err, err_text)
 
             finally:
                 # Always clean up and release the consultant lock

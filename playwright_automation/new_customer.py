@@ -58,26 +58,26 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
         raise Exception("Add Address dialog failed to open after 3 attempts.")
 
     # 5) Fill once it's truly ready
-    first_name_field.fill(str(customer.get("First Name", "")))
-    
+    first_name_field.fill(str(customer.get("First Name") or ""))
+
     # Open address dialog
 #    page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
-#   page.wait_for_timeout(300)    
+#   page.wait_for_timeout(300)
 #    page.locator("c-cmt-no-info-available").get_by_role("button", name="Add New Address").click()
 #    page.wait_for_timeout(500)
-#    page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name", "")))
+#    page.locator('[id^="AddressFirstName-"]').fill(str(customer.get("First Name") or ""))
     page.wait_for_timeout(100)
 
-    page.locator('[id^="AddressLastName-"]').fill(str(customer.get("Last Name", "")))
-    page.wait_for_timeout(100)
-    
-    page.locator('[id^="Street-"]').fill(str(customer.get("Street", "")))
+    page.locator('[id^="AddressLastName-"]').fill(str(customer.get("Last Name") or ""))
     page.wait_for_timeout(100)
 
-    page.locator('[id^="City-"]').fill(str(customer.get("City", "")))
+    page.locator('[id^="Street-"]').fill(str(customer.get("Street") or ""))
     page.wait_for_timeout(100)
 
-    page.locator('[id^="PostalCode-"]').fill(str(customer.get("Postal Code", "")))
+    page.locator('[id^="City-"]').fill(str(customer.get("City") or ""))
+    page.wait_for_timeout(100)
+
+    page.locator('[id^="PostalCode-"]').fill(str(customer.get("Postal Code") or ""))
     page.wait_for_timeout(100)
 
     #new state dropdown logic:
@@ -109,19 +109,27 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     page.get_by_role("textbox", name="First Name").wait_for(state="visible", timeout=30000)
     # Fill in customer info
     page.wait_for_timeout(2000)
-    page.get_by_role("textbox", name="First Name").fill(str(customer.get("First Name", "")))
+    page.get_by_role("textbox", name="First Name").fill(str(customer.get("First Name") or ""))
     page.wait_for_timeout(100)
-    page.get_by_role("textbox", name="Last Name").fill(str(customer.get("Last Name", "")))
+    page.get_by_role("textbox", name="Last Name").fill(str(customer.get("Last Name") or ""))
     page.wait_for_timeout(100)
-    page.get_by_role("textbox", name="Email Address (Optional)").fill(str(customer.get("Email", "")))
+    page.get_by_role("textbox", name="Email Address (Optional)").fill(str(customer.get("Email") or ""))
     page.wait_for_timeout(100)
-    page.get_by_role("textbox", name="Mobile Phone Number (Optional)").fill(str(customer.get("Phone", "")))
+    page.get_by_role("textbox", name="Mobile Phone Number (Optional)").fill(str(customer.get("Phone") or ""))
     page.wait_for_timeout(100)
-    page.get_by_role("textbox", name="Birthday (Optional)").fill(str(customer.get("Birthday", "")))
+    page.get_by_role("textbox", name="Birthday (Optional)").fill(str(customer.get("Birthday") or ""))
     page.wait_for_timeout(100)
     page.get_by_role("button", name="Save New Customer").click()
-    page.wait_for_timeout(1000)
-    
+    logger.info(f"Clicked Save New Customer. URL: {page.url}")
+
+    # Wait for the form to close — if Save succeeded, InTouch navigates away and the button detaches
+    try:
+        page.get_by_role("button", name="Save New Customer").wait_for(state="detached", timeout=10000)
+        logger.info(f"Save New Customer form closed. URL: {page.url}")
+    except PlaywrightTimeoutError:
+        logger.error(f"Save New Customer form did not close after 10s. URL: {page.url}")
+        raise Exception("Save New Customer did not complete — form is still open after 10s. Customer was not saved.")
+
     # If we have address info, fill that in too
     if has_address(customer):
         add_address_on_detail_page(page, customer)

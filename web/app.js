@@ -252,7 +252,7 @@ async function refreshJobs() {
             } else if (j.status === "done") {
                 showToast("✅ " + (j.status_msg || "Complete"));
             } else if (j.status === "failed") {
-                showToast("❌ " + (j.status_msg || "Job failed"), j.error ? j.error : "");
+                showToast("❌ " + (j.status_msg || "Job failed"));
             } else {
                 showToast(`ℹ️ ${j.status}`, label ? `• ${label}` : "");
             }
@@ -269,7 +269,7 @@ async function refreshJobs() {
             } else if (j.status === "done") {
                 showToast("✅ " + (j.status_msg || "Complete"));
             } else if (j.status === "failed") {
-                showToast("❌ " + (j.status_msg || "Job failed"), j.error ? j.error : "");
+                showToast("❌ " + (j.status_msg || "Job failed"));
             }
         }
     } catch (e) {
