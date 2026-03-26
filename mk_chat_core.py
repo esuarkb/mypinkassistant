@@ -966,7 +966,7 @@ UI_EN = {
     "empty_prompt": "Say something like: “new customer Jane Doe …” or “order for Jane Doe: …”",
     "canceled": "Okay — canceled. Ready for your new customer or order.",
 
-    "cust_submit_intro": "Okay — here’s the customer I’m about to submit:",
+    "cust_submit_intro": "Okay — here's the customer I'm about to submit:",
     "name": "Name",
     "email": "Email",
     "phone": "Phone",
@@ -989,11 +989,11 @@ UI_EN = {
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Parse error: {err}",
-    "cant_tell": "I couldn’t tell if that was a new customer or an order. Try rephrasing.",
+    "cant_tell": "I couldn't tell if that was a new customer or an order. Try rephrasing.",
     "cust_confirmed": "✅ {first} {last} confirmed. Adding to MyCustomers now.",
-    "cust_reject": "No problem — Send the corrected customer info and I’ll try again.",
+    "cust_reject": "No problem — Send the corrected customer info and I'll try again.",
     "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
-    "order_reject": "Okay — paste the corrected order and I’ll rebuild the summary.",
+    "order_reject": "Okay — paste the corrected order and I'll rebuild the summary.",
 }
 
 UI_ES = {
@@ -1130,7 +1130,7 @@ def render_top5(matches: List[dict]) -> str:
     top = matches[:TOP5]
     n = len(top)
     reply_range = "1" if n == 1 else f"1-{n}"
-    lines = [f"Got it \u2014 select the best match (reply {reply_range}), or type different search words and I’ll search again:"]
+    lines = [f"Got it \u2014 select the best match (reply {reply_range}), or type different search words and I'll search again:"]
     for i, m in enumerate(top, start=1):
         name = m["product_name"]
         price = fmt_price(m.get("price"))
@@ -1451,7 +1451,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             continue
 
         # Fallback: if they typed something else, ignore but keep a note
-        notes.append(f"Couldn’t apply: “{raw}”")
+        notes.append(f"Couldn't apply: “{raw}”")
 
     # Clean punctuation that causes "Street," to get saved to JSON
     for k in ("Street", "City", "State"):
@@ -2061,7 +2061,7 @@ class MKChatEngine:
                 else:
                     matches = best_matches(catalog, product_text, limit=MATCH_LIMIT)
                     if not matches:
-                        return ChatReply("I couldn’t match that product in the catalog. Try rewording it.")
+                        return ChatReply("I couldn't match that product in the catalog. Try rewording it.")
 
                     top = matches[0]
                     if int(top.get("score") or 0) >= 100:
@@ -2139,7 +2139,7 @@ class MKChatEngine:
                     chosen = picked or (matches[0] if matches else None)
 
                     if not chosen:
-                        return ChatReply("I couldn’t match that product in the catalog. Try rewording it.")
+                        return ChatReply("I couldn't match that product in the catalog. Try rewording it.")
 
                     sku = (chosen.get("sku") or "").strip()
 
@@ -2191,7 +2191,7 @@ class MKChatEngine:
                         cid = int(m_id.group(2))
                         c = get_customer_by_id(cur, consultant_id=consultant_id, customer_id=cid)
                         if not c:
-                            return ChatReply(f"I couldn’t find a customer with ID {cid}.")
+                            return ChatReply(f"I couldn't find a customer with ID {cid}.")
                         order_count = count_orders_for_customer(cur, customer_id=cid)
 
                         state["pending"] = {
@@ -2222,7 +2222,7 @@ class MKChatEngine:
                     )
 
                 if len(matches) == 0:
-                    return ChatReply(f"I couldn’t find {target} in your saved customers.")
+                    return ChatReply(f"I couldn't find {target} in your saved customers.")
 
                 if len(matches) == 1:
                     c = matches[0]
@@ -2378,7 +2378,7 @@ class MKChatEngine:
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                         if len(matches) == 0:
-                            return ChatReply(f"I couldn’t find {guess} in your saved customers yet.")
+                            return ChatReply(f"I couldn't find {guess} in your saved customers yet.")
 
                         if len(matches) > 1:
                             top = matches[:3]
@@ -2446,7 +2446,7 @@ class MKChatEngine:
                     matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                     if len(matches) == 0:
-                        return ChatReply(f"I couldn’t find {guess} in your saved customers yet.")
+                        return ChatReply(f"I couldn't find {guess} in your saved customers yet.")
 
                     if len(matches) > 1:
                         top = matches[:3]
@@ -2547,14 +2547,14 @@ class MKChatEngine:
                     guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
                     guess = _resolve_pronoun_guess(guess, state)
                     if not guess:
-                        return ChatReply("Who is the customer? Try: “show Jane’s info”.")
+                        return ChatReply("Who is the customer? Try: “show Jane's info”.")
 
                     with tx() as (conn, cur):
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                     if len(matches) == 0:
                         return ChatReply(
-                            f"I couldn’t find {guess} in your saved customers yet. "
+                            f"I couldn't find {guess} in your saved customers yet. "
                         )
 
                     if len(matches) == 1:
@@ -2950,7 +2950,7 @@ class MKChatEngine:
 
                     if n:
                         return ChatReply(f"✅ Deleted {name} from MyPinkAssistant (MyCustomers was not changed).")
-                    return ChatReply("I couldn’t delete that customer (maybe it was already removed).")
+                    return ChatReply("I couldn't delete that customer (maybe it was already removed).")
 
                 if answer.lower() in ("cancel", "stop", "no"):
                     state["pending"] = None
@@ -3041,14 +3041,14 @@ class MKChatEngine:
                         return ChatReply("Tell me what to remove, e.g. `remove 1` or `remove charcoal`.")
                     removed = self._remove_line(order, target)
                     if not removed:
-                        return ChatReply("I couldn’t find that item to remove. Try `remove 1` or part of the name.")
+                        return ChatReply("I couldn't find that item to remove. Try `remove 1` or part of the name.")
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
 
                 # ✅ THEN: guardrail for random commands (but not add/remove)
                 if looks_like_command(msg) and not yes(msg) and not no(msg):
-                    return ChatReply("You’re confirming an order. Reply yes or no, or say add or remove to edit the order.")
+                    return ChatReply("You're confirming an order. Reply yes or no, or say add or remove to edit the order.")
 
                 # ... keep your existing yes/no handling below ...
 
@@ -3200,7 +3200,7 @@ class MKChatEngine:
 
             if has_explicit_name and len(matches) == 0 and not full_name_typed:
                 unresolved_name = customer_name_for_lookup or explicit_customer_hint
-                return ChatReply(f"I couldn’t find {unresolved_name} in your saved customers.")
+                return ChatReply(f"I couldn't find {unresolved_name} in your saved customers.")
 
             if len(matches) == 1:
                 matched_first = (matches[0].get("first_name") or "").strip()
@@ -3271,12 +3271,12 @@ class MKChatEngine:
 
             if not items:
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
-                return ChatReply(f"{prefix}\n{ui[‘need_items’]}")
+                return ChatReply(f"{prefix}\n{ui['need_items']}")
 
             order_draft = self._make_order_draft(cust_first, cust_last, items)
             order_draft["customer_id"] = resolved_customer_id
             if not order_draft["lines"]:
-                return ChatReply("I didn’t catch any items — try again with the product names.")
+                return ChatReply("I didn't catch any items — try again with the product names.")
 
             for line in order_draft["lines"]:
                 picked, _m = auto_pick_match(catalog, line["text"])
@@ -3300,7 +3300,7 @@ class MKChatEngine:
 
                 save_session_state(state, session_id=sid)
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
-                return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft[‘lines’][nxt][‘qty’])}")
+                return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft['lines'][nxt]['qty'])}")
 
             state["pending"] = {"kind": "order_confirm", "order": order_draft}
 
