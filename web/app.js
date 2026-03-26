@@ -14,8 +14,11 @@ const footerLine = document.querySelector(".welcome .footerLine");
 const noticeBanner = document.getElementById("noticeBanner");
 
 let toastTimer = null;
-let lastSeenJobId = null;
-let lastSeenStatus = null;
+let toastQueue = [];
+
+// Track all visible jobs: jobId -> status
+const trackedJobs = new Map();
+let jobsInitialized = false;
 
 function pick(arr) {
     if (!arr || arr.length === 0) return null;
@@ -77,6 +80,13 @@ function addMessage(text, who) {
 
 function showToast(text, smallText = "") {
     if (!toast) return;
+    toastQueue.push({ text, smallText });
+    if (toastQueue.length === 1) _showNextToast();
+}
+
+function _showNextToast() {
+    if (!toast || toastQueue.length === 0) return;
+    const { text, smallText } = toastQueue[0];
 
     const isError =
         (text || "").includes("❌") ||
@@ -93,6 +103,8 @@ function showToast(text, smallText = "") {
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
         toast.classList.add("hidden");
+        toastQueue.shift();
+        if (toastQueue.length > 0) _showNextToast();
     }, duration);
 }
 
@@ -224,32 +236,45 @@ async function refreshJobs() {
         const res = await fetch("/jobs");
         const data = await res.json();
         const jobs = data.jobs || [];
-        if (jobs.length === 0) return;
 
-        const j = jobs[0];
-
-        const payload = j.payload || {};
-        const silentInitialSync = !!payload.silent_initial_sync;
-
-        if (silentInitialSync) {
-            lastSeenJobId = j.id;
-            lastSeenStatus = j.status;
+        if (!jobsInitialized) {
+            // Seed the map with current state — no toasts for pre-existing jobs
+            for (const j of jobs) trackedJobs.set(j.id, j.status);
+            jobsInitialized = true;
             return;
         }
 
-        if (lastSeenJobId === null) {
-            lastSeenJobId = j.id;
-            lastSeenStatus = j.status;
-            return;
+        let newestNewJob = null;
+
+        for (const j of jobs) {
+            // Skip silent background sync jobs
+            if ((j.payload || {}).silent_initial_sync) {
+                trackedJobs.set(j.id, j.status);
+                continue;
+            }
+
+            const prevStatus = trackedJobs.get(j.id);
+
+            if (prevStatus === undefined) {
+                // Brand new job — track it; announce only the newest one
+                trackedJobs.set(j.id, j.status);
+                if (!newestNewJob || j.id > newestNewJob.id) newestNewJob = j;
+            } else if (j.status !== prevStatus) {
+                // Status changed — show a completion toast for every job
+                trackedJobs.set(j.id, j.status);
+                if (j.status === "done") {
+                    showToast("✅ " + (j.status_msg || "Complete"));
+                } else if (j.status === "failed") {
+                    const label = jobLabel(j);
+                    showToast("❌ " + (j.status_msg || "Job failed"), label ? `• ${label}` : "");
+                }
+            }
         }
 
-        // New job appeared
-        if (j.id !== lastSeenJobId) {
-            lastSeenJobId = j.id;
-            lastSeenStatus = j.status;
-
+        // Announce the newest new job (queued/running state)
+        if (newestNewJob) {
+            const j = newestNewJob;
             const label = jobLabel(j);
-
             if (j.status === "queued") {
                 showToast("🕒 Queued for MyCustomers", label ? `• ${label}` : "");
             } else if (j.status === "running") {
@@ -257,26 +282,16 @@ async function refreshJobs() {
             } else if (j.status === "done") {
                 showToast("✅ " + (j.status_msg || "Complete"));
             } else if (j.status === "failed") {
-                showToast("❌ " + (j.status_msg || "Job failed"));
-            } else {
-                showToast(`ℹ️ ${j.status}`, label ? `• ${label}` : "");
-            }
-            return;
-        }
-
-        // Same job, status changed
-        if (j.status !== lastSeenStatus) {
-            lastSeenStatus = j.status;
-            const label = jobLabel(j);
-
-            if (j.status === "running") {
-                showToast("▶️ Working…", label ? `• ${label}` : "");
-            } else if (j.status === "done") {
-                showToast("✅ " + (j.status_msg || "Complete"));
-            } else if (j.status === "failed") {
-                showToast("❌ " + (j.status_msg || "Job failed"));
+                showToast("❌ " + (j.status_msg || "Job failed"), label ? `• ${label}` : "");
             }
         }
+
+        // Prune jobs that have aged off the server's return list
+        const serverIds = new Set(jobs.map(j => j.id));
+        for (const id of trackedJobs.keys()) {
+            if (!serverIds.has(id)) trackedJobs.delete(id);
+        }
+
     } catch (e) {
         // ignore
     }
