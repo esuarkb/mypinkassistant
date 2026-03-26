@@ -71,10 +71,35 @@
             margin-bottom: 20px;
         }
 
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 22px;
+            margin-bottom: 2px;
+        }
+
+        .section-header span {
+            font-size: 12px;
+            font-weight: 700;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            white-space: nowrap;
+        }
+
+        .section-header hr {
+            flex: 1;
+            border: none;
+            border-top: 1px solid #e8e8ee;
+            margin: 0;
+        }
+
         label {
             display: block;
             font-size: 12px;
-            color: #666;
+            font-weight: 600;
+            color: #555;
             margin-top: 14px;
         }
 
@@ -85,9 +110,21 @@
             border-radius: 14px;
             border: 1px solid #e8e8ee;
             font-size: 14px;
+            transition: border-color .15s;
+            outline: none;
         }
 
-        /* ✅ Only affects the T&C checkbox row */
+        input:focus {
+            border-color: #e91e63;
+            box-shadow: 0 0 0 3px rgba(233, 30, 99, .1);
+        }
+
+        input.field-error {
+            border-color: #e53935;
+            box-shadow: 0 0 0 3px rgba(229, 57, 53, .1);
+        }
+
+        /* Only affects the T&C checkbox row */
         .checkbox-row {
             display: flex;
             align-items: flex-start;
@@ -109,6 +146,7 @@
         .checkbox-row label {
             margin: 0;
             font-size: 13px;
+            font-weight: 400;
             color: #444;
             cursor: pointer;
         }
@@ -125,10 +163,15 @@
             padding: 12px;
             border: 0;
             border-radius: 14px;
+            font-size: 15px;
             font-weight: 700;
             cursor: pointer;
             background: linear-gradient(135deg, #e91e63, #c2185b);
             color: #fff;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #c2185b, #ad1457);
         }
 
         .small {
@@ -154,34 +197,41 @@
 
             <input type="hidden" name="ref" value="{{REF}}">
 
-            <label>First Name</label>
-            <input name="first_name" value="{{FIRST_NAME}}" required />
+            <div class="section-header"><span>Your MyPinkAssistant Account</span><hr></div>
 
-            <label>Last Name</label>
-            <input name="last_name" value="{{LAST_NAME}}" required />
+            <label for="first_name">First Name</label>
+            <input id="first_name" name="first_name" value="{{FIRST_NAME}}" autocomplete="given-name" required />
 
-            <label>Email</label>
-            <input name="email" type="email" value="{{EMAIL}}" required />
+            <label for="last_name">Last Name</label>
+            <input id="last_name" name="last_name" value="{{LAST_NAME}}" autocomplete="family-name" required />
 
-            <label>Create Password for MyPinkAssistant.com login</label>
-            <input name="password" id="pw1" type="password" required />
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" value="{{EMAIL}}" autocomplete="email" required />
 
-            <label>Confirm Password for MyPinkAssistant.com login</label>
-            <input name="password2" id="pw2" type="password" required />
+            <label for="email2">Confirm Email</label>
+            <input id="email2" type="email" autocomplete="email" required />
+
+            <div id="emailErr" class="err" style="display:none;"></div>
+
+            <label for="pw1">Password</label>
+            <input name="password" id="pw1" type="password" autocomplete="new-password" required />
+
+            <label for="pw2">Confirm Password</label>
+            <input name="password2" id="pw2" type="password" autocomplete="new-password" required />
 
             <div id="pwErr" class="err" style="display:none;"></div>
 
-            <label>InTouch Username</label>
-            <input name="intouch_username" required />
+            <div class="section-header"><span>Connect Your InTouch Account</span><hr></div>
 
-            <label>InTouch Password</label>
-            <input name="intouch_password" type="password" required />
+            <label for="intouch_username">InTouch Username</label>
+            <input id="intouch_username" name="intouch_username" placeholder="Your Mary Kay consultant ID" autocomplete="username" required />
+
+            <label for="intouch_password">InTouch Password</label>
+            <input id="intouch_password" name="intouch_password" type="password" autocomplete="current-password" required />
 
             <div class="small">
                 Your InTouch password is encrypted and never shared.
             </div>
-
-            <!-- ✅ Terms & Conditions -->
 
             <div class="checkbox-row">
                 <input type="checkbox" id="agree_terms" name="agree_terms" value="1" required>
@@ -198,27 +248,96 @@
     </div>
 
     <script>
+        function showPwError(msg, focusEl) {
+            const err = document.getElementById("pwErr");
+            const pw1 = document.getElementById("pw1");
+            const pw2 = document.getElementById("pw2");
+            err.textContent = msg;
+            err.style.display = "block";
+            pw1.classList.toggle("field-error", focusEl === pw1);
+            pw2.classList.toggle("field-error", focusEl === pw2);
+            if (focusEl) focusEl.focus();
+        }
+
+        function clearPwError() {
+            const err = document.getElementById("pwErr");
+            err.style.display = "none";
+            err.textContent = "";
+            document.getElementById("pw1").classList.remove("field-error");
+            document.getElementById("pw2").classList.remove("field-error");
+        }
+
+        function showEmailError(msg) {
+            const err = document.getElementById("emailErr");
+            const em2 = document.getElementById("email2");
+            err.textContent = msg;
+            err.style.display = "block";
+            em2.classList.add("field-error");
+            em2.focus();
+        }
+
+        function clearEmailError() {
+            const err = document.getElementById("emailErr");
+            err.style.display = "none";
+            err.textContent = "";
+            document.getElementById("email2").classList.remove("field-error");
+        }
+
+        document.getElementById("email2").addEventListener("blur", function () {
+            const em1 = document.getElementById("email");
+            if (!this.value || !em1.value) return;
+            if (this.value.toLowerCase() !== em1.value.toLowerCase()) {
+                showEmailError("Email addresses do not match.");
+            } else {
+                clearEmailError();
+            }
+        });
+
+        document.getElementById("email").addEventListener("input", function () {
+            const em2 = document.getElementById("email2");
+            if (em2.value && this.value.toLowerCase() === em2.value.toLowerCase()) clearEmailError();
+        });
+
+        // Real-time check when user leaves the confirm field
+        document.getElementById("pw2").addEventListener("blur", function () {
+            const pw1 = document.getElementById("pw1");
+            if (!this.value || !pw1.value) return;
+            if (this.value !== pw1.value) {
+                showPwError("Passwords do not match.", this);
+            } else {
+                clearPwError();
+            }
+        });
+
+        // Clear error if they go back and edit pw1
+        document.getElementById("pw1").addEventListener("input", function () {
+            const pw2 = document.getElementById("pw2");
+            if (pw2.value && this.value === pw2.value) clearPwError();
+        });
+
         function validateOnboardPasswords() {
             const pw1 = document.getElementById("pw1");
             const pw2 = document.getElementById("pw2");
-            const err = document.getElementById("pwErr");
 
-            if (!pw1 || !pw2 || !err) return true;
+            if (!pw1 || !pw2) return true;
 
-            err.style.display = "none";
-            err.textContent = "";
+            clearPwError();
+            clearEmailError();
 
-            if (pw1.value !== pw2.value) {
-                err.textContent = "Passwords do not match.";
-                err.style.display = "block";
-                pw2.focus();
+            const em1 = document.getElementById("email");
+            const em2 = document.getElementById("email2");
+            if (em1 && em2 && em1.value.toLowerCase() !== em2.value.toLowerCase()) {
+                showEmailError("Email addresses do not match.");
                 return false;
             }
 
             if ((pw1.value || "").length < 8) {
-                err.textContent = "Password must be at least 8 characters.";
-                err.style.display = "block";
-                pw1.focus();
+                showPwError("Password must be at least 8 characters.", pw1);
+                return false;
+            }
+
+            if (pw1.value !== pw2.value) {
+                showPwError("Passwords do not match.", pw2);
                 return false;
             }
 
