@@ -982,6 +982,7 @@ UI_EN = {
 
     "need_customer_for_order": "Who is this order for? Please tell me the customer name and paste the order again.",
     "need_items": "What items should I add to the order?",
+    "got_it_ordering_for": "Got it — order for {name}.",
     "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
     "reply_yes_no_qty": "Reply yes or no — or add a quantity like 'x2'",
     "order_adjust_hint": "You can also say `add` or `remove`.",
@@ -1016,6 +1017,7 @@ UI_ES = {
 
     "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y vuelve a pegar el pedido.",
     "need_items": "¿Qué artículos debo agregar al pedido?",
+    "got_it_ordering_for": "Listo — pedido para {name}.",
     "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
     "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
     "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
@@ -3265,8 +3267,11 @@ class MKChatEngine:
             if not items and explicit_item_hint:
                 items = [{"text": explicit_item_hint, "qty": 1}]
 
+            customer_line = f"{cust_first} {cust_last}".strip()
+
             if not items:
-                return ChatReply(ui["need_items"])
+                prefix = ui["got_it_ordering_for"].format(name=customer_line)
+                return ChatReply(f"{prefix}\n{ui[‘need_items’]}")
 
             order_draft = self._make_order_draft(cust_first, cust_last, items)
             order_draft["customer_id"] = resolved_customer_id
@@ -3294,7 +3299,8 @@ class MKChatEngine:
                 }
 
                 save_session_state(state, session_id=sid)
-                return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"]))
+                prefix = ui["got_it_ordering_for"].format(name=customer_line)
+                return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft[‘lines’][nxt][‘qty’])}")
 
             state["pending"] = {"kind": "order_confirm", "order": order_draft}
 
