@@ -1613,12 +1613,13 @@ def admin_diagnostics(request: Request):
     )
     running = cur.fetchall()
 
-    # 4) DONE jobs (last 15)
+    # 4) DONE jobs (last 15) — exclude background sync jobs, those are noise
     cur.execute(
         """
         SELECT id, consultant_id, type, status_msg, finished_at
         FROM jobs
         WHERE status='done'
+          AND type NOT IN ('IMPORT_CUSTOMERS', 'IMPORT_INVENTORY_ORDERS')
         ORDER BY id DESC
         LIMIT 15
         """
