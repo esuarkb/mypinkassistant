@@ -65,7 +65,12 @@ function scrollChatToBottom() {
 function addMessage(text, who) {
     const div = document.createElement("div");
     div.className = `msg ${who}`;
-    div.textContent = text;
+    if (who === "bot" && text.includes("<a ")) {
+        // Server-generated HTML (e.g. customer card with clickable links)
+        div.innerHTML = text.replace(/\n/g, "<br>");
+    } else {
+        div.textContent = text;
+    }
     chat.appendChild(div);
     requestAnimationFrame(() => scrollChatToBottom());
 }

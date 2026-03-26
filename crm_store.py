@@ -248,14 +248,28 @@ def find_customers_by_name(
 
 
 def format_customer_card(c: Dict[str, Any]) -> str:
-    from datetime import datetime
+    import re
+    import calendar
+    import html
+    from urllib.parse import quote
 
     first = (c.get("first_name") or "").strip()
     last = (c.get("last_name") or "").strip()
-    full_name = f"{first} {last}".strip() or "Customer"
+    full_name = html.escape(f"{first} {last}".strip() or "Customer")
 
-    email = (c.get("email") or "").strip() or "(none)"
-    phone = (c.get("phone") or "").strip() or "(none)"
+    email_raw = (c.get("email") or "").strip()
+    if email_raw:
+        email_val = f'<a href="mailto:{html.escape(email_raw)}">{html.escape(email_raw)}</a>'
+    else:
+        email_val = "(none)"
+
+    phone_raw = (c.get("phone") or "").strip()
+    phone_digits = re.sub(r"\D", "", phone_raw)
+    phone_display = html.escape(_format_phone_pretty(phone_raw) or phone_raw)
+    if phone_digits:
+        phone_val = f'<a href="tel:{phone_digits}">{phone_display}</a>'
+    else:
+        phone_val = "(none)"
 
     street = (c.get("street") or "").strip()
     city = (c.get("city") or "").strip()
@@ -263,39 +277,36 @@ def format_customer_card(c: Dict[str, Any]) -> str:
     postal = (c.get("postal_code") or "").strip()
 
     addr_parts = [p for p in [street, city, state, postal] if p]
-    address = ", ".join(addr_parts) if addr_parts else "(none)"
-
-    import re
-    import calendar
+    if addr_parts:
+        address_text = ", ".join(addr_parts)
+        maps_url = f"https://maps.google.com/?q={quote(address_text)}"
+        address_val = f'<a href="{maps_url}" target="_blank">{html.escape(address_text)}</a>'
+    else:
+        address_val = "(none)"
 
     bday_raw = (c.get("birthday") or "").strip()
     birthday = "(none)"
-
     if bday_raw:
-        # Full date: YYYY-MM-DD
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", bday_raw):
             y, mo, d = map(int, bday_raw.split("-"))
-            birthday = f"{calendar.month_name[mo]} {d}, {y}"
-
-        # Month/day only: MM-DD
+            birthday = html.escape(f"{calendar.month_name[mo]} {d}, {y}")
         elif re.fullmatch(r"\d{2}-\d{2}", bday_raw):
             mo, d = map(int, bday_raw.split("-"))
-            birthday = f"{calendar.month_name[mo]} {d}"
-
+            birthday = html.escape(f"{calendar.month_name[mo]} {d}")
         else:
-            birthday = bday_raw  # fallback
+            birthday = html.escape(bday_raw)
 
     lines = [
-        f"{full_name}",
-        f"• Email: {email}",
-        f"• Phone: {_format_phone_pretty(c.get('phone'))}", 
-        f"• Address: {address}",
+        f"<strong>{full_name}</strong>",
+        f"• Email: {email_val}",
+        f"• Phone: {phone_val}",
+        f"• Address: {address_val}",
         f"• Birthday: {birthday}",
     ]
 
     notes = (c.get("notes") or "").strip()
     if notes:
-        lines.append(f"• Notes: {notes}")
+        lines.append(f"• Notes: {html.escape(notes)}")
 
     return "\n".join(lines)
 
