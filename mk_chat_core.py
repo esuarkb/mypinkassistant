@@ -1126,7 +1126,7 @@ def propose_top(top: dict, current_qty: int) -> str:
 
     return f"I think you mean: {line}. Is that right? (yes/no)"
 
-def render_top5(matches: List[dict]) -> str:
+def render_top5(matches: List[dict], show_scores: bool = False) -> str:
     top = matches[:TOP5]
     n = len(top)
     reply_range = "1" if n == 1 else f"1-{n}"
@@ -1134,8 +1134,8 @@ def render_top5(matches: List[dict]) -> str:
     for i, m in enumerate(top, start=1):
         name = m["product_name"]
         price = fmt_price(m.get("price"))
-        score = int(m.get("score") or 0)
-        lines.append(f"{i}) {name} {price} [{score}%]")
+        score_str = f" [{int(m.get('score') or 0)}%]" if show_scores else ""
+        lines.append(f"{i}) {name} {price}{score_str}")
     return "\n".join(lines)
 
 def render_customer_picker(matches: List[dict], intro: str = "I found multiple matches — reply with 1, 2, or 3:") -> str:
@@ -1914,6 +1914,11 @@ class MKChatEngine:
         consultant = get_consultant(consultant_id)
         language = (consultant.get("language", "en") if consultant else "en") or "en"
         language = language.strip().lower()
+
+        import os as _os
+        _admin_emails = {e.strip().lower() for e in _os.environ.get("MK_ADMIN_EMAILS", "").split(",") if e.strip()}
+        _consultant_email = (consultant.get("email") or "").strip().lower() if consultant else ""
+        show_scores = _consultant_email in _admin_emails
 
         ui = UI_ES if language == "es" else UI_EN
 
@@ -2745,7 +2750,7 @@ class MKChatEngine:
                         "matches": matches,
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_top5(matches))
+                    return ChatReply(render_top5(matches, show_scores=show_scores))
 
                 return ChatReply("Reply yes or no.")
 
@@ -2834,7 +2839,7 @@ class MKChatEngine:
                         "matches": matches,
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_top5(matches))
+                    return ChatReply(render_top5(matches, show_scores=show_scores))
 
                 return ChatReply("Reply yes or no.")
 
@@ -2991,7 +2996,7 @@ class MKChatEngine:
                         "matches": matches[:MATCH_LIMIT],
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_top5(matches))
+                    return ChatReply(render_top5(matches, show_scores=show_scores))
 
                 return ChatReply(ui["reply_yes_no_qty"])
 
@@ -3019,7 +3024,7 @@ class MKChatEngine:
                     "matches": new_matches[:MATCH_LIMIT],
                 }
                 save_session_state(state, session_id=sid)
-                return ChatReply(render_top5(new_matches))
+                return ChatReply(render_top5(new_matches, show_scores=show_scores))
 
             if kind == "order_confirm":
                 order = pending["order"]
