@@ -161,28 +161,13 @@ PB_CONTACT_ID          # ProjectBroadcast contact for alerts
 - Run worker: `python worker.py`
 - `.env` file holds local secrets (gitignored)
 
-## Current Branch: claude-switch
-Working branch for security fixes. Do not merge to main until all fixes 
-are tested locally and verified on Render.
-
-### Security Fixes To Complete (in order)
-1. **XSS in render_page()** — user-controlled values injected into HTML 
-   without escaping. Fix: add `_esc()` helper using `html.escape()` and 
-   wrap all user-derived template substitutions.
-
-2. **No rate limiting on /login, /forgot, /onboard** — no brute force 
-   protection. Fix: add `slowapi` to requirements, decorate those endpoints.
-
-3. **Exception details leaked to clients** — raw Python exceptions returned 
-   in chat and billing responses. Fix: log server-side with logging module, 
-   return generic message to client.
-
-4. **requirements-web.txt duplicates** — multiple packages listed twice with 
-   conflicting versions (openai, requests, etc). Fix: clean consolidated file.
-
-5. **Order deletion not scoped to consultant_id** — cascading delete in 
-   delete_customer_local() uses customer_id only for order deletion.
-   Fix: add consultant_id join to the order deletion queries.
+## Security Fixes — COMPLETED (2026-03-27)
+All five security fixes have been implemented and verified:
+1. ✅ XSS in render_page() — _esc() helper added, all user values escaped
+2. ✅ Rate limiting on /login, /forgot, /onboard — slowapi added
+3. ✅ Exception details leaked to clients — logging added, generic messages returned
+4. ✅ requirements-web.txt duplicates — cleaned and consolidated
+5. ✅ Order deletion scoped to consultant_id — consultant_id join added
 
 ### Lower Priority (after launch)
 - Consolidate `_row_get()` utility (reimplemented in 3 files — app.py, 

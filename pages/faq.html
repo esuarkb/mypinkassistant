@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FAQ — MyPinkAssistant</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #111111;
+            --muted: #5a5a5a;
+            --card: #f7f7f8;
+            --border: #e6e6e6;
+            --pink: #e91e63;
+            --pinkDark: #c2185b;
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 22px 18px;
+        }
+
+        .top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            letter-spacing: .2px;
+            text-decoration: none;
+            color: var(--text);
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--pink);
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            text-decoration: none;
+            color: var(--text);
+            font-weight: 600;
+            background: #fff;
+        }
+
+        .btnPrimary {
+            background: var(--pink);
+            border-color: var(--pink);
+            color: #fff;
+        }
+
+        .btnPrimary:hover {
+            background: var(--pinkDark);
+            border-color: var(--pinkDark);
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 36px 0 6px;
+        }
+
+        .intro {
+            color: var(--muted);
+            font-size: 16px;
+            margin: 0 0 32px;
+        }
+
+        .faq-item {
+            border-top: 1px solid var(--border);
+            padding: 20px 0;
+        }
+
+        .faq-item:last-of-type {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .faq-q {
+            font-weight: 700;
+            font-size: 16px;
+            margin: 0 0 8px;
+        }
+
+        .faq-a {
+            color: var(--muted);
+            font-size: 15px;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .cta {
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        .cta p {
+            color: var(--muted);
+            margin: 0 0 14px;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .footer a {
+            text-decoration: none;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footerLinks {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .footerCopy {
+            margin-top: 8px;
+        }
+    </style>
+    <link rel="icon" type="image/svg+xml" href="/web/icon.svg">
+    <link rel="apple-touch-icon" href="/web/apple-touch-icon.png">
+    <link rel="manifest" href="/web/site.webmanifest">
+    <meta name="theme-color" content="#e91e63">
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="top">
+            <a class="brand" href="/"><span class="dot"></span> MyPinkAssistant</a>
+            <div class="nav">
+                <a class="btn" href="/login">Log in</a>
+                <a class="btn btnPrimary" href="/splash.html">Get started</a>
+            </div>
+        </div>
+
+        <h1>Frequently Asked Questions</h1>
+        <p class="intro">Everything you need to know about MyPinkAssistant.</p>
+
+        <div class="faq-item">
+            <p class="faq-q">How do I look up a customer?</p>
+            <p class="faq-a">Just type their name in the chat — first name, last name, or both. MyPinkAssistant will
+                find them even if you misspell it.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">How do I add a new customer?</p>
+            <p class="faq-a">Type it like you'd text it — something like "New customer Jane Smith, 555-123-4567,
+                jane@email.com." The app will confirm the details before saving anything.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">How do I enter a customer order?</p>
+            <p class="faq-a">Tell the chat what your customer wants in plain language — no SKU numbers needed. The app
+                matches the products from the Mary Kay catalog and places the order in InTouch automatically after you
+                confirm.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">Do I need to manually enter my personal inventory orders into my inventory?</p>
+            <p class="faq-a">No — when you place a personal inventory order through MyPinkAssistant, those items are
+                added to your stock automatically. No manual entry needed.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">How does MyPinkAssistant keep my personal inventory organized?</p>
+            <p class="faq-a">When you enter a customer order, those items are automatically removed from your stock. You
+                can also update any item manually through chat, set par levels so MyPinkAssistant alerts you when
+                something is running low, and print a PDF of your current inventory at any time.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">How does the customer import work?</p>
+            <p class="faq-a">When you sign up and connect your InTouch account, your existing customers are pulled in
+                automatically, allowing you to quickly look up their info or enter their orders to MyCustomers.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">Can I look up order history?</p>
+            <p class="faq-a">Yes — just ask. Try "What did Sarah order last time?" or "Show me Jane's last 3 orders."
+                Order history is available for any customer orders entered through MyPinkAssistant.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">Does it work on my phone?</p>
+            <p class="faq-a">Yes, and you can make it an app! Open mypinkassistant.com in Safari (iPhone) or Chrome
+                (Android), tap the share or menu button, and choose "Add to Home Screen." It will appear on your home
+                screen and open like an app — no download required.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">Is my InTouch password safe?</p>
+            <p class="faq-a">Yes. Your InTouch credentials are encrypted before being stored and are never readable in
+                plain text — not even by us.</p>
+        </div>
+
+        <div class="faq-item">
+            <p class="faq-q">What do I need to sign up?</p>
+            <p class="faq-a">An active Mary Kay consultant account with InTouch credentials. That's it.</p>
+        </div>
+
+        <div class="cta">
+            <p>Ready to try it? First 7 days are free.</p>
+            <a class="btn btnPrimary" href="/splash.html">Get started — $5.99/month</a>
+        </div>
+
+        <footer class="footer">
+            <div class="footerLinks">
+                <a href="/">Home</a>
+                <a href="/legal">Legal</a>
+                <a href="/legal#privacy">Privacy</a>
+                <a href="/legal#terms">Terms</a>
+                <a href="/legal#support">Support</a>
+            </div>
+            <div class="footerCopy">© 2026 MyPinkAssistant</div>
+        </footer>
+    </div>
+</body>
+
+</html>

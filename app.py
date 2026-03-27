@@ -816,6 +816,11 @@ def legal_get(request: Request):
     return render_page("legal.html")
 
 
+@app.get("/faq", response_class=HTMLResponse)
+def faq_get(request: Request):
+    return render_page("faq.html")
+
+
 # -------------------------
 # Reset password
 # -------------------------
