@@ -260,7 +260,7 @@ def load_catalog(path: Path) -> List[dict]:
         reader = csv.DictReader(f)
         for row in reader:
             sku = (row.get("sku") or "").strip()
-            name = (row.get("product_name") or "").strip()
+            name = (row.get("product_name") or "").strip().replace("®", "")
             price = row.get("price")
 
             # ✅ NEW
@@ -273,8 +273,6 @@ def load_catalog(path: Path) -> List[dict]:
             if "sample" in name_l:
                 continue
             if "the look" in name_l or "booklet" in name_l or "look (" in name_l:
-                continue
-            if "pk./" in name_l or "pk/" in name_l:
                 continue
 
             try:
@@ -369,14 +367,22 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
     names = [c["search_string"] for c in candidates]
     results = process.extract(q, names, scorer=fuzz.WRatio, limit=limit)
 
+    q_words = {w for w in re.split(r"\s+", q) if len(w) >= 3}
+
     matches: List[dict] = []
     for name, score, idx in results:
         if score < min_score:
             continue
         c = candidates[idx]
+        name_l = c["product_name"].lower()
+        word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", name_l))
         matches.append(
-            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score}
+            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score, "_hits": word_hits}
         )
+
+    matches.sort(key=lambda m: (m["score"], m["_hits"]), reverse=True)
+    for m in matches:
+        del m["_hits"]
     return matches
 
 
