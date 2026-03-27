@@ -193,7 +193,7 @@
 
         {{ERROR_BLOCK}}
 
-        <form method="post" action="/onboard" id="onboardForm" onsubmit="return validateOnboardPasswords();">
+        <form method="post" action="/onboard" id="onboardForm">
 
             <input type="hidden" name="ref" value="{{REF}}">
 
@@ -247,103 +247,7 @@
         </form>
     </div>
 
-    <script>
-        function showPwError(msg, focusEl) {
-            const err = document.getElementById("pwErr");
-            const pw1 = document.getElementById("pw1");
-            const pw2 = document.getElementById("pw2");
-            err.textContent = msg;
-            err.style.display = "block";
-            pw1.classList.toggle("field-error", focusEl === pw1);
-            pw2.classList.toggle("field-error", focusEl === pw2);
-            if (focusEl) focusEl.focus();
-        }
-
-        function clearPwError() {
-            const err = document.getElementById("pwErr");
-            err.style.display = "none";
-            err.textContent = "";
-            document.getElementById("pw1").classList.remove("field-error");
-            document.getElementById("pw2").classList.remove("field-error");
-        }
-
-        function showEmailError(msg) {
-            const err = document.getElementById("emailErr");
-            const em2 = document.getElementById("email2");
-            err.textContent = msg;
-            err.style.display = "block";
-            em2.classList.add("field-error");
-            em2.focus();
-        }
-
-        function clearEmailError() {
-            const err = document.getElementById("emailErr");
-            err.style.display = "none";
-            err.textContent = "";
-            document.getElementById("email2").classList.remove("field-error");
-        }
-
-        document.getElementById("email2").addEventListener("blur", function () {
-            const em1 = document.getElementById("email");
-            if (!this.value || !em1.value) return;
-            if (this.value.toLowerCase() !== em1.value.toLowerCase()) {
-                showEmailError("Email addresses do not match.");
-            } else {
-                clearEmailError();
-            }
-        });
-
-        document.getElementById("email").addEventListener("input", function () {
-            const em2 = document.getElementById("email2");
-            if (em2.value && this.value.toLowerCase() === em2.value.toLowerCase()) clearEmailError();
-        });
-
-        // Real-time check when user leaves the confirm field
-        document.getElementById("pw2").addEventListener("blur", function () {
-            const pw1 = document.getElementById("pw1");
-            if (!this.value || !pw1.value) return;
-            if (this.value !== pw1.value) {
-                showPwError("Passwords do not match.", this);
-            } else {
-                clearPwError();
-            }
-        });
-
-        // Clear error if they go back and edit pw1
-        document.getElementById("pw1").addEventListener("input", function () {
-            const pw2 = document.getElementById("pw2");
-            if (pw2.value && this.value === pw2.value) clearPwError();
-        });
-
-        function validateOnboardPasswords() {
-            const pw1 = document.getElementById("pw1");
-            const pw2 = document.getElementById("pw2");
-
-            if (!pw1 || !pw2) return true;
-
-            clearPwError();
-            clearEmailError();
-
-            const em1 = document.getElementById("email");
-            const em2 = document.getElementById("email2");
-            if (em1 && em2 && em1.value.toLowerCase() !== em2.value.toLowerCase()) {
-                showEmailError("Email addresses do not match.");
-                return false;
-            }
-
-            if ((pw1.value || "").length < 8) {
-                showPwError("Password must be at least 8 characters.", pw1);
-                return false;
-            }
-
-            if (pw1.value !== pw2.value) {
-                showPwError("Passwords do not match.", pw2);
-                return false;
-            }
-
-            return true;
-        }
-    </script>
+    <script src="/web/onboard.js"></script>
 </body>
 
 </html>

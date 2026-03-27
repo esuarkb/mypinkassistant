@@ -703,6 +703,12 @@ def logout(request: Request):
 
 # -------------------------
 # Forgot password
+@app.get("/check-email")
+def check_email(email: str = Query("", alias="email")):
+    exists = bool(_find_consultant_by_email(email.strip().lower()))
+    return JSONResponse({"exists": exists})
+
+
 # -------------------------
 @app.get("/forgot", response_class=HTMLResponse)
 def forgot_get():
