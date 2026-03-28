@@ -2901,6 +2901,13 @@ class MKChatEngine:
                             "Please type `cancel` and re-enter the customer with the full name."
                         )
 
+                    phone_digits = normalize_phone(customer.get("Phone") or "")
+                    if phone_digits and len(phone_digits) != 10:
+                        return ChatReply(
+                            f"The phone number I have ({phone_digits}) isn't 10 digits — MyCustomers requires a 10-digit US number. "
+                            "Please type the correct number or say cancel."
+                        )
+
                     if not (street and city and state_val and postal):
                         return ChatReply(
                             "I need the full address before I can save this customer, as MyCustomers now requires it for all orders. "
