@@ -28,7 +28,13 @@ Include as much or as little as you want: name, address, email, phone, birthday.
 Example:
 New customer Jane Doe, 444 4th St, Anytown, Alabama 55555, jane@gmail.com, 5551231234, 12-25-02
 
-I’ll organize it and get it ready to send to MyCustomers.
+I’ll organize it and get it ready to send to MyCustomers automatically.
+
+LOOK UP A CUSTOMER
+Just type a name — I’ll find the closest match even if you misspell it.
+
+Example:
+What is Jane’s phone number? What did Jane order last time?
 
 ADD A CUSTOMER ORDER
 Add multiple items and quantities in one message — I’ll confirm everything before submitting.
@@ -36,8 +42,16 @@ Add multiple items and quantities in one message — I’ll confirm everything b
 Example:
 New order for Jane Doe; she wants a poppy lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
 
+PERSONAL INVENTORY
+Your inventory updates automatically when you place orders — no spreadsheets needed. You can check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
+
+Example:
+How many TimeWise sets do I have? Set my par for charcoal masks to 3.
+
 REFERRAL PROGRAM
 Give a month, get a month! Your referral link is in Settings at https://mypinkassistant.com
+
+Have questions? Check out our FAQ: https://mypinkassistant.com/faq
 
 We built MyPinkAssistant to save you time and simplify your business - and we’re honored you’re here.
 
@@ -79,24 +93,24 @@ support@mypinkassistant.com
         New customer Jane Doe, 444 4th St, Anytown, Alabama 55555, jane@gmail.com, 5551231234, 12-25-02
       </p>
       <p style="margin:0 0 16px 0;color:#111;">
-        I’ll organize what you enter and get it ready to send to <strong>MyCustomers</strong>.
+        I’ll organize what you enter and send it to <strong>MyCustomers</strong> automatically.
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📇 Look up Customer Information and Orders</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        You can instantly find customer details and past orders.
+        Instantly find customer details and past orders — just type a name.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
-        What is Jane Doe's address? What was Jane's last order?
+        What is Jane’s phone number? What did Jane order last time?
       </p>
       <p style="margin:0 0 16px 0;color:#111;">
-        Can't remember the exact name? No worries — just give me what you have and I’ll find the closest match.
+        Can’t remember the exact name? No worries — just give me what you have and I’ll find the closest match.
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🛍 Add a Customer Order</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        Add multiple items and quantities in one message — I’ll work with whatever you tell me.
+        Add multiple items and quantities in one message — no SKU numbers needed.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
@@ -106,11 +120,20 @@ support@mypinkassistant.com
         I’ll confirm each item before submitting, and you can always add/remove before final approval.
       </p>
 
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📦 Personal Inventory</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Your inventory updates automatically when you place orders — no spreadsheets needed. Check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Example:</strong><br>
+        How many TimeWise sets do I have? Set my par for charcoal masks to 3.
+      </p>
+
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🎁 Referral Program</h3>
       <p style="margin:0 0 16px 0;color:#111;">
         Give a month, get a month! Your personal referral link is in <strong>Settings</strong>.
       </p>
-      
+
       <p style="margin:0 0 18px 0;font-size:15px;color:#111;font-weight:500;">
         We built MyPinkAssistant to save you time and simplify your business — and we’re honored you’re here. 💗
       </p>
@@ -118,14 +141,12 @@ support@mypinkassistant.com
       <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:18px;"></div>
 
       <p style="margin:10px 0 0 0;font-size:14px;color:#5a5a5a;">
-        Need help, have a feature request, or just want to say hello?<br>
-        Email <a href="mailto:support@mypinkassistant.com" style="color:#e91e63;text-decoration:none;">
-          support@mypinkassistant.com
-        </a>
+        Have questions? Check out our <a href="https://mypinkassistant.com/faq" style="color:#e91e63;text-decoration:none;font-weight:bold;">FAQ</a> or email us at
+        <a href="mailto:support@mypinkassistant.com" style="color:#e91e63;text-decoration:none;">support@mypinkassistant.com</a>.
       </p>
 
       <p style="margin:10px 0 0 0;font-size:12px;color:#5a5a5a;">
-        Or open MyPinkAssistant anytime: <a href="https://mypinkassistant.com" style="color:#e91e63;text-decoration:none;">
+        Open MyPinkAssistant anytime: <a href="https://mypinkassistant.com" style="color:#e91e63;text-decoration:none;">
           mypinkassistant.com
         </a>
       </p>
