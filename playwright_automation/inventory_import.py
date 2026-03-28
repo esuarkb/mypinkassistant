@@ -191,22 +191,15 @@ def import_inventory_orders(
     skipped_orders = []
     sku_totals: Dict[str, int] = {}
 
-    # ── Seed mode: mark the single most recent eligible order as seen, no SKUs ──
+    # ── Seed mode: mark ALL orders in the window as seen, no SKUs imported ──
     if seed_only:
         for link in order_links:
             order_no = link["order_no"]
             if is_order_imported(consultant_id, order_no):
-                # Already seeded from a previous attempt — nothing to do
-                break
-            detail = scrape_order_detail(page, link["href"])
-            order_type = detail["order_type"].lower()
-            order_source = detail["order_source"].lower()
-            print(f"[Inventory][seed] order={order_no} type={detail['order_type']!r} source={detail['order_source']!r}")
-            if order_type == "cosmetic" and order_source != "cds":
-                mark_order_imported(consultant_id, order_no)
-                print(f"[Inventory][seed] watermark set at order {order_no}")
-                break
-            # Not eligible — keep scanning until we find one that is
+                print(f"[Inventory][seed] {order_no} already marked — skipping")
+                continue
+            mark_order_imported(consultant_id, order_no)
+            print(f"[Inventory][seed] watermark: {order_no}")
         return {"imported": [], "skipped": [], "sku_totals": {}, "seed_only": True}
 
     # ── Normal nightly import ──

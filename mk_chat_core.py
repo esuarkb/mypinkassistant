@@ -376,13 +376,15 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         c = candidates[idx]
         name_l = c["product_name"].lower()
         word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", name_l))
+        on_the_go = 1 if "the go set" in name_l else 0
         matches.append(
-            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score, "_hits": word_hits}
+            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score, "_hits": word_hits, "_otg": on_the_go}
         )
 
-    matches.sort(key=lambda m: (m["score"], m["_hits"]), reverse=True)
+    matches.sort(key=lambda m: (m["score"], m["_hits"], -m["_otg"]), reverse=True)
     for m in matches:
         del m["_hits"]
+        del m["_otg"]
     return matches
 
 
