@@ -2908,6 +2908,12 @@ class MKChatEngine:
                             "Please type the correct number or say cancel."
                         )
 
+                    email_val = (customer.get("Email") or "").strip()
+                    if email_val and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_val):
+                        return ChatReply(
+                            f"The email I have ({email_val}) doesn't look valid — please type the correct email or say cancel."
+                        )
+
                     if not (street and city and state_val and postal):
                         return ChatReply(
                             "I need the full address before I can save this customer, as MyCustomers now requires it for all orders. "
