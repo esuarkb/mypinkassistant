@@ -40,10 +40,10 @@ ADD A CUSTOMER ORDER
 Add multiple items and quantities in one message — I’ll confirm everything before submitting.
 
 Example:
-New order for Jane Doe; she wants a poppy lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
+New order for Jane Doe; she wants a red lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
 
 PERSONAL INVENTORY
-Your inventory updates automatically when you place orders — no spreadsheets needed. You can check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
+When you place an inventory order through MaryKayInTouch.com, your stock updates automatically — no manual entry needed. You can also check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
 
 Example:
 How many TimeWise sets do I have? Set my par for charcoal masks to 3.
@@ -122,7 +122,7 @@ support@mypinkassistant.com
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📦 Personal Inventory</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        Your inventory updates automatically when you place orders — no spreadsheets needed. Check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
+        When you place an inventory order through MaryKayInTouch.com, your stock updates automatically — no manual entry needed. You can also check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
