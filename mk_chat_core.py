@@ -2920,6 +2920,17 @@ class MKChatEngine:
                             f"The email I have ({email_val}) doesn't look valid — please type the correct email or say cancel."
                         )
 
+                    bday_val = (customer.get("Birthday") or "").strip()
+                    if bday_val:
+                        try:
+                            parsed_bday = datetime.datetime.strptime(bday_val, "%Y-%m-%d").date()
+                            if parsed_bday > datetime.date.today():
+                                return ChatReply(
+                                    f"The birthday I have ({birthday_display(bday_val)}) is in the future — please type the correct birthday or say cancel."
+                                )
+                        except ValueError:
+                            pass
+
                     if not (street and city and state_val and postal):
                         return ChatReply(
                             "I need the full address before I can save this customer, as MyCustomers now requires it for all orders. "

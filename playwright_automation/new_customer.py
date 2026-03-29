@@ -103,7 +103,7 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
 
 def create_customer_basic(page: Page, customer: dict) -> None:
     # Create a new customer with basic info (name, email, phone, birthday) and optionally address if provided.
-    
+
     # Click "New Customer" to start
     page.get_by_role("button", name="New Customer").click()
     page.get_by_role("textbox", name="First Name").wait_for(state="visible", timeout=30000)
