@@ -707,12 +707,16 @@ STATE_MAP = {
     "WV": "West Virginia",
     "WI": "Wisconsin",
     "WY": "Wyoming",
+    "DC": "Washington, D.C.",
 }
 
 def normalize_state(state: str) -> str:
     s = (state or "").strip()
     if not s:
         return ""
+    # Normalize DC variants
+    if s.upper() in ("DC", "D.C.", "WASHINGTON DC", "WASHINGTON D.C.", "DISTRICT OF COLUMBIA"):
+        return "Washington, D.C."
     if len(s) == 2:
         return STATE_MAP.get(s.upper(), s)
     return s

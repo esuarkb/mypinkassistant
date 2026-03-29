@@ -86,7 +86,7 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     dialog.get_by_role("button", name="Select an option").click()
     page.wait_for_timeout(700)
 
-    dialog.get_by_role("option", name=str(customer.get("State", ""))).click()
+    dialog.get_by_role("option", name=str(customer.get("State") or ""), exact=True).click()
     page.wait_for_timeout(700)
     
     # OLD Select state from dropdown
