@@ -324,7 +324,7 @@ def main():
                         if not claimed:
                             break
                         job_id, _job_type, _payload_json = claimed
-                        mark_job_failed(job_id, friendly)
+                        mark_job_failed(job_id, err, friendly)
 
                     print(f"[Worker] Login failed for consultant_id={cid}: {err}")
                     continue
