@@ -80,7 +80,7 @@ def run() -> None:
 
             # Queue IMPORT_CUSTOMERS if not already pending
             if not _has_pending_job(cur, cid, "IMPORT_CUSTOMERS"):
-                insert_job("IMPORT_CUSTOMERS", {}, consultant_id=cid)
+                insert_job("IMPORT_CUSTOMERS", {"source": "scheduler"}, consultant_id=cid)
                 queued_customers += 1
             else:
                 skipped_pending += 1
@@ -91,14 +91,14 @@ def run() -> None:
                     # Normal nightly import — only new orders
                     insert_job(
                         "IMPORT_INVENTORY_ORDERS",
-                        {"date_range": "days90"},
+                        {"date_range": "days90", "source": "scheduler"},
                         consultant_id=cid,
                     )
                 else:
                     # First run — set watermark only, no SKUs added
                     insert_job(
                         "IMPORT_INVENTORY_ORDERS",
-                        {"date_range": "lastTwelveMonths", "seed_only": True},
+                        {"date_range": "lastTwelveMonths", "seed_only": True, "source": "scheduler"},
                         consultant_id=cid,
                     )
                 queued_inventory += 1

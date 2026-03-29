@@ -172,3 +172,80 @@ support@mypinkassistant.com
     )
     if r.status_code >= 300:
         raise RuntimeError(f"Resend error {r.status_code}: {r.text}")
+
+
+def send_wrong_credentials_email(to_email: str, first_name: str = "") -> None:
+    api_key = (os.getenv("RESEND_API_KEY") or "").strip()
+    mail_from = (os.getenv("MAIL_FROM") or "").strip()
+    if not api_key or not mail_from:
+        raise RuntimeError("Missing RESEND_API_KEY or MAIL_FROM")
+
+    name = (first_name or "").strip() or "there"
+    safe_name = escape(name)
+
+    subject = "MyPinkAssistant — incorrect InTouch credentials"
+
+    text = f"""Hi {name}!
+
+It looks like you might have entered the wrong InTouch username or password. You can fix this at mypinkassistant.com/settings — just re-enter the correct credentials, hit Save, and head back to chat to get started.
+
+Let me know if you have any other issues!
+
+-Brian
+support@mypinkassistant.com
+"""
+
+    html = f"""<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#ffffff;">
+    <div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
+      <p style="margin:0 0 12px 0;">Hi {safe_name}!</p>
+
+      <p style="margin:0 0 16px 0;">
+        It looks like you might have entered the wrong InTouch username or password. You can fix this in just a few steps:
+      </p>
+
+      <ol style="margin:0 0 16px 0;padding-left:20px;color:#111;">
+        <li style="margin-bottom:6px;">Tap the button below to open Settings</li>
+        <li style="margin-bottom:6px;">Re-enter your correct InTouch username and password</li>
+        <li style="margin-bottom:6px;">Hit <strong>Save</strong>, then head back to chat to get started</li>
+      </ol>
+
+      <p style="margin:0 0 22px 0;">
+        <a href="https://mypinkassistant.com/settings"
+           style="display:inline-block;background:#e91e63;color:#ffffff;text-decoration:none;
+                  padding:12px 16px;border-radius:10px;font-weight:bold;">
+          Go to Settings
+        </a>
+      </p>
+
+      <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:10px;"></div>
+
+      <p style="margin:10px 0 0 0;font-size:14px;color:#5a5a5a;">
+        Thank you for using MyPinkAssistant! We are here if you have any questions, suggestions, or issues! —
+        <a href="mailto:support@mypinkassistant.com" style="color:#e91e63;text-decoration:none;">support@mypinkassistant.com</a>
+      </p>
+
+      <p style="margin:6px 0 0 0;font-size:13px;color:#5a5a5a;">-Brian</p>
+    </div>
+  </body>
+</html>
+"""
+
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": mail_from,
+            "to": [to_email],
+            "subject": subject,
+            "text": text,
+            "html": html,
+        },
+        timeout=15,
+    )
+    if r.status_code >= 300:
+        raise RuntimeError(f"Resend error {r.status_code}: {r.text}")

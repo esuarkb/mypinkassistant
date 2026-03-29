@@ -1624,13 +1624,16 @@ def admin_diagnostics(request: Request):
     )
     running = cur.fetchall()
 
-    # 4) DONE jobs (last 15) — exclude background sync jobs, those are noise
+    # 4) DONE jobs (last 15) — exclude nightly scheduler syncs, show onboard/manual ones
     cur.execute(
         """
         SELECT id, consultant_id, type, status_msg, finished_at
         FROM jobs
         WHERE status='done'
-          AND type NOT IN ('IMPORT_CUSTOMERS', 'IMPORT_INVENTORY_ORDERS')
+          AND NOT (
+            type IN ('IMPORT_CUSTOMERS', 'IMPORT_INVENTORY_ORDERS')
+            AND CAST(payload AS TEXT) LIKE '%scheduler%'
+          )
         ORDER BY id DESC
         LIMIT 15
         """

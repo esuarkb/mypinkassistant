@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from db import connect, is_postgres
 
+from emailer import send_wrong_credentials_email
 from playwright_automation.customer_export import download_customer_export
 from customer_import_parser import parse_customer_export_xlsx
 from customer_import_store import import_customers_from_rows
@@ -185,6 +186,29 @@ def _record_login_failure(cid: int) -> None:
         conn.close()
 
 
+def _is_intouch_outage() -> bool:
+    """Return True if 2+ different consultants have failed login in the last 30 minutes."""
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        PH_L = "%s" if is_postgres() else "?"
+        cur.execute(
+            f"""
+            SELECT COUNT(DISTINCT id) FROM consultants
+            WHERE last_login_failure_at >= {PH_L}
+              AND consecutive_login_failures >= 1
+            """,
+            (cutoff,),
+        )
+        row = cur.fetchone()
+        count = row[0] if row else 0
+        return count >= 2
+    finally:
+        conn.close()
+
+
 def _reset_login_failures(cid: int) -> None:
     conn = connect()
     try:
@@ -265,6 +289,34 @@ def main():
                         f"Consultant ID: {cid}\n"
                         f"Error: {err}"
                     )
+
+                    # Send credentials email on first failure only, unless InTouch is down
+                    try:
+                        failures_now = None
+                        conn_tmp = connect()
+                        try:
+                            cur_tmp = conn_tmp.cursor()
+                            PH_TMP = "%s" if is_postgres() else "?"
+                            cur_tmp.execute(
+                                f"SELECT email, first_name, consecutive_login_failures FROM consultants WHERE id = {PH_TMP}",
+                                (cid,),
+                            )
+                            row_tmp = cur_tmp.fetchone()
+                        finally:
+                            conn_tmp.close()
+
+                        if row_tmp:
+                            c_email = row_tmp[0] if not isinstance(row_tmp, dict) else row_tmp["email"]
+                            c_first = row_tmp[1] if not isinstance(row_tmp, dict) else row_tmp["first_name"]
+                            failures_now = int((row_tmp[2] if not isinstance(row_tmp, dict) else row_tmp["consecutive_login_failures"]) or 0)
+
+                            if failures_now == 1 and not _is_intouch_outage():
+                                send_wrong_credentials_email(c_email, c_first or "")
+                                print(f"[Worker] Credentials email sent to consultant_id={cid}")
+                            elif _is_intouch_outage():
+                                print(f"[Worker] InTouch outage detected — suppressing credentials email for consultant_id={cid}")
+                    except Exception as email_err:
+                        print(f"[Worker] Failed to send credentials email: {email_err}")
 
                     while True:
                         refresh_consultant_lock(cid)
