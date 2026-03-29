@@ -1632,7 +1632,7 @@ def admin_diagnostics(request: Request):
         WHERE status='done'
           AND NOT (
             type IN ('IMPORT_CUSTOMERS', 'IMPORT_INVENTORY_ORDERS')
-            AND CAST(payload AS TEXT) LIKE '%scheduler%'
+            AND payload_json LIKE '%scheduler%'
           )
         ORDER BY id DESC
         LIMIT 15
