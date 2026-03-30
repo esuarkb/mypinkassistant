@@ -147,6 +147,34 @@ def main(username: str, password: str) -> None:
             except PlaywrightTimeoutError:
                 print("  WARNING: State dropdown not found inside dialog.")
 
+        # --- Step 8: Close address dialog and open Subscriptions edit ---
+        print("\nStep 8: Closing address dialog and opening Subscriptions edit...")
+        try:
+            dialog = page.get_by_role("dialog")
+            cancel_btn = dialog.get_by_role("button", name="Cancel")
+            cancel_btn.wait_for(state="visible", timeout=3000)
+            cancel_btn.click()
+            page.wait_for_timeout(1000)
+            print("  Address dialog closed via Cancel button.")
+        except PlaywrightTimeoutError:
+            try:
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(1000)
+                print("  Address dialog closed via Escape.")
+            except Exception:
+                pass
+
+        try:
+            sub_edit_btn = page.locator("c-cmt-my-customer-details-subscriptions").get_by_role("button")
+            sub_edit_btn.wait_for(state="visible", timeout=10000)
+            print("  Subscriptions edit button found.")
+            sub_edit_btn.click()
+            page.wait_for_timeout(1500)
+            dump(page, "8_subscriptions_dialog")
+            print("  Subscriptions dialog dumped.")
+        except PlaywrightTimeoutError:
+            print("  ERROR: Subscriptions edit button not found.")
+
         # --- Cleanup: Cancel without saving ---
         print("\nCleaning up — looking for Cancel or close button...")
         try:
@@ -155,16 +183,7 @@ def main(username: str, password: str) -> None:
         except Exception:
             pass
 
-        # Delete the test customer
-        print("Attempting to delete test customer...")
-        try:
-            page.get_by_role("button", name="Delete").click()
-            page.wait_for_timeout(500)
-            page.get_by_role("button", name="Delete").click()  # confirm
-            page.wait_for_timeout(1000)
-            print("  Test customer deleted.")
-        except Exception:
-            print("  Could not auto-delete — please manually delete 'Test Deleteme' from MyCustomers.")
+        print("  Please manually delete 'Test Deleteme' from MyCustomers.")
 
         print("\nAll done. Check dump_nc_*.html files.")
         browser.close()
