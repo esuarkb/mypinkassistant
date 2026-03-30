@@ -352,6 +352,7 @@ def main():
                         # NEW_CUSTOMER
                         # -------------------------
                         if job_type == "NEW_CUSTOMER":
+                            page.goto("https://apps.marykayintouch.com/customer-list")
                             create_customer_basic(page, payload)
 
                             full_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
