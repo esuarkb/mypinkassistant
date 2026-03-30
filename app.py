@@ -26,7 +26,7 @@ from slowapi.errors import RateLimitExceeded
 
 from db import connect, is_postgres
 from db import get_system_setting, set_system_setting
-from mk_chat_core import MKChatEngine, save_session_state, insert_job
+from mk_chat_core import MKChatEngine, save_session_state, insert_job, maybe_queue_initial_customer_import
 from billing_routes import router as billing_router
 
 from auth_core import (
@@ -1211,6 +1211,16 @@ def settings_post(
 
     pw_to_save = None if (intouch_password or "").strip() == "" else intouch_password
     update_settings(cid, language, intouch_username, pw_to_save)
+
+    # If they saved InTouch creds, reset login failures and try to queue initial import
+    if intouch_username.strip() and pw_to_save:
+        with tx() as (conn, cur):
+            cur.execute(
+                f"UPDATE consultants SET consecutive_login_failures = 0, last_login_failure_at = NULL WHERE id = {PH}",
+                (cid,),
+            )
+            maybe_queue_initial_customer_import(cur, consultant_id=cid)
+
     return RedirectResponse("/settings", status_code=302)
 
 @app.get("/inventory/print", response_class=HTMLResponse)
@@ -1532,6 +1542,7 @@ def admin_diagnostics(request: Request):
     ui = get_ui_emergency()
     em_checked = "checked" if ui["enabled"] else ""
     em_msg = ui["message"].replace('"', "&quot;")
+    queue_paused = (get_system_setting("queue_paused", "0") or "0").strip() == "1"
 
     CT = ZoneInfo("America/Chicago")
 
@@ -1777,6 +1788,10 @@ def admin_diagnostics(request: Request):
     <form method="post" action="/admin/clear-failed">
         <button type="submit" class="adminBtn">Clear Failed Jobs</button>
     </form>
+
+    <form method="post" action="/admin/pause-queue">
+        <button type="submit" class="adminBtn {'danger' if queue_paused else ''}">{'Unpause Queue ▶️' if queue_paused else 'Pause Queue ⏸'}</button>
+    </form>
     </div>
     
     <h2 style="margin:20px 0 6px;font-size:16px">Emergency UI Banner</h2>
@@ -1942,6 +1957,18 @@ def admin_clear_failed(request: Request):
         conn.close()
 
     return RedirectResponse("/admin", status_code=302)
+
+@app.post("/admin/pause-queue")
+def admin_pause_queue(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    current = (get_system_setting("queue_paused", "0") or "0").strip()
+    set_system_setting("queue_paused", "0" if current == "1" else "1")
+    return RedirectResponse("/admin", status_code=302)
+
 
 @app.post("/admin/ui-emergency")
 def admin_ui_emergency_post(

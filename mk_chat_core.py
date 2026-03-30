@@ -221,15 +221,6 @@ def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
         consultant_id=consultant_id,
     )
 
-    # Seed the inventory watermark: marks the consultant's most recent
-    # Cosmetic order as "seen" without importing SKUs, so nightly imports
-    # only pick up orders placed after signup.
-    insert_job(
-        "IMPORT_INVENTORY_ORDERS",
-        {"date_range": "lastTwelveMonths", "seed_only": True},
-        consultant_id=consultant_id,
-    )
-
     cur.execute(
         f"""
         UPDATE consultants

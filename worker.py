@@ -11,7 +11,7 @@ load_dotenv()
 
 from datetime import datetime, timezone
 from pathlib import Path
-from db import connect, is_postgres
+from db import connect, is_postgres, get_system_setting
 
 from emailer import send_wrong_credentials_email
 from playwright_automation.customer_export import download_customer_export
@@ -233,6 +233,15 @@ def main():
 
     with sync_playwright() as pw:
         while True:
+            try:
+                paused = (get_system_setting("queue_paused", "0") or "0").strip() == "1"
+            except Exception:
+                paused = False
+            if paused:
+                print("[Worker] Queue paused — sleeping")
+                time.sleep(5)
+                continue
+
             cid = claim_next_consultant()
             if not cid:
                 time.sleep(1)
