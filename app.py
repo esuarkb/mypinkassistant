@@ -1216,7 +1216,11 @@ def settings_post(
     if intouch_username.strip() and pw_to_save:
         with tx() as (conn, cur):
             cur.execute(
-                f"UPDATE consultants SET consecutive_login_failures = 0, last_login_failure_at = NULL WHERE id = {PH}",
+                f"""UPDATE consultants
+                    SET consecutive_login_failures = 0,
+                        last_login_failure_at = NULL,
+                        initial_customer_import_queued = 0
+                    WHERE id = {PH}""",
                 (cid,),
             )
             maybe_queue_initial_customer_import(cur, consultant_id=cid)
