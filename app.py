@@ -1739,7 +1739,7 @@ def admin_diagnostics(request: Request):
     table{{width:100%;border-collapse:collapse;margin-top:12px}}
     th,td{{border-bottom:1px solid #eee;padding:8px 6px;font-size:13px;vertical-align:top}}
     th{{text-align:left;color:#666;font-weight:700}}
-    code{{font-size:12px;word-break:break-all;}}
+    code{{font-size:12px;}}
     .pill{{display:inline-block;padding:2px 8px;border-radius:999px;background:#f1f1f1;font-size:12px;color:#555}}
     .row{{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}}
     a{{color:#e91e63;text-decoration:none;font-weight:700}}
