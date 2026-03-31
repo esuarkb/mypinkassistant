@@ -1934,9 +1934,15 @@ class MKChatEngine:
         last_customer = (state.get("last_ref_customer_name") or "").strip() or None
         pending = state.get("pending")
         msg = (message or "").strip()
+
+        # Replace standalone 8-digit SKU numbers with product names before any parsing
+        import re as _re
+        _sku_map = {str(item["sku"]).strip(): item["product_name"] for item in catalog if item.get("sku")}
+        msg = _re.sub(r'\b(\d{8})\b', lambda m: _sku_map.get(m.group(1), m.group(1)), msg)
+
         intent_result = parse_intent(msg, state)
         print("[INTENT]", intent_result.intent, intent_result.confidence, intent_result.raw_text)
-        
+
         # Intent override: some "recent_orders" phrasings are actually NEW order entry
         if intent_result.intent == "recent_orders" and _looks_like_new_order_entry(msg):
             intent_result.intent = "new_order"
