@@ -14,7 +14,7 @@ cur = conn.cursor()
 cur.execute("""
     SELECT c.id, c.first_name, c.last_name, c.email,
            COUNT(i.id) AS sku_count,
-           COALESCE(SUM(i.quantity), 0) AS total_qty
+           COALESCE(SUM(i.qty_on_hand), 0) AS total_qty
     FROM consultants c
     LEFT JOIN inventory i ON i.consultant_id = c.id
     WHERE c.billing_status IN ('active', 'trialing')
