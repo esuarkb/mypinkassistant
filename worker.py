@@ -23,6 +23,7 @@ PB_CONTACT_ID = os.getenv("PB_CONTACT_ID", "").strip()
 
 ALERT_COOLDOWN_SECONDS = int(os.getenv("ALERT_COOLDOWN_SECONDS", "60"))
 _last_alert_time = 0.0
+_last_outage_alert_time = 0.0
 
 
 def send_failure_text(message: str) -> None:
@@ -294,12 +295,20 @@ def main():
 
                     _record_login_failure(cid)
 
-                    send_failure_text(
-                        f"🚨 MyPinkAssistant Worker Failure\n\n"
-                        f"Type: Login Failure\n"
-                        f"Consultant ID: {cid}\n"
-                        f"Error: {err}"
-                    )
+                    if _is_intouch_outage():
+                        global _last_outage_alert_time
+                        if time.time() - _last_outage_alert_time > 3600:
+                            send_failure_text(
+                                f"🚨 InTouch outage detected — multiple consultants failing login. Suppressing individual alerts."
+                            )
+                            _last_outage_alert_time = time.time()
+                    else:
+                        send_failure_text(
+                            f"🚨 MyPinkAssistant Worker Failure\n\n"
+                            f"Type: Login Failure\n"
+                            f"Consultant ID: {cid}\n"
+                            f"Error: {err}"
+                        )
 
                     # Send credentials email on first failure only, unless InTouch is down
                     try:
