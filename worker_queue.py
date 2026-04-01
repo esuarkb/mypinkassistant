@@ -10,7 +10,7 @@ _last_retention_run = 0.0
 from db import connect, is_postgres, paramify
 
 # How long a consultant lock is valid (seconds) in case a worker crashes.
-LOCK_TTL_SECONDS = 15 * 60  # 15 minutes
+LOCK_TTL_SECONDS = 5 * 60  # 5 minutes
 
 WORKER_ID = os.environ.get("MK_WORKER_ID") or f"worker-{uuid.uuid4().hex[:8]}"
 

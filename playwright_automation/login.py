@@ -55,6 +55,19 @@ def login_intouch(page: Page, username: str, password: str) -> None:
             "Please update your credentials in Settings and try again."
         )
 
+    # If post-login redirect landed on Salesforce "Finish Logging In" page, click through.
+    try:
+        finish_btn = page.get_by_role("button", name="Finish Logging In")
+        finish_btn.wait_for(state="visible", timeout=5000)
+        finish_btn.click()
+        page.wait_for_timeout(2000)
+    except PlaywrightTimeoutError:
+        pass
+
+    # If still not on the customer list, navigate back directly — session cookie is set.
+    if MYCUSTOMERS_URL not in page.url:
+        page.goto(MYCUSTOMERS_URL, wait_until="domcontentloaded")
+
     _wait_for_mycustomers_ready(page, timeout_ms=45000)
     
     # Basic sanity check: we should no longer be on the login page
