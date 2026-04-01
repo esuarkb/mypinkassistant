@@ -267,6 +267,7 @@ def main():
                     args=[
                         "--no-sandbox",
                         "--disable-dev-shm-usage",
+                        "--disable-blink-features=AutomationControlled",
                     ],
                 )
                 context = browser.new_context(
@@ -275,6 +276,7 @@ def main():
                     locale="en-US",
                     timezone_id="America/Chicago",
                 )
+                context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
                 page = context.new_page()
                 
 
@@ -319,9 +321,12 @@ def main():
                             c_first = row_tmp[1] if not isinstance(row_tmp, dict) else row_tmp["first_name"]
                             failures_now = int((row_tmp[2] if not isinstance(row_tmp, dict) else row_tmp["consecutive_login_failures"]) or 0)
 
-                            if failures_now == 1 and not _is_intouch_outage():
+                            is_bad_creds = "invalid username or password" in err.lower()
+                            if failures_now == 1 and is_bad_creds and not _is_intouch_outage():
                                 send_wrong_credentials_email(c_email, c_first or "")
                                 print(f"[Worker] Credentials email sent to consultant_id={cid}")
+                            elif not is_bad_creds:
+                                print(f"[Worker] Login failed but not a credentials error — suppressing credentials email for consultant_id={cid}")
                             elif _is_intouch_outage():
                                 print(f"[Worker] InTouch outage detected — suppressing credentials email for consultant_id={cid}")
                     except Exception as email_err:
