@@ -21,10 +21,10 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 AUDIENCE_ID = sys.argv[1]
-API_KEY = (os.getenv("RESEND_API_KEY") or "").strip()
+API_KEY = (os.getenv("RESEND_API_KEY_FULL") or "").strip()
 
 if not API_KEY:
-    print("Missing RESEND_API_KEY in environment")
+    print("Missing RESEND_API_KEY_FULL in environment")
     sys.exit(1)
 
 conn = connect()

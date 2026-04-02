@@ -474,6 +474,9 @@ def main():
                                 "Please verify your InTouch credentials in Settings and try again."
                             )
 
+                        elif "Customer not found" in raw_err:
+                            err_text = raw_err
+
                         elif "Change Delivery Status Icon" in raw_err or "Add to Bag" in raw_err:
                             err_text = (
                                 "MyPinkAssistant could not submit this order because Mary Kay needs the customer's "

@@ -127,7 +127,7 @@ def import_customers_from_rows(cur, consultant_id: int, rows: List[Dict[str, Any
                     city = {PH},
                     state = {PH},
                     postal_code = {PH},
-                    birthday = {PH},
+                    birthday = COALESCE({PH}, birthday),
                     is_order_ready = {PH},
                     missing_order_fields = {PH},
                     source_status = 'active',
