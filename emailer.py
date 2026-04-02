@@ -51,6 +51,9 @@ How many TimeWise sets do I have? Set my par for charcoal masks to 3.
 REFERRAL PROGRAM
 Give a month, get a month! Your referral link is in Settings at https://mypinkassistant.com
 
+FOLLOW US ON FACEBOOK
+Tips, new features, and updates: https://www.facebook.com/mypinkassistant1
+
 Have questions? Check out our FAQ: https://mypinkassistant.com/faq
 
 We built MyPinkAssistant to save you time and simplify your business - and we’re honored you’re here.
@@ -132,6 +135,12 @@ support@mypinkassistant.com
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🎁 Referral Program</h3>
       <p style="margin:0 0 16px 0;color:#111;">
         Give a month, get a month! Your personal referral link is in <strong>Settings</strong>.
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📣 Follow Us on Facebook</h3>
+      <p style="margin:0 0 16px 0;color:#111;">
+        Follow our Facebook page for tips, new features, and updates:
+        <a href="https://www.facebook.com/mypinkassistant1" style="color:#e91e63;text-decoration:none;font-weight:bold;">facebook.com/mypinkassistant1</a>
       </p>
 
       <p style="margin:0 0 18px 0;font-size:15px;color:#111;font-weight:500;">
