@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from db import connect, is_postgres, get_system_setting
 
-from emailer import send_wrong_credentials_email
+from emailer import send_wrong_credentials_email, send_login_failure_alert_email
 from playwright_automation.customer_export import download_customer_export
 from customer_import_parser import parse_customer_export_xlsx
 from customer_import_store import import_customers_from_rows
@@ -303,12 +303,12 @@ def main():
                             )
                             _last_outage_alert_time = time.time()
                     else:
-                        send_failure_text(
-                            f"🚨 MyPinkAssistant Worker Failure\n\n"
-                            f"Type: Login Failure\n"
-                            f"Consultant ID: {cid}\n"
-                            f"Error: {err}"
-                        )
+                        try:
+                            admin_email = (os.getenv("MK_ADMIN_EMAILS") or "").split(",")[0].strip()
+                            if admin_email:
+                                send_login_failure_alert_email(admin_email, cid, err)
+                        except Exception as alert_err:
+                            print(f"[Worker] Failed to send login failure email: {alert_err}")
 
                     # Send credentials email on first failure only, unless InTouch is down
                     try:
