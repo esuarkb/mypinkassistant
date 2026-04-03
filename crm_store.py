@@ -841,7 +841,8 @@ def format_customers_by_product(customers: list[dict], search_term: str) -> str:
             if pdate:
                 try:
                     from datetime import datetime
-                    pdate = datetime.strptime(pdate[:10], "%Y-%m-%d").strftime("%-m/%-d/%y")
+                    dt = datetime.strptime(pdate[:10], "%Y-%m-%d")
+                    pdate = f"{dt.month}/{dt.day}/{str(dt.year)[2:]}"
                 except Exception:
                     pass
             product_parts.append(f"{pname} ({pdate})" if pdate else pname)

@@ -1193,6 +1193,7 @@ def settings_get(request: Request):
         # new:
         "{{REFERRAL_CODE}}": _esc(code),
         "{{REFERRAL_LINK}}": _esc(referral_link),
+        "{{LAST_CUSTOMER_IMPORT}}": "",
     }
     return render_page("settings.html", replaces=replaces)
 
