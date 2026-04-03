@@ -778,6 +778,78 @@ def count_orders_for_customer(cur, customer_id: int) -> int:
     return int(cur.fetchone()[0] or 0)
 
 
+def find_customers_by_product(cur, consultant_id: int, terms: list[str]) -> list[dict]:
+    """
+    Returns distinct customers who have ordered products matching ALL given terms.
+    terms: list of lowercase words, e.g. ["matte", "foundation"]
+    Each term is matched with LIKE '%term%' against order_items.product_name.
+    """
+    is_sqlite = _is_sqlite_cursor(cur)
+    PH = "?" if is_sqlite else "%s"
+
+    if not terms:
+        return []
+
+    # Build WHERE clause: one LIKE condition per term, ANDed together
+    like_clauses = " AND ".join(f"LOWER(oi.product_name) LIKE {PH}" for _ in terms)
+    like_values = [f"%{t}%" for t in terms]
+
+    query = f"""
+        SELECT c.id, c.first_name, c.last_name, oi.product_name, o.order_date
+        FROM customers c
+        JOIN orders o ON o.customer_id = c.id AND o.consultant_id = {PH}
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE c.consultant_id = {PH}
+          AND (c.source_status IS NULL OR c.source_status <> 'removed')
+          AND {like_clauses}
+        ORDER BY c.last_name, c.first_name, o.order_date DESC
+    """
+    cur.execute(query, [consultant_id, consultant_id] + like_values)
+    rows = _rows_to_dicts(cur)
+
+    # Group by customer, collecting distinct products with their most recent date
+    from collections import OrderedDict
+    grouped = OrderedDict()
+    for row in rows:
+        cid = row["id"]
+        if cid not in grouped:
+            grouped[cid] = {
+                "first_name": row["first_name"],
+                "last_name": row["last_name"],
+                "products": [],
+            }
+        product_name = (row.get("product_name") or "").strip()
+        order_date = (row.get("order_date") or "").strip() if row.get("order_date") else ""
+        # Only keep first occurrence of each product (already sorted date DESC = most recent first)
+        if not any(p["name"] == product_name for p in grouped[cid]["products"]):
+            grouped[cid]["products"].append({"name": product_name, "date": order_date})
+
+    return list(grouped.values())
+
+
+def format_customers_by_product(customers: list[dict], search_term: str) -> str:
+    if not customers:
+        return f"No customers found who have ordered {search_term}."
+    header = f"{len(customers)} customer{'s' if len(customers) != 1 else ''} found:"
+    lines = []
+    for c in customers:
+        name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+        product_parts = []
+        for p in (c.get("products") or []):
+            pname = p.get("name") or ""
+            pdate = p.get("date") or ""
+            if pdate:
+                try:
+                    from datetime import datetime
+                    pdate = datetime.strptime(pdate[:10], "%Y-%m-%d").strftime("%-m/%-d/%y")
+                except Exception:
+                    pass
+            product_parts.append(f"{pname} ({pdate})" if pdate else pname)
+        product_str = ", ".join(product_parts)
+        lines.append(f"• {name} — {product_str}" if product_str else f"• {name}")
+    return header + "\n" + "\n".join(lines)
+
+
 def delete_customer_local(cur, consultant_id: int, customer_id: int, delete_orders: bool = True) -> int:
     """
     Deletes a customer from local CRM only (scoped to consultant_id).

@@ -863,6 +863,22 @@ async def stripe_webhook(request: Request):
                 billing_status="canceled",
                 cancel_at_period_end=0,
             )
+
+            # Clear inventory watermark so if they resubscribe, they're treated as new
+            consultant_id = _get_consultant_id_by_customer_id(customer_id)
+            if consultant_id:
+                conn = connect()
+                try:
+                    cur = conn.cursor()
+                    cur.execute(
+                        f"DELETE FROM inventory_intouch_imports WHERE consultant_id = {PH}",
+                        (consultant_id,),
+                    )
+                    conn.commit()
+                    print(f"[Webhook] Cleared inventory watermark for consultant_id={consultant_id}")
+                finally:
+                    conn.close()
+
             print(f"[Webhook] OK: {etype} (cust={customer_id}, updated_rows={updated})")
 
         elif etype == "invoice.paid":

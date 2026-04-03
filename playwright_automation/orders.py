@@ -30,9 +30,10 @@ def open_customer_list(page: Page) -> None:
 # -------------------------
 # Order helpers
 # -------------------------
-def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
+def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment_method: str = "inventory") -> None:
     """
-    Opens a customer and starts a new order from My Inventory.
+    Opens a customer and starts a new order.
+    fulfillment_method: "inventory" (default) or "cds"
     Safely handles duplicate customer names by selecting the first match.
     """
     full_name = f"{first} {last}"
@@ -62,8 +63,11 @@ def open_customer_and_start_order(page: Page, first: str, last: str) -> None:
     page.get_by_role("button", name="Add Order").click()
     page.wait_for_timeout(3000)
 
-    #Select from my Inventory instead of CDS
-    page.get_by_text("My Inventory").click()
+    # Select fulfillment method
+    if fulfillment_method == "cds":
+        page.get_by_text("Customer Delivery Service").click()
+    else:
+        page.get_by_text("My Inventory").click()
     page.wait_for_timeout(1200)
 
 
@@ -102,33 +106,38 @@ def add_sku_to_bag(page: Page, sku: str) -> None:
 #    page.get_by_role("button", name="Yes, Confirm").click()
 #    ensure_orders_ready(page)
 
-def finalize_order(page: Page) -> None:
-    # save and review order, then confirm delivery status change
-    # waits for the Save and Review button to be enabled before clicking
+def finalize_order(page: Page, leave_pending: bool = False) -> None:
+    # save and review order
     page.get_by_role("button", name="Save and Review").click()
 
+    if leave_pending:
+        # Leave order in pending state — do not change delivery status
+        page.wait_for_timeout(1500)
+        return
+
+    # Process order: confirm delivery status change
     page.get_by_role("button", name="Change Delivery Status Icon").click()
-
-    # page.get_by_role("button", name="Yes, Confirm").wait_for(timeout=3000)
     page.get_by_role("button", name="Yes, Confirm").click()
-
     ensure_orders_ready(page)
 
 def process_order_batch(page: Page, rows: list[dict]) -> None:
     """
     Processes a batch of order rows for ONE customer.
     Each row must contain: First Name, Last Name, SKU
+    Optional: fulfillment_method ("inventory" or "cds"), leave_pending (bool)
     """
     if not rows:
         return
 
     first = rows[0]["First Name"].strip()
     last = rows[0]["Last Name"].strip()
+    fulfillment_method = rows[0].get("fulfillment_method", "inventory")
+    leave_pending = bool(rows[0].get("leave_pending", False))
 
-    open_customer_and_start_order(page, first, last)
+    open_customer_and_start_order(page, first, last, fulfillment_method)
 
     for row in rows:
         sku = row["SKU"].strip()
         add_sku_to_bag(page, sku)
 
-    finalize_order(page)
+    finalize_order(page, leave_pending=leave_pending)

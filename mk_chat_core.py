@@ -557,6 +557,8 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         '  "order": {\n'
         '    "customer_first": "",\n'
         '    "customer_last": "",\n'
+        '    "fulfillment_method": "inventory",\n'
+        '    "leave_pending": false,\n'
         '    "items": [{"text": "", "qty": 1}]\n'
         "  }\n"
         "}\n\n"
@@ -568,6 +570,10 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         "- Do NOT treat numbers that are part of a product name as quantity (examples: '4-in-1 cleanser', '2-in-1', '3D').\n"
         "- Only set qty > 1 if the user explicitly indicates quantity (two, x2, qty 2, three of them, etc.). Otherwise qty must be 1.\n"
         "- If the user says a quantity change like 'make that 2' or 'change it to 3', do NOT output a new order. That will be handled separately.\n"
+        '- Set fulfillment_method to "cds" if the user mentions CDS or customer delivery. Default is "inventory".\n'
+        '- Do NOT include "cds", "pending", "customer delivery" as items in the items list — these are order flags only.\n'
+        '- Set leave_pending to true if the user says "pending order", "save as pending", or "leave it pending". Default is false.\n'
+        '- A CDS order always implies leave_pending true.\n'
     )
 
     last_ctx = ""
@@ -1094,7 +1100,8 @@ def _split_order_for_prefix(message: str) -> tuple[str, str]:
         "and",
         "ultimate", "mascara", "bronze", "beach", "foundation", "primer",
         "cc", "cream", "brush", "charcoal", "repair", "set", "lipstick",
-        "satin", "hands", "lips", "ordered", "wants", "needs"
+        "satin", "hands", "lips", "ordered", "wants", "needs",
+        "cds", "pending", "customer delivery", "customer delivery service",
     }
 
     name_parts = []
@@ -1111,7 +1118,9 @@ def _split_order_for_prefix(message: str) -> tuple[str, str]:
             break
 
     customer_hint = " ".join(name_parts).strip()
-    item_hint = " ".join(words[item_start_idx:]).strip()
+    item_hint = " ".join(
+        w for w in words[item_start_idx:] if w.lower().strip(",") not in stop_words
+    ).strip()
 
     return customer_hint, item_hint
 
@@ -2340,6 +2349,44 @@ class MKChatEngine:
                 return ChatReply(format_leaderboard(rows, title))
         
         # -------------------------
+        # Customer search by product
+        # -------------------------
+        if not pending:
+            import re as _re2
+            _product_term = None
+
+            # Pattern 1: "[product] customers" — e.g. "repair customers", "show my matte foundation customers"
+            _m1 = _re2.search(r"(?:show\s+)?(?:my\s+)?(.+?)\s+customers\b", lowered)
+            # Pattern 2: "customers who [use/ordered/buy/have] [product]" — e.g. "customers who use repair"
+            _m2 = _re2.search(r"\bcustomers\s+who\s+(?:use|ordered|buy|have|bought|order)\s+(.+)", lowered)
+
+            _prefix_filler = {"who", "are", "my", "show", "list", "which", "what", "any",
+                              "the", "a", "all", "give", "me", "find", "get", "have", "do",
+                              "i", "is", "of", "new", "other", "please"}
+
+            if _m2:
+                _product_term = _m2.group(1).strip()
+            elif _m1:
+                _candidate = _m1.group(1).strip()
+                # Strip leading filler words (e.g. "who are my" from "who are my repair customers")
+                _candidate_words = [w for w in _candidate.split() if w not in _prefix_filler]
+                _candidate = " ".join(_candidate_words).strip()
+                if _candidate:
+                    _product_term = _candidate
+
+            if _product_term:
+                from crm_store import find_customers_by_product, format_customers_by_product
+                from db import tx
+                _filler = {"on", "the", "a", "an", "use", "using", "with", "for", "in", "of"}
+                terms = [w for w in _product_term.lower().split() if len(w) > 1 and w not in _filler]
+                if terms:
+                    with tx() as (conn, cur):
+                        results = find_customers_by_product(cur, consultant_id=consultant_id, terms=terms)
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(format_customers_by_product(results, _product_term))
+
+        # -------------------------
         # CRM quick lookup: recent orders lookup (no LLM call)
         # -------------------------
         if not pending:
@@ -3017,6 +3064,12 @@ class MKChatEngine:
                     return ChatReply(propose_top(top, current_qty=q_new))
 
                 if yes(msg):
+                    if not (top.get("sku") or "").strip():
+                        # No match found — can't confirm a blank item
+                        return ChatReply(
+                            "I couldn't find that product in the catalog. "
+                            "Try rewording it (brand, line, or shade helps), or say `cancel` to start over."
+                        )
                     order["lines"][line_index]["chosen"] = top
                     state["pending"] = None
                     return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
@@ -3058,6 +3111,24 @@ class MKChatEngine:
                 }
                 save_session_state(state, session_id=sid)
                 return ChatReply(render_top5(new_matches, show_scores=show_scores))
+
+            if kind == "awaiting_order_items":
+                cust_first = pending["customer_first"]
+                cust_last = pending["customer_last"]
+                fulfillment_method = pending.get("fulfillment_method", "inventory")
+                leave_pending = bool(pending.get("leave_pending", False))
+                resolved_customer_id = pending.get("customer_id")
+                items = [{"text": msg.strip(), "qty": 1}]
+                order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                order_draft["customer_id"] = resolved_customer_id
+                if not order_draft["lines"]:
+                    return ChatReply("I didn't catch any items — try again with the product names.")
+                for line in order_draft["lines"]:
+                    picked, _m = auto_pick_match(catalog, line["text"])
+                    if picked:
+                        line["chosen"] = picked
+                state["pending"] = None
+                return self._continue_resolving_and_reply(state, order_draft, consultant_id, sid, catalog, ui)
 
             if kind == "order_confirm":
                 order = pending["order"]
@@ -3124,27 +3195,36 @@ class MKChatEngine:
                         )
 
                     # 2) Queue jobs for worker/playwright
+                    _fulfillment = order.get("fulfillment_method", "inventory")
+                    _leave_pending = bool(order.get("leave_pending", False))
                     for line in order["lines"]:
                         sku = line["chosen"]["sku"]
                         qty = int(line["qty"])
                         for _ in range(max(1, qty)):
                             insert_job(
                                 "NEW_ORDER_ROW",
-                                {"First Name": cust_first, "Last Name": cust_last, "SKU": sku},
+                                {
+                                    "First Name": cust_first,
+                                    "Last Name": cust_last,
+                                    "SKU": sku,
+                                    "fulfillment_method": _fulfillment,
+                                    "leave_pending": _leave_pending,
+                                },
                                 consultant_id=consultant_id,
                             )
 
-                    # 3) Decrement personal inventory for each ordered item
-                    with tx() as (conn, cur):
-                        for line in order["lines"]:
-                            sku = line["chosen"]["sku"]
-                            qty = int(line["qty"])
-                            upsert_inventory_quantity(
-                                cur,
-                                consultant_id=consultant_id,
-                                sku=sku,
-                                qty_delta=-qty,
-                            )
+                    # 3) Decrement personal inventory for each ordered item (skip for CDS)
+                    if _fulfillment != "cds":
+                        with tx() as (conn, cur):
+                            for line in order["lines"]:
+                                sku = line["chosen"]["sku"]
+                                qty = int(line["qty"])
+                                upsert_inventory_quantity(
+                                    cur,
+                                    consultant_id=consultant_id,
+                                    sku=sku,
+                                    qty_delta=-qty,
+                                )
 
                     state["pending"] = None
                     state["last_ref_customer_name"] = f"{cust_first} {cust_last}".strip()
@@ -3180,6 +3260,24 @@ class MKChatEngine:
             order = parsed.get("order") or {}
             cust_first = (order.get("customer_first") or "").strip()
             cust_last = (order.get("customer_last") or "").strip()
+            fulfillment_method = "cds" if (order.get("fulfillment_method") or "").lower() == "cds" else "inventory"
+            leave_pending = bool(order.get("leave_pending")) or fulfillment_method == "cds"
+
+            # Promote flag words that the AI mistakenly put in the items list
+            _FLAG_WORDS = {"cds", "pending", "customer delivery", "customer delivery service"}
+            cleaned_items = []
+            for it in (order.get("items") or []):
+                item_text = (it.get("text") or "").strip().lower()
+                if item_text in _FLAG_WORDS:
+                    if item_text in ("cds", "customer delivery", "customer delivery service"):
+                        fulfillment_method = "cds"
+                        leave_pending = True
+                    elif item_text == "pending":
+                        leave_pending = True
+                else:
+                    cleaned_items.append(it)
+            if cleaned_items != (order.get("items") or []):
+                order["items"] = cleaned_items
 
             explicit_customer_hint = ""
             explicit_item_hint = ""
@@ -3285,7 +3383,7 @@ class MKChatEngine:
                     if not items:
                         return ChatReply(ui["need_items"])
 
-                    order_draft = self._make_order_draft(cust_first, cust_last, items)
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
 
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3308,10 +3406,19 @@ class MKChatEngine:
             customer_line = f"{cust_first} {cust_last}".strip()
 
             if not items:
+                state["pending"] = {
+                    "kind": "awaiting_order_items",
+                    "customer_first": cust_first,
+                    "customer_last": cust_last,
+                    "customer_id": resolved_customer_id,
+                    "fulfillment_method": fulfillment_method,
+                    "leave_pending": leave_pending,
+                }
+                save_session_state(state, session_id=sid)
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
                 return ChatReply(f"{prefix}\n{ui['need_items']}")
 
-            order_draft = self._make_order_draft(cust_first, cust_last, items)
+            order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
             order_draft["customer_id"] = resolved_customer_id
             if not order_draft["lines"]:
                 return ChatReply("I didn't catch any items — try again with the product names.")
@@ -3451,7 +3558,7 @@ class MKChatEngine:
         )
 
 
-    def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict]) -> dict:
+    def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict], fulfillment_method: str = "inventory", leave_pending: bool = False) -> dict:
         lines = []
         for it in items:
             text = (it.get("text") or "").strip()
@@ -3462,7 +3569,12 @@ class MKChatEngine:
             if qty < 1:
                 qty = 1
             lines.append({"text": text, "qty": qty, "chosen": None})
-        return {"customer": {"First Name": cust_first, "Last Name": cust_last}, "lines": lines}
+        return {
+            "customer": {"First Name": cust_first, "Last Name": cust_last},
+            "lines": lines,
+            "fulfillment_method": fulfillment_method,
+            "leave_pending": leave_pending,
+        }
 
     def _aggregate_lines_for_preview(self, order: dict) -> List[dict]:
         """
@@ -3560,7 +3672,16 @@ class MKChatEngine:
 
     def _format_order_confirm(self, order: dict, ui: dict) -> str:
         cust = order["customer"]
-        out = [ui["order_intro"].format(first=cust["First Name"], last=cust["Last Name"])]
+        fulfillment = order.get("fulfillment_method", "inventory")
+        leave_pending = bool(order.get("leave_pending", False))
+        if fulfillment == "cds":
+            label = " (CDS)"
+        elif leave_pending:
+            label = " (PENDING)"
+        else:
+            label = ""
+        intro = ui["order_intro"].format(first=cust["First Name"], last=cust["Last Name"])
+        out = [intro.replace(":", f"{label}:")]
 
         total = 0.0
         any_prices = False
@@ -3579,6 +3700,9 @@ class MKChatEngine:
 
         if any_prices:
             out.append(ui["estimated_total"].format(total=f"${total:.2f}"))
+
+        if fulfillment == "cds":
+            out.append("\nReminder: you will need to finalize this CDS order on InTouch by navigating to Orders and completing the order.")
 
         out.append(ui["order_confirm_q"])
         return "\n".join(out)

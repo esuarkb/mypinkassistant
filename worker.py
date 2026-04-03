@@ -398,8 +398,16 @@ def main():
                             process_order_batch(page, rows)
 
                             customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
+                            fulfillment = payload.get("fulfillment_method", "inventory")
+                            leave_pending = bool(payload.get("leave_pending", False))
+                            if fulfillment == "cds":
+                                done_msg = f"CDS order for {customer_name} saved — pending in MyCustomers. ✅"
+                            elif leave_pending:
+                                done_msg = f"Order for {customer_name} saved as pending. ✅"
+                            else:
+                                done_msg = f"Order for {customer_name} complete! ✅"
                             for jid in job_ids:
-                                mark_job_done(jid, f"Order for {customer_name} complete! ✅")
+                                mark_job_done(jid, done_msg)
 
                         # -------------------------
                         # IMPORT_CUSTOMERS
