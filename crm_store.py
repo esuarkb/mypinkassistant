@@ -819,7 +819,8 @@ def find_customers_by_product(cur, consultant_id: int, terms: list[str]) -> list
                 "products": [],
             }
         product_name = (row.get("product_name") or "").strip()
-        order_date = (row.get("order_date") or "").strip() if row.get("order_date") else ""
+        _od = row.get("order_date")
+        order_date = str(_od)[:10] if _od else ""
         # Only keep first occurrence of each product (already sorted date DESC = most recent first)
         if not any(p["name"] == product_name for p in grouped[cid]["products"]):
             grouped[cid]["products"].append({"name": product_name, "date": order_date})
