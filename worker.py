@@ -258,6 +258,25 @@ def main():
                 username = (username or "").strip()
                 password = (password or "").strip()
 
+                # Fetch consultant name/email for alerts
+                _c_info_conn = connect()
+                try:
+                    _c_info_cur = _c_info_conn.cursor()
+                    _c_info_cur.execute(
+                        f"SELECT first_name, last_name, email FROM consultants WHERE id = {PH_W}",
+                        (cid,),
+                    )
+                    _c_info_row = _c_info_cur.fetchone()
+                finally:
+                    _c_info_conn.close()
+                if _c_info_row:
+                    _c_first = (_c_info_row[0] if not isinstance(_c_info_row, dict) else _c_info_row["first_name"]) or ""
+                    _c_last = (_c_info_row[1] if not isinstance(_c_info_row, dict) else _c_info_row["last_name"]) or ""
+                    _c_email = (_c_info_row[2] if not isinstance(_c_info_row, dict) else _c_info_row["email"]) or ""
+                else:
+                    _c_first = _c_last = _c_email = ""
+                _c_name = f"{_c_first} {_c_last}".strip() or f"ID {cid}"
+
                 # Headless only if explicitly set to true
                 HEADLESS = os.getenv("HEADLESS", "").lower() == "true"
                 print("HEADLESS env:", os.getenv("HEADLESS"))
@@ -306,7 +325,7 @@ def main():
                         try:
                             admin_email = (os.getenv("MK_ADMIN_EMAILS") or "").split(",")[0].strip()
                             if admin_email:
-                                send_login_failure_alert_email(admin_email, cid, err)
+                                send_login_failure_alert_email(admin_email, cid, _c_name, _c_email, err)
                         except Exception as alert_err:
                             print(f"[Worker] Failed to send login failure email: {alert_err}")
 
@@ -318,7 +337,7 @@ def main():
                             cur_tmp = conn_tmp.cursor()
                             PH_TMP = "%s" if is_postgres() else "?"
                             cur_tmp.execute(
-                                f"SELECT email, first_name, consecutive_login_failures FROM consultants WHERE id = {PH_TMP}",
+                                f"SELECT consecutive_login_failures FROM consultants WHERE id = {PH_TMP}",
                                 (cid,),
                             )
                             row_tmp = cur_tmp.fetchone()
@@ -326,13 +345,11 @@ def main():
                             conn_tmp.close()
 
                         if row_tmp:
-                            c_email = row_tmp[0] if not isinstance(row_tmp, dict) else row_tmp["email"]
-                            c_first = row_tmp[1] if not isinstance(row_tmp, dict) else row_tmp["first_name"]
-                            failures_now = int((row_tmp[2] if not isinstance(row_tmp, dict) else row_tmp["consecutive_login_failures"]) or 0)
+                            failures_now = int((row_tmp[0] if not isinstance(row_tmp, dict) else row_tmp["consecutive_login_failures"]) or 0)
 
                             is_bad_creds = "invalid username or password" in err.lower()
                             if failures_now == 1 and is_bad_creds and not _is_intouch_outage():
-                                send_wrong_credentials_email(c_email, c_first or "")
+                                send_wrong_credentials_email(_c_email, _c_first or "")
                                 print(f"[Worker] Credentials email sent to consultant_id={cid}")
                             elif not is_bad_creds:
                                 print(f"[Worker] Login failed but not a credentials error — suppressing credentials email for consultant_id={cid}")
@@ -501,7 +518,7 @@ def main():
                         send_failure_text(
                             f"🚨 MyPinkAssistant Worker Failure\n\n"
                             f"Type: Job Failure\n"
-                            f"Consultant ID: {cid}\n"
+                            f"Consultant: {_c_name} ({_c_email}) ID {cid}\n"
                             f"Job ID: {job_id}\n"
                             f"Job Type: {job_type}\n"
                             f"Customer: {customer_name or 'Unknown'}\n"

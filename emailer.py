@@ -260,7 +260,7 @@ support@mypinkassistant.com
         raise RuntimeError(f"Resend error {r.status_code}: {r.text}")
 
 
-def send_login_failure_alert_email(to_email: str, consultant_id: int, error: str) -> None:
+def send_login_failure_alert_email(to_email: str, consultant_id: int, consultant_name: str, consultant_email: str, error: str) -> None:
     api_key = (os.getenv("RESEND_API_KEY") or "").strip()
     mail_from = (os.getenv("MAIL_FROM") or "").strip()
     if not api_key or not mail_from:
@@ -274,7 +274,7 @@ def send_login_failure_alert_email(to_email: str, consultant_id: int, error: str
   <body style="margin:0;padding:0;background:#ffffff;">
     <div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
       <h2 style="margin:0 0 12px 0;font-size:18px;">&#128680; InTouch Login Failure</h2>
-      <p style="margin:0 0 8px 0;"><strong>Consultant ID:</strong> {consultant_id}</p>
+      <p style="margin:0 0 8px 0;"><strong>Consultant:</strong> {escape(consultant_name)} ({escape(consultant_email)}) ID {consultant_id}</p>
       <p style="margin:0 0 8px 0;"><strong>Error:</strong></p>
       <p style="margin:0 0 16px 0;padding:10px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:8px;font-size:13px;">{safe_error}</p>
       <p style="margin:0;font-size:13px;color:#5a5a5a;">This will auto-resolve once the consultant updates their credentials in Settings.</p>
@@ -282,7 +282,7 @@ def send_login_failure_alert_email(to_email: str, consultant_id: int, error: str
   </body>
 </html>"""
 
-    text = f"InTouch Login Failure\n\nConsultant ID: {consultant_id}\nError: {error}\n\nThis will auto-resolve once the consultant updates their credentials."
+    text = f"InTouch Login Failure\n\nConsultant: {consultant_name} ({consultant_email}) ID {consultant_id}\nError: {error}\n\nThis will auto-resolve once the consultant updates their credentials."
 
     r = requests.post(
         "https://api.resend.com/emails",
