@@ -2804,6 +2804,21 @@ class MKChatEngine:
                             if picked:
                                 line["chosen"] = picked
 
+                    # If no items were provided yet, ask for them now
+                    if not order_draft.get("lines"):
+                        cust_first = (c.get("first_name") or "").strip()
+                        cust_last = (c.get("last_name") or "").strip()
+                        state["pending"] = {
+                            "kind": "awaiting_order_items",
+                            "customer_first": cust_first,
+                            "customer_last": cust_last,
+                            "customer_id": customer_id,
+                            "fulfillment_method": order_draft.get("fulfillment_method", "inventory"),
+                            "leave_pending": bool(order_draft.get("leave_pending", False)),
+                        }
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(ui["got_it_ordering_for"].format(name=f"{cust_first} {cust_last}".strip()) + "\n" + ui["need_items"])
+
                     nxt = self._next_unresolved_index(order_draft)
                     if nxt is not None:
                         top, matches, _ = self._start_line_resolution(catalog, order_draft, nxt)
@@ -3429,8 +3444,6 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
-                    if not items:
-                        return ChatReply(render_customer_picker(matches[:3]) + "\n\n" + ui["need_items"])
                     return ChatReply(render_customer_picker(matches[:3]))
 
             elif len(matches) > 1:
@@ -3452,8 +3465,6 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
-                    if not items:
-                        return ChatReply(render_customer_picker(matches[:3]) + "\n\n" + ui["need_items"])
                     return ChatReply(render_customer_picker(matches[:3]))
 
                 else:
@@ -3469,8 +3480,6 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
-                    if not items:
-                        return ChatReply(render_customer_picker(matches[:3]) + "\n\n" + ui["need_items"])
                     return ChatReply(render_customer_picker(matches[:3]))
 
             items = order.get("items") or []
