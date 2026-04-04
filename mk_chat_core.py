@@ -3421,8 +3421,6 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    if not items:
-                        return ChatReply(ui["need_items"])
                     order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3431,6 +3429,8 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
+                    if not items:
+                        return ChatReply(render_customer_picker(matches[:3]) + "\n\n" + ui["need_items"])
                     return ChatReply(render_customer_picker(matches[:3]))
 
             elif len(matches) > 1:
@@ -3444,8 +3444,6 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    if not items:
-                        return ChatReply(ui["need_items"])
                     order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3454,6 +3452,8 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
+                    if not items:
+                        return ChatReply(render_customer_picker(matches[:3]) + "\n\n" + ui["need_items"])
                     return ChatReply(render_customer_picker(matches[:3]))
 
                 else:
@@ -3461,8 +3461,6 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    if not items:
-                        return ChatReply(ui["need_items"])
                     order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3471,6 +3469,8 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
+                    if not items:
+                        return ChatReply(render_customer_picker(matches[:3]) + "\n\n" + ui["need_items"])
                     return ChatReply(render_customer_picker(matches[:3]))
 
             items = order.get("items") or []
