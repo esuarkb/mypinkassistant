@@ -1114,6 +1114,11 @@ def app_page(request: Request):
 
     html = html.replace("{{ADMIN_BUTTON}}", admin_btn)
 
+    _lang = (c.get("language") or "en").strip().lower()
+    _chat_placeholder = "Escribe un cliente o pedido…" if _lang == "es" else "Enter a customer or order…"
+    html = html.replace("{{CHAT_PLACEHOLDER}}", _chat_placeholder)
+    html = html.replace("{{CHAT_LANG}}", _lang)
+
     ui = get_ui_emergency()
     if ui["enabled"] and ui["message"]:
         banner = f"""
@@ -1227,6 +1232,19 @@ def settings_post(
             maybe_queue_initial_customer_import(cur, consultant_id=cid)
 
     return RedirectResponse("/settings", status_code=302)
+
+@app.post("/settings/language")
+def settings_language(request: Request, language: str = Form("en")):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return JSONResponse({"ok": False}, status_code=401)
+    language = language.strip().lower()
+    if language not in ("en", "es"):
+        language = "en"
+    with tx() as (conn, cur):
+        cur.execute(f"UPDATE consultants SET language = {PH} WHERE id = {PH}", (language, cid))
+    return JSONResponse({"ok": True})
 
 @app.get("/inventory/print", response_class=HTMLResponse)
 def inventory_print(request: Request):

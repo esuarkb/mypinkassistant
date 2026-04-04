@@ -1003,6 +1003,37 @@ UI_EN = {
     "cust_reject": "No problem — Send the corrected customer info and I'll try again.",
     "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
     "order_reject": "Okay — paste the corrected order and I'll rebuild the summary.",
+
+    "no_catalog_match": "I couldn't match that product in the catalog. Try rewording it.",
+    "no_customer_found": "I couldn't find {name} in your saved customers.",
+    "no_customer_found_yet": "I couldn't find {name} in your saved customers yet.",
+    "no_customer_id": "I couldn't find a customer with ID {cid}.",
+    "customer_spent": "{name} has spent ${total} ({period}).",
+    "who_is_customer": "Who is the customer? Try: \u201cshow Jane\u2019s info\u201d.",
+    "multiple_matches": "Multiple matches: Reply with 1, 2, or 3 — or type cancel.",
+    "lost_order_draft": "I lost track of that order draft. Please paste the order again.",
+    "what_to_do_customer": "Okay — what would you like to do with that customer?",
+    "inventory_added": "Added {qty} of {product} to your inventory. You currently have {current} on hand.",
+    "inventory_removed": "Removed {qty} of {product} from your inventory. You currently have {current} on hand.",
+    "inventory_set": "Set {product} inventory to {qty}. You currently have {current} on hand.",
+    "inventory_report": "Here's your inventory report: {link}",
+    "reply_yes_no": "Reply yes or no.",
+    "pick_match_5": "Pick the best match with 1-5, or type cancel.",
+    "low_stock_set": "Got it — I'll flag {product} when you have fewer than {qty} on hand.",
+    "confirming_customer": "You're confirming a new customer. Reply yes or no, or type cancel to retry.",
+    "deleted_customer": "✅ Deleted {name} from MyPinkAssistant (MyCustomers was not changed).",
+    "delete_failed": "I couldn't delete that customer (maybe it was already removed).",
+    "delete_confirm_prompt": "To confirm deletion, type DELETE. Or type `cancel`.",
+    "no_items_caught": "I didn't catch any items — try again with the product names.",
+    "add_hint": "Tell me what to add, e.g. `add satin hands`.",
+    "remove_hint": "Tell me what to remove, e.g. `remove 1` or `remove charcoal`.",
+    "remove_not_found": "I couldn't find that item to remove. Try `remove 1` or part of the name.",
+    "confirming_order": "You're confirming an order. Reply yes or no, or say add or remove to edit the order.",
+    "reply_yes_no_adjust": "Reply yes or no — or say add or remove to adjust the order.",
+    "trouble": "I'm having a little trouble right now, please try again in a moment.",
+    "customer_not_in_mc": "I'm not finding {name} in MyCustomers. If you are sure they are already in MyCustomers, you can go to Settings and tap Import MyCustomers to sync the latest. Otherwise, we will need to add {name} as a new customer first.",
+    "propose_top": "I think you mean: {line}. Is that right? (yes/no)",
+    "render_top5_intro": "Got it \u2014 select the best match (reply {range}), or type different search words and I'll search again:",
 }
 
 UI_ES = {
@@ -1018,7 +1049,7 @@ UI_ES = {
     "none": "(ninguno)",
     "cust_confirm_q": "¿Se ve correcto? (sí/no)",
     # keep add/edit commands in English so your parser stays simple
-    "cust_edit_hint": "You can also say 'add...' or 'edit...'",
+    "cust_edit_hint": "Si necesitas agregar o editar, escribe la información correcta en el chat.",
 
     "order_intro": "Perfecto — tengo este pedido para {first} {last}:",
     "estimated_total": "Total estimado (precio): {total}",
@@ -1029,7 +1060,7 @@ UI_ES = {
     "got_it_ordering_for": "Listo — pedido para {name}.",
     "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
     "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
-    "order_adjust_hint": "You can also say `add ...` or `remove ...`.",
+    "order_adjust_hint": "También puedes decir `add ...` o `remove ...`.",
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Error al interpretar: {err}",
@@ -1038,6 +1069,37 @@ UI_ES = {
     "cust_reject": "No hay problema — envíame la info corregida del cliente y lo intento de nuevo.",
     "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",
     "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
+
+    "no_catalog_match": "No pude encontrar ese producto en el catálogo. Intenta describirlo de otra forma.",
+    "no_customer_found": "No encontré a {name} en tus clientes guardados.",
+    "no_customer_found_yet": "Aún no encontré a {name} en tus clientes guardados.",
+    "no_customer_id": "No encontré un cliente con ID {cid}.",
+    "customer_spent": "{name} ha gastado ${total} ({period}).",
+    "who_is_customer": "¿Quién es el cliente? Prueba: \u201cinfo de Jane\u201d.",
+    "multiple_matches": "Varias coincidencias: responde con 1, 2 o 3 — o escribe cancelar.",
+    "lost_order_draft": "Perdí el borrador del pedido. Por favor, vuelve a pegar el pedido.",
+    "what_to_do_customer": "Listo — ¿qué quieres hacer con ese cliente?",
+    "inventory_added": "Agregué {qty} de {product} a tu inventario. Actualmente tienes {current} disponibles.",
+    "inventory_removed": "Eliminé {qty} de {product} de tu inventario. Actualmente tienes {current} disponibles.",
+    "inventory_set": "Actualicé el inventario de {product} a {qty}. Actualmente tienes {current} disponibles.",
+    "inventory_report": "Aquí está tu reporte de inventario: {link}",
+    "reply_yes_no": "Responde sí o no.",
+    "pick_match_5": "Elige la mejor opción del 1 al 5, o escribe cancelar.",
+    "low_stock_set": "Listo — te avisaré sobre {product} cuando tengas menos de {qty} disponibles.",
+    "confirming_customer": "Estás confirmando un nuevo cliente. Responde sí o no, o escribe cancelar para reintentar.",
+    "deleted_customer": "✅ {name} eliminado de MyPinkAssistant (MyCustomers no fue modificado).",
+    "delete_failed": "No pude eliminar ese cliente (quizás ya fue removido).",
+    "delete_confirm_prompt": "Para confirmar la eliminación, escribe ELIMINAR. O escribe `cancelar`.",
+    "no_items_caught": "No detecté ningún artículo — intenta de nuevo con los nombres de los productos.",
+    "add_hint": "Dime qué agregar, por ejemplo: `add satin hands`.",
+    "remove_hint": "Dime qué eliminar, por ejemplo: `remove 1` o `remove charcoal`.",
+    "remove_not_found": "No encontré ese artículo para eliminarlo. Prueba `remove 1` o parte del nombre.",
+    "confirming_order": "Estás confirmando un pedido. Responde sí o no, o di agregar o eliminar para editarlo.",
+    "reply_yes_no_adjust": "Responde sí o no — o di agregar o eliminar para ajustar el pedido.",
+    "trouble": "Estoy teniendo un pequeño problema ahora mismo, por favor intenta de nuevo en un momento.",
+    "customer_not_in_mc": "No encuentro a {name} en MyCustomers. Si estás segura de que ya está en MyCustomers, ve a Configuración y toca Importar MyCustomers para sincronizar. De lo contrario, necesitaremos agregar a {name} como nueva cliente primero.",
+    "propose_top": "Creo que te refieres a: {line}. ¿Es correcto? (sí/no)",
+    "render_top5_intro": "Listo \u2014 elige la mejor opción (responde {range}), o escribe otras palabras de búsqueda:",
 }
 
 def parse_add_remove(message: str):
@@ -1124,7 +1186,9 @@ def _split_order_for_prefix(message: str) -> tuple[str, str]:
 
     return customer_hint, item_hint
 
-def propose_top(top: dict, current_qty: int) -> str:
+def propose_top(top: dict, current_qty: int, ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
     q = int(current_qty or 1)
     qtxt = f" x{q}" if q != 1 else ""
 
@@ -1136,13 +1200,15 @@ def propose_top(top: dict, current_qty: int) -> str:
 
     line = " ".join(parts) + qtxt
 
-    return f"I think you mean: {line}. Is that right? (yes/no)"
+    return ui["propose_top"].format(line=line)
 
-def render_top5(matches: List[dict], show_scores: bool = False) -> str:
+def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
     top = matches[:TOP5]
     n = len(top)
     reply_range = "1" if n == 1 else f"1-{n}"
-    lines = [f"Got it \u2014 select the best match (reply {reply_range}), or type different search words and I'll search again:"]
+    lines = [ui["render_top5_intro"].format(range=reply_range)]
     for i, m in enumerate(top, start=1):
         name = m["product_name"]
         price = fmt_price(m.get("price"))
@@ -1990,7 +2056,7 @@ class MKChatEngine:
             import os
             base_url = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
             link = f"{base_url}/inventory/print" if base_url else "/inventory/print"
-            return ChatReply(f"Here's your inventory report: {link}")
+            return ChatReply(ui["inventory_report"].format(link=link))
 
         # -------------------------
         # Inventory: quantity count query (early — before intent routing so
@@ -2002,7 +2068,7 @@ class MKChatEngine:
                 picked, matches = auto_pick_match(catalog, product_text)
                 chosen = picked or (matches[0] if matches else None)
                 if not chosen:
-                    return ChatReply("I couldn't match that product in the catalog. Try rewording it.")
+                    return ChatReply(ui["no_catalog_match"])
                 sku = (chosen.get("sku") or "").strip()
                 with tx() as (conn, cur):
                     row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
@@ -2042,7 +2108,7 @@ class MKChatEngine:
                 else:
                     matches = best_matches(catalog, product_text, limit=MATCH_LIMIT)
                     if not matches:
-                        return ChatReply("I couldn't match that product in the catalog. Try rewording it.")
+                        return ChatReply(ui["no_catalog_match"])
                     top = matches[0]
                     if int(top.get("score") or 0) >= 100:
                         chosen = top
@@ -2055,7 +2121,7 @@ class MKChatEngine:
                             "matches": matches[:MATCH_LIMIT],
                         }
                         save_session_state(state, session_id=sid)
-                        return ChatReply(propose_top(top, current_qty=1))
+                        return ChatReply(propose_top(top, current_qty=1, ui=ui))
 
                 sku = (chosen.get("sku") or "").strip()
                 product_name = (chosen.get("product_name") or "").strip()
@@ -2066,9 +2132,7 @@ class MKChatEngine:
                         sku=sku,
                         low_stock_threshold=int(qty),
                     )
-                return ChatReply(
-                    f"Got it — I'll flag {product_name} when you have fewer than {qty} on hand."
-                )
+                return ChatReply(ui["low_stock_set"].format(product=product_name, qty=qty))
 
         # -------------------------
         # Inventory commands
@@ -2084,7 +2148,7 @@ class MKChatEngine:
                 else:
                     matches = best_matches(catalog, product_text, limit=MATCH_LIMIT)
                     if not matches:
-                        return ChatReply("I couldn't match that product in the catalog. Try rewording it.")
+                        return ChatReply(ui["no_catalog_match"])
 
                     top = matches[0]
                     if int(top.get("score") or 0) >= 100:
@@ -2099,7 +2163,7 @@ class MKChatEngine:
                             "matches": matches[:MATCH_LIMIT],
                         }
                         save_session_state(state, session_id=sid)
-                        return ChatReply(propose_top(top, current_qty=1))
+                        return ChatReply(propose_top(top, current_qty=1, ui=ui))
 
                 sku = (chosen.get("sku") or "").strip()
                 product_name = (chosen.get("product_name") or "").strip()
@@ -2162,7 +2226,7 @@ class MKChatEngine:
                     chosen = picked or (matches[0] if matches else None)
 
                     if not chosen:
-                        return ChatReply("I couldn't match that product in the catalog. Try rewording it.")
+                        return ChatReply(ui["no_catalog_match"])
 
                     sku = (chosen.get("sku") or "").strip()
 
@@ -2214,7 +2278,7 @@ class MKChatEngine:
                         cid = int(m_id.group(2))
                         c = get_customer_by_id(cur, consultant_id=consultant_id, customer_id=cid)
                         if not c:
-                            return ChatReply(f"I couldn't find a customer with ID {cid}.")
+                            return ChatReply(ui["no_customer_id"].format(cid=cid))
                         order_count = count_orders_for_customer(cur, customer_id=cid)
 
                         state["pending"] = {
@@ -2245,7 +2309,7 @@ class MKChatEngine:
                     )
 
                 if len(matches) == 0:
-                    return ChatReply(f"I couldn't find {target} in your saved customers.")
+                    return ChatReply(ui["no_customer_found"].format(name=target))
 
                 if len(matches) == 1:
                     c = matches[0]
@@ -2443,7 +2507,7 @@ class MKChatEngine:
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                         if len(matches) == 0:
-                            return ChatReply(f"I couldn't find {guess} in your saved customers yet.")
+                            return ChatReply(ui["no_customer_found_yet"].format(name=guess))
 
                         if len(matches) > 1:
                             top = matches[:3]
@@ -2511,7 +2575,7 @@ class MKChatEngine:
                     matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                     if len(matches) == 0:
-                        return ChatReply(f"I couldn't find {guess} in your saved customers yet.")
+                        return ChatReply(ui["no_customer_found_yet"].format(name=guess))
 
                     if len(matches) > 1:
                         top = matches[:3]
@@ -2564,7 +2628,7 @@ class MKChatEngine:
                     if m:
                         period = f"{m.group(1)} {m.group(2)} days"
 
-                return ChatReply(f"{customer_name} has spent ${total_spent:,.2f} ({period}).")
+                return ChatReply(ui["customer_spent"].format(name=customer_name, total=f"{total_spent:,.2f}", period=period))
 
         # Cancel command (intent-driven)
         if intent_result.intent == "cancel" and not (
@@ -2612,15 +2676,13 @@ class MKChatEngine:
                     guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
                     guess = _resolve_pronoun_guess(guess, state)
                     if not guess:
-                        return ChatReply("Who is the customer? Try: “show Jane's info”.")
+                        return ChatReply(ui['who_is_customer'])
 
                     with tx() as (conn, cur):
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                     if len(matches) == 0:
-                        return ChatReply(
-                            f"I couldn't find {guess} in your saved customers yet. "
-                        )
+                        return ChatReply(ui["no_customer_found_yet"].format(name=guess))
 
                     if len(matches) == 1:
                         c = matches[0]
@@ -2649,12 +2711,12 @@ class MKChatEngine:
                 choice = (msg or "").strip()
 
                 if not choice.isdigit():
-                    return ChatReply("Multiple matches: Reply with 1, 2, or 3 — or type cancel.")
+                    return ChatReply(ui["multiple_matches"])
 
                 idx = int(choice)
                 candidates = pending.get("candidates") or []
                 if idx < 1 or idx > len(candidates):
-                    return ChatReply("Multiple matches: Please reply with 1, 2, or 3 — or type cancel.")
+                    return ChatReply(ui["multiple_matches"])
 
                 c = candidates[idx - 1]
                 customer_id = int(c["id"])
@@ -2719,12 +2781,12 @@ class MKChatEngine:
 
                     # period label (stored if we want; fall back)
                     period = pending.get("period_label") or "lifetime"
-                    return ChatReply(f"{customer_name} has spent ${total_spent:,.2f} ({period}).")
+                    return ChatReply(ui["customer_spent"].format(name=customer_name, total=f"{total_spent:,.2f}", period=period))
 
                 if action == "order_customer_pick":
                     order_draft = pending.get("order_draft") or {}
                     if not order_draft:
-                        return ChatReply("I lost track of that order draft. Please paste the order again.")
+                        return ChatReply(ui["lost_order_draft"])
 
                     # Attach the exact chosen customer
                     order_draft["customer_id"] = customer_id
@@ -2757,7 +2819,7 @@ class MKChatEngine:
                             "matches": matches,
                         }
                         save_session_state(state, session_id=sid)
-                        return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"]))
+                        return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"], ui=ui))
 
                     state["pending"] = {"kind": "order_confirm", "order": order_draft}
                     save_session_state(state, session_id=sid)
@@ -2772,7 +2834,7 @@ class MKChatEngine:
                         + ui["order_adjust_hint"]
                     )
 
-                return ChatReply("Okay — what would you like to do with that customer?")
+                return ChatReply(ui["what_to_do_customer"])
 
             if kind == "inventory_confirm_top":
                 top = pending["top"]
@@ -2795,11 +2857,11 @@ class MKChatEngine:
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     if action == "add":
-                        return ChatReply(f"Added {qty} of {product_name} to your inventory. You currently have {current_qty} on hand.")
+                        return ChatReply(ui["inventory_added"].format(qty=qty, product=product_name, current=current_qty))
                     elif action == "remove":
-                        return ChatReply(f"Removed {qty} of {product_name} from your inventory. You currently have {current_qty} on hand.")
+                        return ChatReply(ui["inventory_removed"].format(qty=qty, product=product_name, current=current_qty))
                     else:
-                        return ChatReply(f"Set {product_name} inventory to {qty}. You currently have {current_qty} on hand.")
+                        return ChatReply(ui["inventory_set"].format(product=product_name, qty=qty, current=current_qty))
 
                 if no(msg):
                     state["pending"] = {
@@ -2810,20 +2872,20 @@ class MKChatEngine:
                         "matches": matches,
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_top5(matches, show_scores=show_scores))
+                    return ChatReply(render_top5(matches, show_scores=show_scores, ui=ui))
 
-                return ChatReply("Reply yes or no.")
+                return ChatReply(ui["reply_yes_no"])
 
             if kind == "inventory_pick_top5":
                 choice = (msg or "").strip()
                 matches = pending.get("matches") or []
 
                 if not choice.isdigit():
-                    return ChatReply("Pick the best match with 1-5, or type cancel.")
+                    return ChatReply(ui["pick_match_5"])
 
                 idx = int(choice)
                 if idx < 1 or idx > min(TOP5, len(matches)):
-                    return ChatReply("Please reply with 1, 2, 3, 4, or 5 — or type cancel.")
+                    return ChatReply(ui["pick_match_5"])
 
                 chosen = matches[idx - 1]
                 action = pending.get("action")
@@ -2862,20 +2924,11 @@ class MKChatEngine:
                 save_session_state(state, session_id=sid)
 
                 if action == "add":
-                    return ChatReply(
-                        f"Added {qty} of {product_name} to your inventory. "
-                        f"You currently have {current_qty} on hand."
-                    )
+                    return ChatReply(ui["inventory_added"].format(qty=qty, product=product_name, current=current_qty))
                 elif action == "remove":
-                    return ChatReply(
-                        f"Removed {qty} of {product_name} from your inventory. "
-                        f"You currently have {current_qty} on hand."
-                    )
+                    return ChatReply(ui["inventory_removed"].format(qty=qty, product=product_name, current=current_qty))
                 else:
-                    return ChatReply(
-                        f"Set {product_name} inventory to {qty}. "
-                        f"You currently have {current_qty} on hand."
-                    )
+                    return ChatReply(ui["inventory_set"].format(product=product_name, qty=qty, current=current_qty))
 
             if kind == "inventory_threshold_confirm_top":
                 top = pending["top"]
@@ -2889,7 +2942,7 @@ class MKChatEngine:
                         upsert_inventory_quantity(cur, consultant_id=consultant_id, sku=sku, low_stock_threshold=qty)
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply(f"Got it \u2014 I'll flag {product_name} when you have fewer than {qty} on hand.")
+                    return ChatReply(ui["low_stock_set"].format(product=product_name, qty=qty))
 
                 if no(msg):
                     state["pending"] = {
@@ -2899,20 +2952,20 @@ class MKChatEngine:
                         "matches": matches,
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_top5(matches, show_scores=show_scores))
+                    return ChatReply(render_top5(matches, show_scores=show_scores, ui=ui))
 
-                return ChatReply("Reply yes or no.")
+                return ChatReply(ui["reply_yes_no"])
 
             if kind == "inventory_threshold_top5":
                 choice = (msg or "").strip()
                 matches = pending.get("matches") or []
 
                 if not choice.isdigit():
-                    return ChatReply("Pick the best match with 1-5, or type cancel.")
+                    return ChatReply(ui["pick_match_5"])
 
                 idx = int(choice)
                 if idx < 1 or idx > min(TOP5, len(matches)):
-                    return ChatReply("Please reply with 1, 2, 3, 4, or 5 — or type cancel.")
+                    return ChatReply(ui["pick_match_5"])
 
                 chosen = matches[idx - 1]
                 qty = int(pending.get("qty") or 0)
@@ -2930,9 +2983,7 @@ class MKChatEngine:
                 state["pending"] = None
                 save_session_state(state, session_id=sid)
 
-                return ChatReply(
-                    f"Got it — I'll flag {product_name} when you have fewer than {qty} on hand."
-                )
+                return ChatReply(ui["low_stock_set"].format(product=product_name, qty=qty))
 
             if kind == "customer_confirm":
                 if yes(msg):
@@ -3009,7 +3060,7 @@ class MKChatEngine:
                     return ChatReply(ui["cust_reject"])
 
                 if looks_like_command(msg):
-                    return ChatReply("You're confirming a new customer. Reply yes or no, or type cancel to retry.")
+                    return ChatReply(ui["confirming_customer"])
                 updated, notes = apply_customer_edits(pending["customer"], msg)
                 pending["customer"] = updated
                 state["pending"] = pending
@@ -3038,15 +3089,15 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
 
                     if n:
-                        return ChatReply(f"✅ Deleted {name} from MyPinkAssistant (MyCustomers was not changed).")
-                    return ChatReply("I couldn't delete that customer (maybe it was already removed).")
+                        return ChatReply(ui["deleted_customer"].format(name=name))
+                    return ChatReply(ui["delete_failed"])
 
                 if answer.lower() in ("cancel", "stop", "no"):
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply("Canceled. Ready for your next customer or order.")
+                    return ChatReply(ui["canceled"])
 
-                return ChatReply("To confirm deletion, type DELETE. Or type `cancel`.")
+                return ChatReply(ui["delete_confirm_prompt"])
 
             if kind == "order_line_confirm_top":
                 order = pending["order"]
@@ -3065,7 +3116,7 @@ class MKChatEngine:
                         "matches": matches,
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(propose_top(top, current_qty=q_new))
+                    return ChatReply(propose_top(top, current_qty=q_new, ui=ui))
 
                 if yes(msg):
                     if not (top.get("sku") or "").strip():
@@ -3086,7 +3137,7 @@ class MKChatEngine:
                         "matches": matches[:MATCH_LIMIT],
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_top5(matches, show_scores=show_scores))
+                    return ChatReply(render_top5(matches, show_scores=show_scores, ui=ui))
 
                 return ChatReply(ui["reply_yes_no_qty"])
 
@@ -3114,7 +3165,7 @@ class MKChatEngine:
                     "matches": new_matches[:MATCH_LIMIT],
                 }
                 save_session_state(state, session_id=sid)
-                return ChatReply(render_top5(new_matches, show_scores=show_scores))
+                return ChatReply(render_top5(new_matches, show_scores=show_scores, ui=ui))
 
             if kind == "awaiting_order_items":
                 cust_first = pending["customer_first"]
@@ -3126,7 +3177,7 @@ class MKChatEngine:
                 order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
                 order_draft["customer_id"] = resolved_customer_id
                 if not order_draft["lines"]:
-                    return ChatReply("I didn't catch any items — try again with the product names.")
+                    return ChatReply(ui["no_items_caught"])
                 for line in order_draft["lines"]:
                     picked, _m = auto_pick_match(catalog, line["text"])
                     if picked:
@@ -3143,7 +3194,7 @@ class MKChatEngine:
                 if action == "add":
                     qty, item_text = parse_qty_prefix(rest)
                     if not item_text:
-                        return ChatReply("Tell me what to add, e.g. `add satin hands`.")
+                        return ChatReply(ui["add_hint"])
                     order["lines"].append({"text": item_text, "qty": qty, "chosen": None})
                     state["pending"] = None
                     return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
@@ -3151,17 +3202,17 @@ class MKChatEngine:
                 if action == "remove":
                     target = (rest or "").strip()
                     if not target:
-                        return ChatReply("Tell me what to remove, e.g. `remove 1` or `remove charcoal`.")
+                        return ChatReply(ui["remove_hint"])
                     removed = self._remove_line(order, target)
                     if not removed:
-                        return ChatReply("I couldn't find that item to remove. Try `remove 1` or part of the name.")
+                        return ChatReply(ui["remove_not_found"])
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
 
                 # ✅ THEN: guardrail for random commands (but not add/remove)
                 if looks_like_command(msg) and not yes(msg) and not no(msg):
-                    return ChatReply("You're confirming an order. Reply yes or no, or say add or remove to edit the order.")
+                    return ChatReply(ui["confirming_order"])
 
                 # ... keep your existing yes/no handling below ...
 
@@ -3237,10 +3288,12 @@ class MKChatEngine:
 
                 if no(msg):
                     state["pending"] = None
+                    state["last_ref_customer_id"] = None
+                    state["last_ref_customer_name"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["order_reject"])
 
-                return ChatReply("Reply yes or no — or say add or remove to adjust the order.")
+                return ChatReply(ui["reply_yes_no_adjust"])
 
         # -------------------------
         # Normal parse
@@ -3248,7 +3301,7 @@ class MKChatEngine:
         try:
             parsed = parse_with_openai(self.client, msg, last_customer)
         except Exception:
-            return ChatReply("I'm having a little trouble right now, please try again in a moment.")
+            return ChatReply(ui["trouble"])
 
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}
@@ -3318,7 +3371,7 @@ class MKChatEngine:
             # If the user explicitly started a new order for someone,
             # do not fall back to the previous customer.
             if starts_explicit_order and not customer_name_for_lookup:
-                return ChatReply("Who is this order for? Please tell me the customer name and paste the order again.")
+                return ChatReply(ui["need_customer_for_order"])
 
             if not customer_name_for_lookup:
                 return ChatReply(ui["need_customer_for_order"])
@@ -3334,13 +3387,14 @@ class MKChatEngine:
                     limit=3,
                 )
 
-            # If the user explicitly typed a full first+last name and we found nothing locally,
-            # allow the order to continue as typed. MyCustomers can still try to find/create them.
             full_name_typed = bool(cust_first and cust_last)
 
-            if has_explicit_name and len(matches) == 0 and not full_name_typed:
+            if len(matches) == 0:
+                # No match at all — hard stop regardless of how name was typed
                 unresolved_name = customer_name_for_lookup or explicit_customer_hint
-                return ChatReply(f"I couldn't find {unresolved_name} in your saved customers.")
+                if full_name_typed:
+                    return ChatReply(ui["customer_not_in_mc"].format(name=unresolved_name))
+                return ChatReply(ui["no_customer_found"].format(name=unresolved_name))
 
             if len(matches) == 1:
                 matched_first = (matches[0].get("first_name") or "").strip()
@@ -3349,9 +3403,6 @@ class MKChatEngine:
                 typed_full = " ".join([p for p in [cust_first, cust_last] if p]).strip().lower()
                 matched_full = f"{matched_first} {matched_last}".strip().lower()
 
-                # If the user typed a full first+last name, only trust the local match
-                # if it is very close. Otherwise keep the typed name and let MyCustomers try it.
-                full_name_typed = bool(cust_first and cust_last)
                 strong_enough_match = (
                     typed_full == matched_full
                     or fuzz.WRatio(typed_full, matched_full) >= 90
@@ -3365,30 +3416,14 @@ class MKChatEngine:
                     state["last_ref_customer_id"] = int(matches[0]["id"])
                     state["last_ref_customer_name"] = f"{cust_first} {cust_last}".strip()
                     save_session_state(state, session_id=sid)
-
-            elif len(matches) > 1:
-                # If user gave a full first+last name, but local matches are only fuzzy/questionable,
-                # allow the order to continue as typed. This lets MyCustomers try to find the person.
-                typed_full_name = bool(cust_first and cust_last)
-
-                strong_local_match = any(
-                    ((m.get("first_name") or "").strip().lower() == cust_first.lower())
-                    and ((m.get("last_name") or "").strip().lower() == cust_last.lower())
-                    for m in matches
-                )
-
-                if not typed_full_name or strong_local_match:
+                else:
+                    # Full name typed but weak match — show picker instead of sliding through
                     items = order.get("items") or []
-
-                    # If parser missed items too, try to rebuild from raw text tail
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-
                     if not items:
                         return ChatReply(ui["need_items"])
-
                     order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
-
                     state["pending"] = {
                         "kind": "pick_customer",
                         "candidates": matches[:3],
@@ -3396,10 +3431,47 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
-
                     return ChatReply(render_customer_picker(matches[:3]))
 
-                # Otherwise: proceed with the full typed name and do not force a picker
+            elif len(matches) > 1:
+                strong_local_match = any(
+                    ((m.get("first_name") or "").strip().lower() == cust_first.lower())
+                    and ((m.get("last_name") or "").strip().lower() == cust_last.lower())
+                    for m in matches
+                )
+
+                if not full_name_typed or strong_local_match:
+                    items = order.get("items") or []
+                    if not items and explicit_item_hint:
+                        items = [{"text": explicit_item_hint, "qty": 1}]
+                    if not items:
+                        return ChatReply(ui["need_items"])
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                    state["pending"] = {
+                        "kind": "pick_customer",
+                        "candidates": matches[:3],
+                        "action": "order_customer_pick",
+                        "order_draft": order_draft,
+                    }
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(render_customer_picker(matches[:3]))
+
+                else:
+                    # Full name typed, multiple fuzzy matches, none exact — show picker
+                    items = order.get("items") or []
+                    if not items and explicit_item_hint:
+                        items = [{"text": explicit_item_hint, "qty": 1}]
+                    if not items:
+                        return ChatReply(ui["need_items"])
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                    state["pending"] = {
+                        "kind": "pick_customer",
+                        "candidates": matches[:3],
+                        "action": "order_customer_pick",
+                        "order_draft": order_draft,
+                    }
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(render_customer_picker(matches[:3]))
 
             items = order.get("items") or []
 
@@ -3425,7 +3497,7 @@ class MKChatEngine:
             order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
             order_draft["customer_id"] = resolved_customer_id
             if not order_draft["lines"]:
-                return ChatReply("I didn't catch any items — try again with the product names.")
+                return ChatReply(ui["no_items_caught"])
 
             for line in order_draft["lines"]:
                 picked, _m = auto_pick_match(catalog, line["text"])
@@ -3449,7 +3521,7 @@ class MKChatEngine:
 
                 save_session_state(state, session_id=sid)
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
-                return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft['lines'][nxt]['qty'])}")
+                return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft['lines'][nxt]['qty'], ui=ui)}")
 
             state["pending"] = {"kind": "order_confirm", "order": order_draft}
 
@@ -3520,7 +3592,7 @@ class MKChatEngine:
             }
 
             save_session_state(state, session_id=sid)
-            return ChatReply(propose_top(top, current_qty=order["lines"][nxt]["qty"]))
+            return ChatReply(propose_top(top, current_qty=order["lines"][nxt]["qty"], ui=ui))
 
     ## format_customer_confirm
     def _format_customer_confirm(self, customer: dict, ui: dict) -> str:

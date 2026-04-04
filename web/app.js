@@ -42,13 +42,17 @@ async function loadUiMessages() {
         // use defaults
     }
 
-    const h = pick(cfg.hero_headlines);
-    const s = pick(cfg.hero_subheads);
-    const y = pick(cfg.you_can_say);
+    const lang = (document.body.dataset.lang || "en").trim();
+    const isEs = lang === "es";
+
+    const h = pick(isEs ? (cfg.hero_headlines_es || cfg.hero_headlines) : cfg.hero_headlines);
+    const s = pick(isEs ? (cfg.hero_subheads_es || cfg.hero_subheads) : cfg.hero_subheads);
+    const y = pick(isEs ? (cfg.you_can_say_es || cfg.you_can_say) : cfg.you_can_say);
+    const youCanSayLabel = isEs ? "Puedes decir" : "You can say";
 
     if (heroTitle && h) heroTitle.textContent = h;
     if (heroSub && s) heroSub.textContent = s;
-    if (footerLine && y) footerLine.textContent = `You can say: ${y}`;
+    if (footerLine && y) footerLine.textContent = `${youCanSayLabel}: ${y}`;
 
     // Emergency banner
     if (noticeBanner && cfg.emergency && cfg.emergency.enabled) {

@@ -17,9 +17,16 @@
         }
     }
 
+    function saveLang(v) {
+        setLang(v);
+        const fd = new FormData();
+        fd.append("language", v);
+        fetch("/settings/language", { method: "POST", body: fd });
+    }
+
     if (enBtn && esBtn && lang) {
-        enBtn.addEventListener("click", () => setLang("en"));
-        esBtn.addEventListener("click", () => setLang("es"));
+        enBtn.addEventListener("click", () => saveLang("en"));
+        esBtn.addEventListener("click", () => saveLang("es"));
         setLang((lang.value || "en").trim());
     }
 

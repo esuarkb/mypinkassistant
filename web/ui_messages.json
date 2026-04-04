@@ -1,8 +1,8 @@
 {
     "hero_headlines": [
         "Hey there 👋 Let’s do some work.",
-        "Let's get down to business ✨",
-        "You've got new customers? Great job, let's get them in."
+        "Let’s get down to business ✨",
+        "You’ve got new customers? Great job, let’s get them in."
     ],
     "hero_subheads": [
         "Add a new customer or an order. I’ll confirm details, then queue it for MyCustomers."
@@ -13,6 +13,21 @@
         "Order for Jane Doe: 4 in 1 cleanser and 2 charcoal masks",
         "Add customer Mary Jones 333 3rd St Anytown, Alabama 12345 2565551212 maryjones@gmail.com",
         "New order for Jane Doe: Satin Hands, Satin Lips, Foundation Primer"
+    ],
+    "hero_headlines_es": [
+        "Hola 👋 Vamos a trabajar.",
+        "¡Vamos al grano! ✨",
+        "¿Tienes nuevas clientas? ¡Genial, agreguémoslas!"
+    ],
+    "hero_subheads_es": [
+        "Agrega una clienta o un pedido. Confirmo los detalles y lo envío a MyCustomers."
+    ],
+    "you_can_say_es": [
+        "Nueva cliente Jane Doe, jane@gmail.com, 555 5th St Anytown, AL 12345, 5551231234",
+        "Nueva cliente Jane Doe, jane@gmail.com, 2565551212, 12 de junio (¡sí, también puedes decirme el cumpleaños!)",
+        "Pedido para Jane Doe: limpiador 4 en 1 y 2 mascarillas de carbón",
+        "Nueva cliente Mary Jones 333 3rd St Anytown, Alabama 12345 2565551212 maryjones@gmail.com",
+        "Nuevo pedido para Jane Doe: Satin Hands, Satin Lips, Foundation Primer"
     ],
     "emergency": {
         "enabled": false,

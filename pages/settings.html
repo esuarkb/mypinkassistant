@@ -191,12 +191,14 @@
             <div class="subtle">Signed in as <span class="email">{{EMAIL}}</span></div>
 
             <form method="post" action="/settings" id="settingsForm" autocomplete="off">
-                <label>Language</label>
+                <label>Chat Language</label>
                 <div class="row" style="margin-top:8px">
                     <button type="button" class="toggle {{EN_ACTIVE}}" id="langEn">English</button>
                     <button type="button" class="toggle {{ES_ACTIVE}}" id="langEs">Español</button>
                 </div>
                 <input type="hidden" name="language" id="language" value="{{LANG_VALUE}}" />
+
+                <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 
                 <label>InTouch username</label>
                 <input class="inputShort" name="intouch_username" value="{{INTOUCH_USERNAME}}" autocomplete="off" />

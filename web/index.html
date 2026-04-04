@@ -13,7 +13,7 @@
     <meta name="theme-color" content="#e91e63">
 </head>
 
-<body>
+<body data-lang="{{CHAT_LANG}}">
     <!-- Emergency/notice banner (optional) -->
     <div id="noticeBanner" class="notice hidden" role="status" aria-live="polite"></div>
 
@@ -50,7 +50,7 @@
 
                 <!-- Center composer shown only until first message -->
                 <div class="composer composer-center" id="composerCenter">
-                    <textarea id="msg" placeholder="Enter a customer or order…" rows="1"></textarea>
+                    <textarea id="msg" placeholder="{{CHAT_PLACEHOLDER}}" rows="1"></textarea>
                     <button id="send" class="sendBtn" type="button">Send</button>
                 </div>
             </div>
