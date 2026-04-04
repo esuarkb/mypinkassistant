@@ -337,7 +337,7 @@ def main():
                             cur_tmp = conn_tmp.cursor()
                             PH_TMP = "%s" if is_postgres() else "?"
                             cur_tmp.execute(
-                                f"SELECT consecutive_login_failures FROM consultants WHERE id = {PH_TMP}",
+                                f"SELECT consecutive_login_failures, last_login_failure_at FROM consultants WHERE id = {PH_TMP}",
                                 (cid,),
                             )
                             row_tmp = cur_tmp.fetchone()
@@ -346,9 +346,21 @@ def main():
 
                         if row_tmp:
                             failures_now = int((row_tmp[0] if not isinstance(row_tmp, dict) else row_tmp["consecutive_login_failures"]) or 0)
+                            last_failure_at = row_tmp[1] if not isinstance(row_tmp, dict) else row_tmp["last_login_failure_at"]
 
                             is_bad_creds = "invalid username or password" in err.lower()
-                            if failures_now == 1 and is_bad_creds and not _is_intouch_outage():
+
+                            # Send credentials email at most once per 24 hours
+                            _creds_email_sent = False
+                            if last_failure_at and failures_now > 1:
+                                if isinstance(last_failure_at, str):
+                                    last_failure_at = datetime.fromisoformat(last_failure_at.replace("Z", "+00:00"))
+                                if last_failure_at.tzinfo is None:
+                                    last_failure_at = last_failure_at.replace(tzinfo=timezone.utc)
+                                hours_since = (datetime.now(timezone.utc) - last_failure_at).total_seconds() / 3600
+                                _creds_email_sent = hours_since < 24
+
+                            if is_bad_creds and not _is_intouch_outage() and not _creds_email_sent:
                                 send_wrong_credentials_email(_c_email, _c_first or "")
                                 print(f"[Worker] Credentials email sent to consultant_id={cid}")
                             elif not is_bad_creds:

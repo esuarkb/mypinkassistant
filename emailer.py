@@ -196,7 +196,7 @@ def send_wrong_credentials_email(to_email: str, first_name: str = "") -> None:
 
     text = f"""Hi {name}!
 
-It looks like you might have entered the wrong InTouch username or password. You can fix this at mypinkassistant.com/settings — just re-enter the correct credentials, hit Save, and head back to chat to get started.
+It looks like you might have saved the wrong InTouch username or password in MyPinkAssistant. You can fix this at mypinkassistant.com/settings — just re-enter the correct credentials, hit Save, and head back to chat to get started.
 
 Let me know if you have any other issues!
 
@@ -211,7 +211,7 @@ support@mypinkassistant.com
       <p style="margin:0 0 12px 0;">Hi {safe_name}!</p>
 
       <p style="margin:0 0 16px 0;">
-        It looks like you might have entered the wrong InTouch username or password. You can fix this in just a few steps:
+        It looks like you might have saved the wrong InTouch username or password in MyPinkAssistant. You can fix this in just a few steps:
       </p>
 
       <ol style="margin:0 0 16px 0;padding-left:20px;color:#111;">

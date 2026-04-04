@@ -800,7 +800,7 @@ def find_customers_by_product(cur, consultant_id: int, terms: list[str]) -> list
         JOIN orders o ON o.customer_id = c.id AND o.consultant_id = {PH}
         JOIN order_items oi ON oi.order_id = o.id
         WHERE c.consultant_id = {PH}
-          AND (c.source_status IS NULL OR c.source_status <> 'removed')
+          AND COALESCE(c.source_status, 'active') = 'active'
           AND {like_clauses}
         ORDER BY c.last_name, c.first_name, o.order_date DESC
     """

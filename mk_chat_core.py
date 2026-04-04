@@ -2359,6 +2359,8 @@ class MKChatEngine:
             _m1 = _re2.search(r"(?:show\s+)?(?:my\s+)?(.+?)\s+customers\b", lowered)
             # Pattern 2: "customers who [use/ordered/buy/have] [product]" — e.g. "customers who use repair"
             _m2 = _re2.search(r"\bcustomers\s+who\s+(?:use|ordered|buy|have|bought|order)\s+(.+)", lowered)
+            # Pattern 3: "who bought/ordered/uses [product]"
+            _m3 = _re2.search(r"\bwho\s+(?:bought|ordered|uses|has|orders|buys|got)\s+(.+)", lowered)
 
             _prefix_filler = {"who", "are", "my", "show", "list", "which", "what", "any",
                               "the", "a", "all", "give", "me", "find", "get", "have", "do",
@@ -2366,6 +2368,8 @@ class MKChatEngine:
 
             if _m2:
                 _product_term = _m2.group(1).strip()
+            elif _m3:
+                _product_term = _m3.group(1).strip()
             elif _m1:
                 _candidate = _m1.group(1).strip()
                 # Strip leading filler words (e.g. "who are my" from "who are my repair customers")
