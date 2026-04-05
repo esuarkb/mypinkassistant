@@ -1299,9 +1299,12 @@ def inventory_print(request: Request):
         threshold_val = int(threshold) if threshold is not None else ""
         sku_esc = _esc(sku)
 
+        retail_val = (retail * int(qty)) if (isinstance(retail, (int, float)) and qty is not None and int(qty) > 0) else 0.0
+
         rows_html.append(
-            f'<tr{row_class} data-has-qty="{1 if qty else 0}" data-sku="{sku_esc}">'
+            f'<tr{row_class} data-has-qty="{1 if qty else 0}" data-sku="{sku_esc}" data-retail="{retail_val:.2f}">'
             f"<td>{name}</td>"
+            f'<td class="sku-cell">{sku_esc}</td>'
             f"<td>{retail_txt}</td>"
             f'<td{on_hand_class}>'
             f'<span class="dv">{qty_txt}</span>'
@@ -1337,10 +1340,20 @@ def inventory_print(request: Request):
     tr.low td.low-cell {{ color: #c0392b; font-weight: 700; }}
     tr.low {{ background: #fff5f5; }}
     .hidden {{ display: none; }}
+    .sku-cell {{ color: #888; font-size: 11px; }}
+    .summary-bar {{
+      position: sticky; top: 0; z-index: 10;
+      display: inline-block;
+      background: #fff8fb; border: 1px solid #f0d0e0; border-radius: 8px;
+      padding: 10px 16px; margin-bottom: 14px;
+      font-size: 14px;
+    }}
+    .summary-bar .grand-total {{ font-weight: 700; color: #d63384; }}
     @media print {{
       .controls {{ display: none; }}
       body {{ padding: 10px; }}
       tr.low td.low-cell {{ color: #c0392b; }}
+      .summary-bar {{ position: static; }}
     }}
   </style>
 </head>
@@ -1359,10 +1372,14 @@ def inventory_print(request: Request):
     </label>
     <button class="btn-print" id="btn-print">Print / Save PDF</button>
   </div>
+  <div class="summary-bar" id="summary-bar">
+    Total Retail Value on Shelf: <span class="grand-total" id="grand-total">$0.00</span>
+  </div>
   <table id="inv-table">
     <thead>
       <tr>
         <th>Product</th>
+        <th>SKU</th>
         <th>Retail</th>
         <th>On Hand</th>
         <th>Par</th>

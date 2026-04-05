@@ -27,6 +27,19 @@ document.addEventListener('DOMContentLoaded', function () {
         btnPrint.textContent = 'Save';
     });
 
+    function updateGrandTotal() {
+        var total = 0;
+        document.querySelectorAll('#inv-table tbody tr').forEach(function (row) {
+            if (row.classList.contains('hidden')) return;
+            var val = parseFloat(row.dataset.retail || '0');
+            if (val > 0) total += val;
+        });
+        var gtEl = document.getElementById('grand-total');
+        if (gtEl) gtEl.textContent = '$' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    updateGrandTotal();
+
     function exitEnterMode() {
         toggleInputs(false);
         btnPrint.textContent = 'Print / Save PDF';
@@ -94,5 +107,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 row.classList.remove('hidden');
             }
         });
+        updateGrandTotal();
     }
 });

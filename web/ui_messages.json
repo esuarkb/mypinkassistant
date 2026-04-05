@@ -9,10 +9,24 @@
     ],
     "you_can_say": [
         "New customer Jane Doe, jane@gmail.com, 555 5th St Anytown, AL 12345, 5551231234",
+        "New order for Jane Doe: Satin Hands, Satin Lips, Foundation Primer",
+        "What did Jane Doe order last?",
         "New customer Jane Doe, jane@gmail.com, 2565551212, June 12 (yes, you can tell me the birthday too!)",
+        "Show me Jane Doe's last 3 orders",
+        "What's Jane Doe's info?",
+        "Who bought the charcoal mask?",
+        "Who ordered Satin Hands?",
+        "New customer Mary Jones 333 3rd St Anytown, Alabama 12345 2565551212 maryjones@gmail.com",
         "Order for Jane Doe: 4 in 1 cleanser and 2 charcoal masks",
-        "Add customer Mary Jones 333 3rd St Anytown, Alabama 12345 2565551212 maryjones@gmail.com",
-        "New order for Jane Doe: Satin Hands, Satin Lips, Foundation Primer"
+        "Who are my Repair customers?",
+        "Set my Repair Set par to 3",
+        "Who are my top 5 customers this quarter",
+        "Add 5 charcoal masks to my inventory",
+        "Remove 1 foundation primer from inventory",
+        "Set my Satin Hands set par to 2",
+        "Show my inventory report",
+        "What am I low on?",
+        "Who are my top 7 customers this month"
     ],
     "hero_headlines_es": [
         "Hola 👋 Vamos a trabajar.",
@@ -24,10 +38,24 @@
     ],
     "you_can_say_es": [
         "Nueva cliente Jane Doe, jane@gmail.com, 555 5th St Anytown, AL 12345, 5551231234",
+        "Nuevo pedido para Jane Doe: Satin Hands, Satin Lips, Foundation Primer",
+        "¿Qué pidió Jane Doe la última vez?",
         "Nueva cliente Jane Doe, jane@gmail.com, 2565551212, 12 de junio (¡sí, también puedes decirme el cumpleaños!)",
-        "Pedido para Jane Doe: limpiador 4 en 1 y 2 mascarillas de carbón",
+        "Muéstrame los últimos 3 pedidos de Jane Doe",
+        "¿Cuál es la información de Jane Doe?",
+        "¿Quién compró la mascarilla de carbón?",
+        "¿Quién ha pedido Satin Hands?",
         "Nueva cliente Mary Jones 333 3rd St Anytown, Alabama 12345 2565551212 maryjones@gmail.com",
-        "Nuevo pedido para Jane Doe: Satin Hands, Satin Lips, Foundation Primer"
+        "Pedido para Jane Doe: limpiador 4 en 1 y 2 mascarillas de carbón",
+        "¿Quiénes son mis clientas de Repair?",
+        "Pon el par de mi Repair Set en 3",
+        "¿Quiénes son mis 5 mejores clientas este trimestre?",
+        "Agrega 5 mascarillas de carbón a mi inventario",
+        "Quita 1 Foundation Primer de mi inventario",
+        "Pon el par de mi set Satin Hands en 2",
+        "Muestra mi reporte de inventario",
+        "¿Qué me está faltando en inventario?",
+        "¿Quiénes son mis 7 mejores clientas este mes?"
     ],
     "emergency": {
         "enabled": false,

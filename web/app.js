@@ -47,12 +47,38 @@ async function loadUiMessages() {
 
     const h = pick(isEs ? (cfg.hero_headlines_es || cfg.hero_headlines) : cfg.hero_headlines);
     const s = pick(isEs ? (cfg.hero_subheads_es || cfg.hero_subheads) : cfg.hero_subheads);
-    const y = pick(isEs ? (cfg.you_can_say_es || cfg.you_can_say) : cfg.you_can_say);
+    const youCanSayArr = isEs ? (cfg.you_can_say_es || cfg.you_can_say) : cfg.you_can_say;
     const youCanSayLabel = isEs ? "Puedes decir" : "You can say";
+    const nextLabel = isEs ? "siguiente" : "next";
 
     if (heroTitle && h) heroTitle.textContent = h;
     if (heroSub && s) heroSub.textContent = s;
-    if (footerLine && y) footerLine.textContent = `${youCanSayLabel}: ${y}`;
+
+    if (footerLine && youCanSayArr && youCanSayArr.length > 0) {
+        let youCanSayIndex = Math.floor(Math.random() * youCanSayArr.length);
+
+        const textSpan = document.createElement("span");
+        textSpan.id = "youCanSayText";
+        textSpan.textContent = `${youCanSayLabel}: ${youCanSayArr[youCanSayIndex]}`;
+
+        const cycleBtn = document.createElement("button");
+        cycleBtn.id = "youCanSayCycle";
+        cycleBtn.title = nextLabel;
+        cycleBtn.textContent = "↻";
+        cycleBtn.addEventListener("click", () => {
+            youCanSayIndex = (youCanSayIndex + 1) % youCanSayArr.length;
+            const ts = document.getElementById("youCanSayText");
+            if (ts) ts.textContent = `${youCanSayLabel}: ${youCanSayArr[youCanSayIndex]}`;
+            cycleBtn.classList.remove("spinning");
+            void cycleBtn.offsetWidth;
+            cycleBtn.classList.add("spinning");
+            cycleBtn.addEventListener("animationend", () => cycleBtn.classList.remove("spinning"), { once: true });
+        });
+
+        footerLine.textContent = "";
+        footerLine.appendChild(textSpan);
+        footerLine.appendChild(cycleBtn);
+    }
 
     // Emergency banner
     if (noticeBanner && cfg.emergency && cfg.emergency.enabled) {

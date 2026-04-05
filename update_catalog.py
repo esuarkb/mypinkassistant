@@ -117,8 +117,21 @@ def load_catalog(path: Path) -> dict[str, dict]:
     return catalog
 
 
-def save_catalog(catalog: dict[str, dict], path: Path) -> None:
-    rows = sorted(catalog.values(), key=lambda r: r["sku"])
+def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict] | None = None) -> None:
+    # Items currently in OPOS — preserve scrape order
+    if scraped_order:
+        opos_skus = [item["sku"] for item in scraped_order]
+        opos_set  = set(opos_skus)
+        active_rows = [catalog[sku] for sku in opos_skus if sku in catalog]
+        # Items no longer in OPOS (discontinued) — appended at bottom, sorted by date_added desc
+        dropped_rows = sorted(
+            [r for r in catalog.values() if r["sku"] not in opos_set],
+            key=lambda r: r.get("date_added") or "",
+            reverse=True,
+        )
+        rows = active_rows + dropped_rows
+    else:
+        rows = sorted(catalog.values(), key=lambda r: r["sku"])
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added"])
         writer.writeheader()
@@ -177,7 +190,7 @@ def main(username: str, password: str) -> None:
         catalog = load_catalog(path)
         before  = len(catalog)
         added, updated = upsert(catalog, scraped)
-        save_catalog(catalog, path)
+        save_catalog(catalog, path, scraped_order=scraped)
 
         print(f"\n[{lang.upper()}] Done.")
         print(f"  Catalog before : {before} SKUs")
