@@ -20,9 +20,13 @@ TEST_CUSTOMER = {
     "Phone":       "5550001234",
     "Birthday":    "01/15",
     "Street":      "123 Main St",
+    "Street2":     "Apt 4B",
     "City":        "Dallas",
     "State":       "Texas",
     "Postal Code": "75201",
+    "Tags":        "loyal customer, skincare",
+    "Note Title":  "Test Note",
+    "Note Body":   "This is a test note entry.",
 }
 
 
@@ -34,14 +38,9 @@ def dump(page, name: str) -> None:
 
 def login(page, username: str, password: str) -> None:
     print("Navigating to MyCustomers login...")
+    from playwright_automation.login import login_intouch
+    login_intouch(page, username, password)
     page.goto(CUSTOMERS_URL, wait_until="domcontentloaded")
-    page.get_by_role("textbox", name="Consultant Number").wait_for(state="visible", timeout=30000)
-    page.get_by_role("textbox", name="Consultant Number").fill(username)
-    page.wait_for_timeout(100)
-    page.get_by_role("textbox", name="Password").fill(password)
-    page.wait_for_timeout(100)
-    page.get_by_text("Log In").click()
-    page.wait_for_timeout(1500)
     page.get_by_role("button", name="New Customer").wait_for(timeout=45000)
     print("  Logged in, MyCustomers ready.")
 
@@ -86,6 +85,31 @@ def main(username: str, password: str) -> None:
         page.wait_for_timeout(100)
         page.get_by_role("textbox", name="Birthday (Optional)").press_sequentially("01151990", delay=50)
         page.wait_for_timeout(500)
+
+        # --- Tags ---
+        print("  Filling tags...")
+        tags_field = page.locator('[id^="autocomplete-textarea"]')
+        if tags_field.count():
+            tags_field.fill(TEST_CUSTOMER["Tags"])
+            print(f"  Tags filled: {TEST_CUSTOMER['Tags']}")
+        else:
+            print("  WARNING: Tags field not found")
+
+        # --- Note ---
+        print("  Adding note...")
+        page.get_by_role("button", name="Add New Note").click()
+        page.wait_for_timeout(1000)
+        note_title = page.locator('[id^="noteTitle"]')
+        note_body = page.locator('[id^="noteBody"]')
+        if note_title.count() and note_body.count():
+            note_title.fill(TEST_CUSTOMER["Note Title"])
+            note_body.fill(TEST_CUSTOMER["Note Body"])
+            page.get_by_role("button", name="Save & Exit").click()
+            page.wait_for_timeout(1000)
+            print("  Note saved.")
+        else:
+            print("  WARNING: Note fields not found")
+
         dump(page, "3_form_filled")
 
         # --- Step 4: Save ---
@@ -133,6 +157,49 @@ def main(username: str, password: str) -> None:
 
             page.wait_for_timeout(500)
             dump(page, "6_address_dialog")
+
+            # --- Inspect all address dialog fields ---
+            print("\n  Address dialog fields (before apt click):")
+            dialog = page.get_by_role("dialog")
+            for inp in dialog.locator("input, textarea").all():
+                try:
+                    iid = inp.get_attribute("id") or ""
+                    ph = inp.get_attribute("placeholder") or ""
+                    nm = inp.get_attribute("name") or ""
+                    vis = inp.is_visible()
+                    print(f"    visible={vis} id={iid!r} ph={ph!r} name={nm!r}")
+                except:
+                    pass
+
+            # --- Click apt/suite expander ---
+            print("\n  Looking for apt/suite expander button...")
+            for btn in dialog.get_by_role("button").all():
+                try:
+                    txt = btn.inner_text().strip()
+                    print(f"    BUTTON: {txt!r}")
+                except:
+                    pass
+            try:
+                apt_btn = dialog.get_by_role("button", name="Add Apartment")
+                if not apt_btn.count():
+                    apt_btn = dialog.locator("button", has_text="Apartment")
+                if not apt_btn.count():
+                    apt_btn = dialog.locator("button", has_text="Suite")
+                apt_btn.first.click()
+                page.wait_for_timeout(1000)
+                print("  Clicked apt expander.")
+                print("\n  Address dialog fields (after apt click):")
+                for inp in dialog.locator("input, textarea").all():
+                    try:
+                        iid = inp.get_attribute("id") or ""
+                        ph = inp.get_attribute("placeholder") or ""
+                        nm = inp.get_attribute("name") or ""
+                        vis = inp.is_visible()
+                        print(f"    visible={vis} id={iid!r} ph={ph!r} name={nm!r}")
+                    except:
+                        pass
+            except Exception as e:
+                print(f"  Could not click apt expander: {e}")
 
             # --- Step 7: Check state dropdown ---
             print("\nStep 7: Checking state dropdown...")

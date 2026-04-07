@@ -1935,7 +1935,7 @@ def admin_diagnostics(request: Request):
       <tr>
         <th>id</th><th>consultant</th><th>type</th><th>error</th><th>finished (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td><details><summary><code>{(r['error'] or '').splitlines()[0][:80]}</code></summary><code>{(r['error'] or '')[:500]}</code></details></td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
+      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td><details><summary><code>{((r['error'] or '').splitlines() or [''])[0][:80]}</code></summary><code>{(r['error'] or '')[:500]}</code></details></td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
     </table>
 
     <div style="margin-top:16px" class="muted">

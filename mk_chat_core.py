@@ -545,6 +545,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         '    "Email": "",\n'
         '    "Phone": "",\n'
         '    "Street": "",\n'
+        '    "Street2": "",\n'
         '    "City": "",\n'
         '    "State": "",\n'
         '    "Postal Code": "",\n'
@@ -564,6 +565,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         "}\n\n"
         "Rules:\n"
         "- State must be full name (e.g., Alabama).\n"
+        "- Street is the street number and name only. Put apt/unit/suite/lot/# info in Street2.\n"
         "- Birthday may be provided as MM/DD, Month Day, or YYYY-MM-DD. Output as YYYY-MM-DD. If year missing, use 2000.\n"
         "- For shades/colors/variants (Normal/Dry, Combination/Oily), include them in item text if present.\n"
         "- If the user says a variant applies to multiple items (e.g., 'normal/dry both'), append that variant phrase to each affected item.\n"
@@ -743,30 +745,37 @@ STREET_SUFFIXES = (
     "pkwy", "parkway", "hwy", "highway", "pl", "place", "way"
 )
 
-def _append_unit_suffix_if_present(street: str, extra: str) -> str:
+def _append_unit_suffix_if_present(street: str, extra: str) -> tuple:
+    unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer", "bldg", "building", "spc", "space")
     extra = (extra or "").strip()
-    if not extra:
-        return street
 
-    unit_words = ("apt", "apartment", "unit", "lot", "suite", "ste", "#", "trlr", "trailer")
+    if extra:
+        if not any(word in extra.lower() for word in unit_words):
+            return street, ""
 
-    if not any(word in extra.lower() for word in unit_words):
-        return street
+        # Stop before anything that looks like a date, like 10-14 or 10/14
+        parts = extra.split()
+        clean_parts = []
+        for p in parts:
+            if re.match(r"\d{1,2}[-/]\d{1,2}$", p):
+                break
+            clean_parts.append(p)
 
-    # Stop before anything that looks like a date, like 10-14 or 10/14
-    parts = extra.split()
-    clean_parts = []
+        extra_clean = " ".join(clean_parts).strip()
+        return street, extra_clean if extra_clean else ""
 
-    for p in parts:
-        if re.match(r"\d{1,2}[-/]\d{1,2}$", p):
-            break
-        clean_parts.append(p)
+    # No extra — check if the street string itself contains a unit keyword
+    # e.g. "555 5th st apt 5" -> ("555 5th st", "apt 5")
+    street_lower = street.lower()
+    for word in unit_words:
+        m = re.search(r'\b' + re.escape(word) + r'\b', street_lower)
+        if m:
+            base = street[:m.start()].strip()
+            unit = street[m.start():].strip()
+            if base:
+                return base, unit
 
-    extra_clean = " ".join(clean_parts).strip()
-    if not extra_clean:
-        return street
-
-    return f"{street} {extra_clean}"
+    return street, ""
 
 def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     """
@@ -795,10 +804,11 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     if m:
         street = m.group("street").strip()
         extra = (m.group("extra") or "").strip()
-        street = _append_unit_suffix_if_present(street, extra)
+        street, street2 = _append_unit_suffix_if_present(street, extra)
 
         return {
             "Street": street,
+            "Street2": street2,
             "City": m.group("city").strip(),
             "State": m.group("state").strip(),
             "Postal Code": m.group("zip").strip(),
@@ -817,10 +827,11 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     if m:
         street = m.group("street").strip()
         extra = (m.group("extra") or "").strip()
-        street = _append_unit_suffix_if_present(street, extra)
+        street, street2 = _append_unit_suffix_if_present(street, extra)
 
         return {
             "Street": street,
+            "Street2": street2,
             "City": m.group("city").strip(),
             "State": m.group("state").strip(),
             "Postal Code": m.group("zip").strip(),
@@ -835,15 +846,16 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     if m:
         street = m.group("street").strip()
         extra = (m.group("extra") or "").strip()
-        street = _append_unit_suffix_if_present(street, extra)
+        street, street2 = _append_unit_suffix_if_present(street, extra)
 
         return {
             "Street": street,
+            "Street2": street2,
             "City": m.group("city").strip(),
             "State": m.group("state").strip(),
             "Postal Code": m.group("zip").strip(),
         }
-    
+
     # ---------- Pattern D: "street city ST ZIP" (no commas)
     # Example: "333 3rd st arab al 35976"
     m = re.match(
@@ -853,10 +865,11 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
     if m:
         street = m.group("street").strip()
         extra = (m.group("extra") or "").strip()
-        street = _append_unit_suffix_if_present(street, extra)
+        street, street2 = _append_unit_suffix_if_present(street, extra)
 
         return {
             "Street": street,
+            "Street2": street2,
             "City": m.group("city").strip(),
             "State": m.group("state").strip(),
             "Postal Code": m.group("zip").strip(),
@@ -3637,7 +3650,9 @@ class MKChatEngine:
 
     ## format_customer_confirm
     def _format_customer_confirm(self, customer: dict, ui: dict) -> str:
-        street = (customer.get("Street") or "").strip()
+        street_base = (customer.get("Street") or "").strip()
+        street2 = (customer.get("Street2") or "").strip()
+        street = f"{street_base} {street2}".strip() if street2 else street_base
         city = (customer.get("City") or "").strip()
         st = (customer.get("State") or "").strip()
         postal = (customer.get("Postal Code") or "").strip()

@@ -323,6 +323,7 @@ def upsert_customer_from_pending(cur, consultant_id: int, customer: Dict[str, An
     email = (customer.get("Email") or "").strip() or None
     phone = (customer.get("Phone") or "").strip() or None
     street = (customer.get("Street") or customer.get("Address") or "").strip() or None
+    street2 = (customer.get("Street2") or "").strip() or None
     city = (customer.get("City") or "").strip() or None
     state = (customer.get("State") or "").strip() or None
     postal = (customer.get("Postal Code") or customer.get("Zip") or "").strip() or None
@@ -333,19 +334,19 @@ def upsert_customer_from_pending(cur, consultant_id: int, customer: Dict[str, An
     if is_sqlite:
         cur.execute("""
             INSERT INTO customers
-              (consultant_id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, created_at, updated_at)
+              (consultant_id, first_name, last_name, email, phone, street, street2, city, state, postal_code, birthday, created_at, updated_at)
             VALUES
-              (?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
-        """, (consultant_id, first, last, email, phone, street, city, state, postal, birthday))
+              (?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
+        """, (consultant_id, first, last, email, phone, street, street2, city, state, postal, birthday))
         return int(cur.lastrowid)
 
     cur.execute("""
         INSERT INTO customers
-          (consultant_id, first_name, last_name, email, phone, street, city, state, postal_code, birthday, created_at, updated_at)
+          (consultant_id, first_name, last_name, email, phone, street, street2, city, state, postal_code, birthday, created_at, updated_at)
         VALUES
-          (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW(), NOW())
+          (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW(), NOW())
         RETURNING id
-    """, (consultant_id, first, last, email, phone, street, city, state, postal, birthday))
+    """, (consultant_id, first, last, email, phone, street, street2, city, state, postal, birthday))
     return int(cur.fetchone()[0])
 
 from datetime import datetime, timezone

@@ -137,7 +137,6 @@ def parse_customer_export_xlsx(path: str) -> List[Dict[str, Any]]:
 
         addr1 = get(row, "Address Line 1")
         addr2 = get(row, "Address Line 2")
-        street = " ".join([p for p in [addr1, addr2] if p]).strip()
 
         customer = {
             "first_name": first,
@@ -145,7 +144,8 @@ def parse_customer_export_xlsx(path: str) -> List[Dict[str, Any]]:
             "birthday": _normalize_import_birthday(get(row, "Birthday")),
             "phone": normalize_phone(get(row, "Phone")),
             "email": get(row, "Email").lower(),
-            "street": street,
+            "street": addr1,
+            "street2": addr2,
             "city": get(row, "City"),
             "state": normalize_state(get(row, "State/Territory")),
             "postal_code": get(row, "Postal Code"),

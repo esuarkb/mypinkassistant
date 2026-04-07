@@ -74,6 +74,15 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     page.locator('[id^="Street-"]').fill(str(customer.get("Street") or ""))
     page.wait_for_timeout(100)
 
+    dialog = page.get_by_role("dialog")
+
+    street2 = str(customer.get("Street2") or "").strip()
+    if street2:
+        dialog.get_by_role("button", name="Add Apartment/Suite/Etc").click()
+        page.wait_for_timeout(500)
+        page.locator('[id^="StreetLine2_t__c-"]').fill(street2)
+        page.wait_for_timeout(100)
+
     page.locator('[id^="City-"]').fill(str(customer.get("City") or ""))
     page.wait_for_timeout(100)
 
@@ -81,7 +90,6 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     page.wait_for_timeout(100)
 
     #new state dropdown logic:
-    dialog = page.get_by_role("dialog")
 
     dialog.get_by_role("button", name="Select an option").click()
     page.wait_for_timeout(700)

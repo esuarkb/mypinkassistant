@@ -117,6 +117,12 @@ CREATE TABLE IF NOT EXISTS order_items (
 cur.execute("CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)")
 cur.execute("CREATE INDEX IF NOT EXISTS idx_order_items_sku ON order_items(sku)")
 
+# ---- street2 column (apt/suite) ----
+try:
+    cur.execute("ALTER TABLE customers ADD COLUMN street2 TEXT")
+except Exception:
+    pass  # already exists
+
 # ---- customer followups (2+2+2) ----
 cur.execute("""
 CREATE TABLE IF NOT EXISTS customer_followups (
