@@ -132,6 +132,18 @@ CREATE TABLE IF NOT EXISTS customer_followups (
 );
 CREATE INDEX IF NOT EXISTS idx_followups_consultant ON customer_followups(consultant_id, completed_at);
 
+-- birthday followups
+CREATE TABLE IF NOT EXISTS customer_birthday_followups (
+  id BIGSERIAL PRIMARY KEY,
+  consultant_id BIGINT NOT NULL,
+  customer_id BIGINT NOT NULL,
+  year INT NOT NULL,
+  completed_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(customer_id, consultant_id, year)
+);
+CREATE INDEX IF NOT EXISTS idx_birthday_followups_consultant ON customer_birthday_followups(consultant_id, year);
+
 CREATE TABLE IF NOT EXISTS inventory_intouch_imports (
   id BIGSERIAL PRIMARY KEY,
   consultant_id BIGINT NOT NULL,

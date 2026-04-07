@@ -312,6 +312,147 @@ def complete_followup(cur, consultant_id: int, order_id: int, followup_window: i
     return True
 
 
+def get_pending_birthday_followups(cur, consultant_id: int) -> list[dict]:
+    """Return customers with a birthday this month that haven't been texted yet this year."""
+    PH = "?" if _SQLITE else "%s"
+    if _SQLITE:
+        cur.execute(
+            """
+            SELECT c.id, c.first_name, c.last_name, c.phone,
+                   CAST(strftime('%m', c.birthday) AS INTEGER) AS bday_month,
+                   CAST(strftime('%d', c.birthday) AS INTEGER) AS bday_day
+            FROM customers c
+            WHERE c.consultant_id = ?
+              AND c.birthday IS NOT NULL AND c.birthday <> ''
+              AND CAST(strftime('%m', c.birthday) AS INTEGER) = CAST(strftime('%m', 'now') AS INTEGER)
+              AND c.phone IS NOT NULL AND c.phone <> ''
+              AND COALESCE(c.source_status, 'active') = 'active'
+              AND NOT EXISTS (
+                  SELECT 1 FROM customer_birthday_followups bf
+                  WHERE bf.customer_id = c.id
+                    AND bf.consultant_id = ?
+                    AND bf.year = CAST(strftime('%Y', 'now') AS INTEGER)
+                    AND bf.completed_at IS NOT NULL
+              )
+            ORDER BY bday_day ASC
+            """,
+            (consultant_id, consultant_id),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT c.id, c.first_name, c.last_name, c.phone,
+                   EXTRACT(MONTH FROM c.birthday::date)::INT AS bday_month,
+                   EXTRACT(DAY FROM c.birthday::date)::INT AS bday_day
+            FROM customers c
+            WHERE c.consultant_id = %s
+              AND c.birthday IS NOT NULL AND c.birthday <> ''
+              AND EXTRACT(MONTH FROM c.birthday::date)::INT = EXTRACT(MONTH FROM NOW())::INT
+              AND c.phone IS NOT NULL AND c.phone <> ''
+              AND COALESCE(c.source_status, 'active') = 'active'
+              AND NOT EXISTS (
+                  SELECT 1 FROM customer_birthday_followups bf
+                  WHERE bf.customer_id = c.id
+                    AND bf.consultant_id = %s
+                    AND bf.year = EXTRACT(YEAR FROM NOW())::INT
+                    AND bf.completed_at IS NOT NULL
+              )
+            ORDER BY bday_day ASC
+            """,
+            (consultant_id, consultant_id),
+        )
+
+    rows = cur.fetchall()
+    results = []
+    for row in rows:
+        def _g(key, idx):
+            try:
+                return row[key] if isinstance(row, dict) else row[idx]
+            except Exception:
+                return None
+
+        customer_id = _g("id", 0)
+        first_name  = _g("first_name", 1) or ""
+        last_name   = _g("last_name", 2) or ""
+        phone       = _g("phone", 3) or ""
+        bday_month  = _g("bday_month", 4)
+        bday_day    = _g("bday_day", 5)
+
+        import calendar as _cal
+        bday_month_name = _cal.month_name[bday_month] if bday_month else ""
+
+        # first contact check
+        if _SQLITE:
+            cur.execute(
+                "SELECT 1 FROM customer_followups WHERE customer_id = ? AND consultant_id = ? AND completed_at IS NOT NULL LIMIT 1",
+                (customer_id, consultant_id),
+            )
+        else:
+            cur.execute(
+                "SELECT 1 FROM customer_followups WHERE customer_id = %s AND consultant_id = %s AND completed_at IS NOT NULL LIMIT 1",
+                (customer_id, consultant_id),
+            )
+        is_first_contact = cur.fetchone() is None
+
+        # also check birthday followups for first contact
+        if is_first_contact:
+            if _SQLITE:
+                cur.execute(
+                    "SELECT 1 FROM customer_birthday_followups WHERE customer_id = ? AND consultant_id = ? AND completed_at IS NOT NULL LIMIT 1",
+                    (customer_id, consultant_id),
+                )
+            else:
+                cur.execute(
+                    "SELECT 1 FROM customer_birthday_followups WHERE customer_id = %s AND consultant_id = %s AND completed_at IS NOT NULL LIMIT 1",
+                    (customer_id, consultant_id),
+                )
+            is_first_contact = cur.fetchone() is None
+
+        results.append({
+            "card_type":        "birthday",
+            "customer_id":      customer_id,
+            "first_name":       first_name,
+            "last_name":        last_name,
+            "phone":            phone,
+            "bday_day":         bday_day,
+            "bday_month_name":  bday_month_name,
+            "is_first_contact": is_first_contact,
+        })
+
+    return results
+
+
+def complete_birthday_followup(cur, consultant_id: int, customer_id: int) -> bool:
+    """Mark a birthday followup done for the current year."""
+    if is_postgres():
+        cur.execute(
+            """
+            INSERT INTO customer_birthday_followups (consultant_id, customer_id, year, completed_at)
+            VALUES (%s, %s, EXTRACT(YEAR FROM NOW())::INT, NOW())
+            ON CONFLICT (customer_id, consultant_id, year)
+            DO UPDATE SET completed_at = NOW()
+            """,
+            (consultant_id, customer_id),
+        )
+    else:
+        cur.execute(
+            """
+            INSERT INTO customer_birthday_followups (consultant_id, customer_id, year, completed_at)
+            VALUES (?, ?, CAST(strftime('%Y', 'now') AS INTEGER), datetime('now'))
+            ON CONFLICT(customer_id, consultant_id, year) DO UPDATE SET completed_at = datetime('now')
+            """,
+            (consultant_id, customer_id),
+        )
+    return True
+
+
+def _birthday_message(customer_first: str, consultant_first: str, is_first_contact: bool) -> str:
+    msg = f"Hey {customer_first}! Wishing you a wonderful birthday today! I hope your day is as beautiful as you are! 🎂"
+    if is_first_contact:
+        return f"Hey {customer_first}, It's {consultant_first}, your Mary Kay girl! Wishing you a wonderful birthday today! I hope your day is as beautiful as you are! 🎂"
+    return msg
+
+
 def _window_label(window_days: int) -> str:
     if window_days == 2:
         return "2-day follow-up"
@@ -326,38 +467,54 @@ def render_followup_cards(followups: list[dict], consultant_first: str) -> str:
     if not followups:
         return "You're all caught up on follow-ups! 🎉"
 
+    import html as _html
     parts = ['<div class="followup-list">']
     for f in followups:
-        order_id     = f["order_id"]
-        window       = f["window_days"]
-        first        = f["first_name"]
-        last         = f["last_name"]
-        phone        = f["phone"]
-        product      = f["product_name"]
-        item_count   = f["item_count"]
-        days_ago     = f["days_ago"]
-        is_first     = f["is_first_contact"]
+        first     = f["first_name"]
+        last      = f["last_name"]
+        phone     = f["phone"]
+        is_first  = f["is_first_contact"]
+        clean_phone = "".join(c for c in phone if c.isdigit() or c == "+")
 
-        label        = _window_label(window)
-        sms_text     = _followup_message(product, first, consultant_first, is_first, window, item_count=item_count)
-        clean_phone  = "".join(c for c in phone if c.isdigit() or c == "+")
-        sms_uri      = f"sms:{clean_phone}&body={quote(sms_text)}"
+        if f.get("card_type") == "birthday":
+            customer_id      = f["customer_id"]
+            bday_day         = f["bday_day"]
+            bday_month_name  = f["bday_month_name"]
+            sms_text    = _birthday_message(first, consultant_first, is_first)
+            sms_uri     = f"sms:{clean_phone}&body={quote(sms_text)}"
+            msg_attr    = _html.escape(sms_text, quote=True)
+            parts.append(
+                f'<div class="followup-card" data-card-type="birthday" data-customer-id="{customer_id}" data-phone="{clean_phone}" data-msg="{msg_attr}" data-sms="{sms_uri}">'
+                f'<button class="followup-circle" data-card-type="birthday" data-customer-id="{customer_id}" aria-label="Send birthday text">○</button>'
+                f'<div class="followup-info">'
+                f'<span class="followup-name">{first} {last}</span>'
+                f'<span class="followup-meta">🎂 Birthday &bull; {bday_month_name} {bday_day}</span>'
+                f'</div>'
+                f'</div>'
+            )
+        else:
+            order_id   = f["order_id"]
+            window     = f["window_days"]
+            product    = f["product_name"]
+            item_count = f["item_count"]
+            days_ago   = f["days_ago"]
 
-        clean_product = _clean_product_name(product)
-        extra = f" +{item_count - 1} more" if item_count > 1 else ""
-        product_meta = f"{clean_product}{extra}"
-
-        import html as _html
-        msg_attr = _html.escape(sms_text, quote=True)
-        parts.append(
-            f'<div class="followup-card" data-order="{order_id}" data-window="{window}" data-phone="{clean_phone}" data-msg="{msg_attr}" data-sms="{sms_uri}">'
-            f'<button class="followup-circle" data-order-id="{order_id}" data-window-id="{window}" aria-label="Send text">○</button>'
-            f'<div class="followup-info">'
-            f'<span class="followup-name">{first} {last}</span>'
-            f'<span class="followup-meta">{label} &bull; ordered {days_ago}d ago &bull; {product_meta}</span>'
-            f'</div>'
-            f'</div>'
-        )
+            label         = _window_label(window)
+            sms_text      = _followup_message(product, first, consultant_first, is_first, window, item_count=item_count)
+            sms_uri       = f"sms:{clean_phone}&body={quote(sms_text)}"
+            clean_product = _clean_product_name(product)
+            extra         = f" +{item_count - 1} more" if item_count > 1 else ""
+            product_meta  = f"{clean_product}{extra}"
+            msg_attr      = _html.escape(sms_text, quote=True)
+            parts.append(
+                f'<div class="followup-card" data-card-type="order" data-order="{order_id}" data-window="{window}" data-phone="{clean_phone}" data-msg="{msg_attr}" data-sms="{sms_uri}">'
+                f'<button class="followup-circle" data-card-type="order" data-order-id="{order_id}" data-window-id="{window}" aria-label="Send text">○</button>'
+                f'<div class="followup-info">'
+                f'<span class="followup-name">{first} {last}</span>'
+                f'<span class="followup-meta">{label} &bull; ordered {days_ago}d ago &bull; {product_meta}</span>'
+                f'</div>'
+                f'</div>'
+            )
 
     parts.append('</div>')
     return "\n".join(parts)

@@ -2421,7 +2421,7 @@ class MKChatEngine:
             _is_followup = any(t in lowered for t in _followup_triggers)
             _is_more = any(t in lowered for t in _more_triggers)
             if _is_followup or _is_more:
-                from followup_store import get_pending_followups, render_followup_cards
+                from followup_store import get_pending_followups, get_pending_birthday_followups, render_followup_cards
                 from db import tx
                 _offset = 0
                 if _is_more:
@@ -2430,8 +2430,10 @@ class MKChatEngine:
                 _consultant_first = (_gcf(consultant_id) or {}).get("first_name") or ""
                 _consultant_first = _consultant_first.strip()
                 with tx() as (conn, cur):
-                    _followups = get_pending_followups(cur, consultant_id=consultant_id, offset=_offset, limit=5)
-                state["followup_offset"] = _offset + len(_followups)
+                    _order_followups = get_pending_followups(cur, consultant_id=consultant_id, offset=_offset, limit=5)
+                    _bday_followups = get_pending_birthday_followups(cur, consultant_id=consultant_id) if _offset == 0 else []
+                _followups = _order_followups + _bday_followups
+                state["followup_offset"] = _offset + len(_order_followups)
                 save_session_state(state, session_id=sid)
                 return ChatReply(render_followup_cards(_followups, _consultant_first))
 
@@ -3068,10 +3070,17 @@ class MKChatEngine:
                         except ValueError:
                             pass
 
+                    valid_states = set(STATE_MAP.values())
+                    state_ok = state_val in valid_states
                     if not (street and city and state_val and postal):
                         return ChatReply(
                             "I need the full address before I can save this customer, as MyCustomers now requires it for all orders. "
                             "Please type the street, city, state, and ZIP, or say cancel."
+                        )
+                    if not state_ok:
+                        return ChatReply(
+                            f"I wasn't able to recognize \"{state_val}\" as a valid state. "
+                            "Please re-enter the address with the full state name (e.g. Texas) or abbreviation (e.g. TX), or say cancel."
                         )
 
                     with tx() as (conn, cur):

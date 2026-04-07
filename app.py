@@ -1506,15 +1506,24 @@ async def followup_complete(request: Request):
     except Exception:
         return JSONResponse({"ok": False}, status_code=400)
 
-    order_id = data.get("order_id")
-    followup_window = data.get("followup_window")
-    if not order_id or not followup_window:
-        return JSONResponse({"ok": False}, status_code=400)
-
-    from followup_store import complete_followup
+    card_type = data.get("card_type", "order")
     from db import tx
-    with tx() as (conn, cur):
-        ok = complete_followup(cur, consultant_id=int(cid), order_id=int(order_id), followup_window=int(followup_window))
+
+    if card_type == "birthday":
+        customer_id = data.get("customer_id")
+        if not customer_id:
+            return JSONResponse({"ok": False}, status_code=400)
+        from followup_store import complete_birthday_followup
+        with tx() as (conn, cur):
+            ok = complete_birthday_followup(cur, consultant_id=int(cid), customer_id=int(customer_id))
+    else:
+        order_id = data.get("order_id")
+        followup_window = data.get("followup_window")
+        if not order_id or not followup_window:
+            return JSONResponse({"ok": False}, status_code=400)
+        from followup_store import complete_followup
+        with tx() as (conn, cur):
+            ok = complete_followup(cur, consultant_id=int(cid), order_id=int(order_id), followup_window=int(followup_window))
     return JSONResponse({"ok": ok})
 
 
