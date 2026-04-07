@@ -119,6 +119,19 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_sku ON order_items(sku);
 
+-- customer followups (2+2+2)
+CREATE TABLE IF NOT EXISTS customer_followups (
+  id BIGSERIAL PRIMARY KEY,
+  consultant_id BIGINT NOT NULL,
+  customer_id BIGINT NOT NULL,
+  order_id BIGINT NOT NULL,
+  followup_window INT NOT NULL,
+  completed_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(order_id, followup_window)
+);
+CREATE INDEX IF NOT EXISTS idx_followups_consultant ON customer_followups(consultant_id, completed_at);
+
 CREATE TABLE IF NOT EXISTS inventory_intouch_imports (
   id BIGSERIAL PRIMARY KEY,
   consultant_id BIGINT NOT NULL,

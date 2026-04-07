@@ -98,9 +98,9 @@ function scrollChatToBottom() {
 function addMessage(text, who) {
     const div = document.createElement("div");
     div.className = `msg ${who}`;
-    if (who === "bot" && text.includes("<a ")) {
-        // Server-generated HTML (e.g. customer card with clickable links)
-        div.innerHTML = text.replace(/\n/g, "<br>");
+    if (who === "bot" && (text.includes("<a ") || text.includes("<div"))) {
+        // Server-generated HTML (e.g. customer cards, follow-up cards)
+        div.innerHTML = text;
     } else {
         div.textContent = text;
     }
@@ -250,6 +250,78 @@ msg.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
+    }
+});
+
+// Delegated handler for follow-up circles — avoids inline onclick CSP issues
+chat.addEventListener("click", function(e) {
+    var btn = e.target.closest(".followup-circle");
+    if (!btn) return;
+
+    var card = btn.closest(".followup-card");
+    if (!card) return;
+
+    var orderId = parseInt(btn.dataset.orderId, 10);
+    var followupWindow = parseInt(btn.dataset.windowId, 10);
+    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile) {
+        window.location.href = card.dataset.sms;
+    } else {
+        var existing = card.querySelector(".followup-desktop-panel");
+        if (existing) {
+            existing.remove();
+        } else {
+            var phone = card.dataset.phone || "";
+            var msg = card.dataset.msg || "";
+            var panel = document.createElement("div");
+            panel.className = "followup-desktop-panel";
+            var copyBtn = document.createElement("button");
+            copyBtn.className = "fdp-copy";
+            copyBtn.textContent = "Copy message";
+            copyBtn.addEventListener("click", function() {
+                function fallbackCopy() {
+                    var ta = document.createElement("textarea");
+                    ta.value = msg;
+                    ta.style.position = "fixed";
+                    ta.style.opacity = "0";
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(ta);
+                    copyBtn.textContent = "Copied!";
+                    setTimeout(function() { copyBtn.textContent = "Copy message"; }, 1500);
+                }
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(msg).then(function() {
+                        copyBtn.textContent = "Copied!";
+                        setTimeout(function() { copyBtn.textContent = "Copy message"; }, 1500);
+                    }).catch(function() { fallbackCopy(); });
+                } else {
+                    fallbackCopy();
+                }
+            });
+            var phoneDiv = document.createElement("div");
+            phoneDiv.className = "fdp-phone";
+            phoneDiv.textContent = "📱 " + phone;
+            var msgDiv = document.createElement("div");
+            msgDiv.className = "fdp-msg";
+            msgDiv.textContent = msg;
+            panel.appendChild(phoneDiv);
+            panel.appendChild(msgDiv);
+            panel.appendChild(copyBtn);
+            card.appendChild(panel);
+        }
+    }
+
+    if (!btn.classList.contains("done")) {
+        btn.classList.add("done");
+        btn.textContent = "✓";
+        fetch("/followup/complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_id: orderId, followup_window: followupWindow })
+        }).catch(function() {});
     }
 });
 

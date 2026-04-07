@@ -2413,6 +2413,29 @@ class MKChatEngine:
                 return ChatReply(format_leaderboard(rows, title))
         
         # -------------------------
+        # Follow-up trigger (2+2+2)
+        # -------------------------
+        if not pending:
+            _followup_triggers = ("follow up", "followup", "follow-up", "any follow", "follow ups", "followups")
+            _more_triggers = ("any more", "more follow", "next follow")
+            _is_followup = any(t in lowered for t in _followup_triggers)
+            _is_more = any(t in lowered for t in _more_triggers)
+            if _is_followup or _is_more:
+                from followup_store import get_pending_followups, render_followup_cards
+                from db import tx
+                _offset = 0
+                if _is_more:
+                    _offset = state.get("followup_offset") or 0
+                from auth_core import get_consultant_full as _gcf
+                _consultant_first = (_gcf(consultant_id) or {}).get("first_name") or ""
+                _consultant_first = _consultant_first.strip()
+                with tx() as (conn, cur):
+                    _followups = get_pending_followups(cur, consultant_id=consultant_id, offset=_offset, limit=5)
+                state["followup_offset"] = _offset + len(_followups)
+                save_session_state(state, session_id=sid)
+                return ChatReply(render_followup_cards(_followups, _consultant_first))
+
+        # -------------------------
         # Customer search by product
         # -------------------------
         if not pending:

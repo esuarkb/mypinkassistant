@@ -117,6 +117,21 @@ CREATE TABLE IF NOT EXISTS order_items (
 cur.execute("CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)")
 cur.execute("CREATE INDEX IF NOT EXISTS idx_order_items_sku ON order_items(sku)")
 
+# ---- customer followups (2+2+2) ----
+cur.execute("""
+CREATE TABLE IF NOT EXISTS customer_followups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL,
+  customer_id INTEGER NOT NULL,
+  order_id INTEGER NOT NULL,
+  followup_window INTEGER NOT NULL,
+  completed_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(order_id, followup_window)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_followups_consultant ON customer_followups(consultant_id, completed_at)")
+
 conn.commit()
 conn.close()
 

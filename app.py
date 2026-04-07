@@ -1492,6 +1492,33 @@ def reset_inventory_import_history(request: Request):
 
 
 # -------------------------
+# Follow-up API
+# -------------------------
+@app.post("/followup/complete")
+async def followup_complete(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return JSONResponse({"ok": False}, status_code=401)
+
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False}, status_code=400)
+
+    order_id = data.get("order_id")
+    followup_window = data.get("followup_window")
+    if not order_id or not followup_window:
+        return JSONResponse({"ok": False}, status_code=400)
+
+    from followup_store import complete_followup
+    from db import tx
+    with tx() as (conn, cur):
+        ok = complete_followup(cur, consultant_id=int(cid), order_id=int(order_id), followup_window=int(followup_window))
+    return JSONResponse({"ok": ok})
+
+
+# -------------------------
 # Chat + Jobs API (protected)
 # -------------------------
 @app.post("/chat")

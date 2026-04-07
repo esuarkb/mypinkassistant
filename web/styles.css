@@ -464,3 +464,107 @@ body.noticeActive .layout {
         display: none;
     }
 }
+
+/* -------- Follow-up cards -------- */
+.followup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.followup-card {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
+.followup-circle {
+    background: none;
+    border: 2px solid var(--pink);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--pink);
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.followup-circle.done {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: #fff;
+    cursor: default;
+}
+
+.followup-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.followup-name {
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.followup-meta {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.followup-desktop-panel {
+    grid-column: 1 / -1;
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: #f9f9f9;
+    border-radius: 8px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fdp-phone {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.fdp-msg {
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.fdp-copy {
+    align-self: flex-start;
+    background: var(--pink);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.fdp-copy:hover {
+    background: var(--pinkHover);
+}
