@@ -1770,20 +1770,33 @@ def admin_diagnostics(request: Request):
     # -------------------------
     conn2 = _conn()
     cur2 = conn2.cursor()
-    cur2.execute("SELECT id, first_name, last_name, email FROM consultants")
+    cur2.execute("SELECT id, first_name, last_name, email, referred_by_consultant_id, created_at FROM consultants ORDER BY id ASC")
     consultant_rows = cur2.fetchall()
     conn2.close()
 
     consultants_html = {}
+    consultant_names = {}  # id -> "First Last" for referrer lookup
+    consultant_data = []   # for the consultants table
+
     for r in consultant_rows:
         cid = _row_get(r, "id", None) if _row_get(r, "id", None) is not None else r[0]
         fn = (_row_get(r, "first_name", "") if _row_get(r, "first_name", None) is not None else (r[1] or "")).strip()
         ln = (_row_get(r, "last_name", "") if _row_get(r, "last_name", None) is not None else (r[2] or "")).strip()
         em = (_row_get(r, "email", "") if _row_get(r, "email", None) is not None else (r[3] or "")).strip()
+        ref_by = _row_get(r, "referred_by_consultant_id", None)
+        if ref_by is None:
+            try: ref_by = r[4]
+            except Exception: ref_by = None
+        created = _row_get(r, "created_at", None)
+        if created is None:
+            try: created = r[5]
+            except Exception: created = None
 
         name = f"{fn} {ln}".strip() or "Unknown"
         email_html = f"<div class='consultant-email'>{em}</div>" if em else ""
         consultants_html[int(cid)] = f"<div class='consultant-name'>{name}</div>{email_html}"
+        consultant_names[int(cid)] = name
+        consultant_data.append({"id": int(cid), "name": name, "email": em, "ref_by": ref_by, "created_at": created})
 
     def consultant_cell(cid_val):
         try:
@@ -1791,6 +1804,21 @@ def admin_diagnostics(request: Request):
         except Exception:
             return "<div class='consultant-name'>Unknown</div>"
         return consultants_html.get(cid_int, "<div class='consultant-name'>Unknown</div>")
+
+    referred = [c for c in consultant_data if c["ref_by"]][-15:][::-1]
+    consultant_rows_html = ""
+    for c in referred:
+        ref = consultant_names.get(int(c["ref_by"]), "Unknown")
+        consultant_rows_html += (
+            "<tr>"
+            "<td>" + str(c["name"]) + "</td>"
+            "<td style='font-size:12px;color:#666'>" + str(c["email"]) + "</td>"
+            "<td>" + ref + "</td>"
+            "<td>" + (_fmt_ct(c["created_at"]) or "") + "</td>"
+            "</tr>"
+        )
+    if not consultant_rows_html:
+        consultant_rows_html = "<tr><td colspan='4' class='muted'>No referred consultants yet.</td></tr>"
 
     html = f"""
 <!doctype html>
@@ -1938,7 +1966,15 @@ def admin_diagnostics(request: Request):
       {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td><details><summary><code>{((r['error'] or '').splitlines() or [''])[0][:80]}</code></summary><code>{(r['error'] or '')[:500]}</code></details></td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
     </table>
 
-    <div style="margin-top:16px" class="muted">
+    <h2 style=”margin:16px 0 6px;font-size:16px”>Referred Consultants (last 15)</h2>
+    <table>
+      <tr>
+        <th>name</th><th>email</th><th>referred by</th><th>joined (CT)</th>
+      </tr>
+      {consultant_rows_html}
+    </table>
+
+    <div style=”margin-top:16px” class=”muted”>
       Tip: if you ever see “running” jobs older than ~15 minutes, the worker likely crashed mid-run.
     </div>
 
