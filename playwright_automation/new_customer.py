@@ -127,6 +127,16 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     page.wait_for_timeout(100)
     page.get_by_role("textbox", name="Birthday (Optional)").fill(str(customer.get("Birthday") or ""))
     page.wait_for_timeout(100)
+
+    tags = str(customer.get("Tags") or "").strip()
+    if tags:
+        tags_field = page.locator('[id^="autocomplete-textarea"]')
+        for tag in [t.strip() for t in tags.split(",") if t.strip()]:
+            tags_field.fill(tag)
+            page.wait_for_timeout(200)
+            tags_field.press("Enter")
+            page.wait_for_timeout(200)
+
     page.get_by_role("button", name="Save New Customer").click()
     page.wait_for_timeout(1000)
     

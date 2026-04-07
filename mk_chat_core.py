@@ -549,7 +549,8 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         '    "City": "",\n'
         '    "State": "",\n'
         '    "Postal Code": "",\n'
-        '    "Birthday": ""\n'
+        '    "Birthday": "",\n'
+        '    "Tags": ""\n'
         "  }\n"
         "}\n\n"
         "If ORDER:\n"
@@ -566,6 +567,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         "Rules:\n"
         "- State must be full name (e.g., Alabama).\n"
         "- Street is the street number and name only. Put apt/unit/suite/lot/# info in Street2.\n"
+        "- Extract comma-separated tags from 'tag:' or 'tags:' keyword into Tags as a plain comma-separated string.\n"
         "- Birthday may be provided as MM/DD, Month Day, or YYYY-MM-DD. Output as YYYY-MM-DD. If year missing, use 2000.\n"
         "- For shades/colors/variants (Normal/Dry, Combination/Oily), include them in item text if present.\n"
         "- If the user says a variant applies to multiple items (e.g., 'normal/dry both'), append that variant phrase to each affected item.\n"
@@ -1468,6 +1470,15 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             if b:
                 c["Birthday"] = b
                 notes.append("Birthday updated")
+            continue
+
+        # tags:
+        if low.startswith("tag"):
+            raw = re.sub(r"^tags?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
+            tags = ", ".join(t.strip() for t in raw.split(",") if t.strip())
+            if tags:
+                c["Tags"] = tags
+                notes.append("Tags updated")
             continue
 
         # address:
@@ -3677,6 +3688,12 @@ class MKChatEngine:
         #if not street:
         #    warning = "\n⚠ No address added yet. Mary Kay now requires an address before personal inventory orders can be submitted.\n"
 
+        tags_raw = (customer.get("Tags") or "").strip()
+        tags = ", ".join(t.strip() for t in tags_raw.split(",") if t.strip())
+        if tags:
+            customer["Tags"] = tags  # normalize in-place for storage/payload
+        tags_line = f"• Tags: {tags}\n" if tags else ""
+
         return (
             f"{ui['cust_submit_intro']}\n"
             f"• {ui['name']}: {customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}\n"
@@ -3684,7 +3701,7 @@ class MKChatEngine:
             f"• {ui['phone']}: {phone_disp or ui['none']}\n"
             f"• {ui['address']}: {addr}\n"
             f"• {ui['birthday']}: {birthday_disp or ui['none']}\n"
-        #    f"{warning}"
+            f"{tags_line}"
             f"{ui['cust_confirm_q']}\n"
             f"{ui['cust_edit_hint']}"
         )

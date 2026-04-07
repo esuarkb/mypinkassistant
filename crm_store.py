@@ -328,25 +328,26 @@ def upsert_customer_from_pending(cur, consultant_id: int, customer: Dict[str, An
     state = (customer.get("State") or "").strip() or None
     postal = (customer.get("Postal Code") or customer.get("Zip") or "").strip() or None
     birthday = (customer.get("Birthday") or "").strip() or None
+    tags = (customer.get("Tags") or "").strip() or None
 
     is_sqlite = _is_sqlite_cursor(cur)
 
     if is_sqlite:
         cur.execute("""
             INSERT INTO customers
-              (consultant_id, first_name, last_name, email, phone, street, street2, city, state, postal_code, birthday, created_at, updated_at)
+              (consultant_id, first_name, last_name, email, phone, street, street2, city, state, postal_code, birthday, tags, created_at, updated_at)
             VALUES
-              (?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
-        """, (consultant_id, first, last, email, phone, street, street2, city, state, postal, birthday))
+              (?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'), datetime('now'))
+        """, (consultant_id, first, last, email, phone, street, street2, city, state, postal, birthday, tags))
         return int(cur.lastrowid)
 
     cur.execute("""
         INSERT INTO customers
-          (consultant_id, first_name, last_name, email, phone, street, street2, city, state, postal_code, birthday, created_at, updated_at)
+          (consultant_id, first_name, last_name, email, phone, street, street2, city, state, postal_code, birthday, tags, created_at, updated_at)
         VALUES
-          (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW(), NOW())
+          (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW(), NOW())
         RETURNING id
-    """, (consultant_id, first, last, email, phone, street, street2, city, state, postal, birthday))
+    """, (consultant_id, first, last, email, phone, street, street2, city, state, postal, birthday, tags))
     return int(cur.fetchone()[0])
 
 from datetime import datetime, timezone

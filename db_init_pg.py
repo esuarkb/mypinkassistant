@@ -135,6 +135,9 @@ CREATE INDEX IF NOT EXISTS idx_followups_consultant ON customer_followups(consul
 -- street2 column (apt/suite)
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS street2 TEXT;
 
+-- tags column
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS tags TEXT;
+
 -- birthday followups
 CREATE TABLE IF NOT EXISTS customer_birthday_followups (
   id BIGSERIAL PRIMARY KEY,

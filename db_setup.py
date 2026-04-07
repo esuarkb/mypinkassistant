@@ -123,6 +123,12 @@ try:
 except Exception:
     pass  # already exists
 
+# ---- tags column ----
+try:
+    cur.execute("ALTER TABLE customers ADD COLUMN tags TEXT")
+except Exception:
+    pass  # already exists
+
 # ---- customer followups (2+2+2) ----
 cur.execute("""
 CREATE TABLE IF NOT EXISTS customer_followups (
