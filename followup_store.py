@@ -319,12 +319,24 @@ def get_pending_birthday_followups(cur, consultant_id: int) -> list[dict]:
         cur.execute(
             """
             SELECT c.id, c.first_name, c.last_name, c.phone,
-                   CAST(strftime('%m', c.birthday) AS INTEGER) AS bday_month,
-                   CAST(strftime('%d', c.birthday) AS INTEGER) AS bday_day
+                   CAST(CASE
+                     WHEN c.birthday LIKE '____-__-__'
+                       THEN strftime('%m', c.birthday)
+                     ELSE substr(c.birthday, 1, instr(c.birthday, '-') - 1)
+                   END AS INTEGER) AS bday_month,
+                   CAST(CASE
+                     WHEN c.birthday LIKE '____-__-__'
+                       THEN strftime('%d', c.birthday)
+                     ELSE substr(c.birthday, instr(c.birthday, '-') + 1)
+                   END AS INTEGER) AS bday_day
             FROM customers c
             WHERE c.consultant_id = ?
               AND c.birthday IS NOT NULL AND c.birthday <> ''
-              AND CAST(strftime('%m', c.birthday) AS INTEGER) = CAST(strftime('%m', 'now') AS INTEGER)
+              AND CAST(CASE
+                    WHEN c.birthday LIKE '____-__-__'
+                      THEN strftime('%m', c.birthday)
+                    ELSE substr(c.birthday, 1, instr(c.birthday, '-') - 1)
+                  END AS INTEGER) = CAST(strftime('%m', 'now') AS INTEGER)
               AND c.phone IS NOT NULL AND c.phone <> ''
               AND COALESCE(c.source_status, 'active') = 'active'
               AND NOT EXISTS (
@@ -342,12 +354,26 @@ def get_pending_birthday_followups(cur, consultant_id: int) -> list[dict]:
         cur.execute(
             """
             SELECT c.id, c.first_name, c.last_name, c.phone,
-                   EXTRACT(MONTH FROM c.birthday::date)::INT AS bday_month,
-                   EXTRACT(DAY FROM c.birthday::date)::INT AS bday_day
+                   CASE
+                     WHEN c.birthday ~ '^\d{4}-\d{2}-\d{2}$'
+                       THEN EXTRACT(MONTH FROM c.birthday::date)::INT
+                     ELSE SPLIT_PART(c.birthday, '-', 1)::INT
+                   END AS bday_month,
+                   CASE
+                     WHEN c.birthday ~ '^\d{4}-\d{2}-\d{2}$'
+                       THEN EXTRACT(DAY FROM c.birthday::date)::INT
+                     ELSE SPLIT_PART(c.birthday, '-', 2)::INT
+                   END AS bday_day
             FROM customers c
             WHERE c.consultant_id = %s
               AND c.birthday IS NOT NULL AND c.birthday <> ''
-              AND EXTRACT(MONTH FROM c.birthday::date)::INT = EXTRACT(MONTH FROM NOW())::INT
+              AND (
+                CASE
+                  WHEN c.birthday ~ '^\d{4}-\d{2}-\d{2}$'
+                    THEN EXTRACT(MONTH FROM c.birthday::date)::INT
+                  ELSE SPLIT_PART(c.birthday, '-', 1)::INT
+                END
+              ) = EXTRACT(MONTH FROM NOW())::INT
               AND c.phone IS NOT NULL AND c.phone <> ''
               AND COALESCE(c.source_status, 'active') = 'active'
               AND NOT EXISTS (
