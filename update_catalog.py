@@ -92,7 +92,8 @@ def scrape_products(page, opos_url: str) -> list[dict]:
                 }
                 if (!variant) {
                     // Look for visible variant text element (skin type, shade name shown on page)
-                    const variantEl = row.querySelector('.product-variant-name, .variant-name, .product-shade, [class*="variant"]');
+                    // .sku-formula-name covers skin type variants (Normal/Dry, Combination/Oily)
+                    const variantEl = row.querySelector('.sku-formula-name, .product-variant-name, .variant-name, .product-shade, [class*="variant"]');
                     if (variantEl) {
                         variant = variantEl.textContent.trim();
                     }
@@ -137,8 +138,14 @@ def load_catalog(path: Path) -> dict[str, dict]:
 def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict] | None = None) -> None:
     # Items currently in OPOS — preserve scrape order
     if scraped_order:
-        opos_skus = [item["sku"] for item in scraped_order]
-        opos_set  = set(opos_skus)
+        # Deduplicate scrape order — same SKU can appear twice if listed under multiple categories
+        seen_skus: set[str] = set()
+        opos_skus = []
+        for item in scraped_order:
+            if item["sku"] not in seen_skus:
+                opos_skus.append(item["sku"])
+                seen_skus.add(item["sku"])
+        opos_set  = seen_skus
         active_rows = [catalog[sku] for sku in opos_skus if sku in catalog]
         # Items not in this scrape — only treat as dropped if last_seen > 60 days ago (or never seen)
         cutoff = (date.today() - __import__("datetime").timedelta(days=60)).isoformat()
@@ -165,6 +172,7 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
 def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
     import re as _re
     added = updated = auto_labeled = 0
+    scraped_skus = {item["sku"] for item in scraped}
     for item in scraped:
         sku       = item["sku"]
         name      = item["product_name"]
@@ -201,6 +209,8 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
             for other_sku, other in catalog.items():
                 if other_sku == sku:
                     continue
+                if other_sku in scraped_skus:
+                    continue  # still active in OPOS — never label as old
                 other_name = other["product_name"]
                 if "(Old SKU)" in other_name:
                     continue

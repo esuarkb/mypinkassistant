@@ -9,32 +9,32 @@ sku,product_name,price,search_terms,date_added,last_seen
 10233594,Mary Kay Illuminating Bronzer de edición limitada - Medium Glow,22.00,,,2026-04-08
 10233595,Mary Kay Illuminating Bronzer de edición limitada - Deep Glow,22.00,,,2026-04-08
 10235072,Mary Kay Nourishing Oil,50.00,,,2026-04-08
-10230672,Mary Kay Hydrating Regimen,80.00,skin care,,2026-04-08
-10230673,Mary Kay Mattifying Regimen,80.00,skin care,,2026-04-08
+10230672,Mary Kay Hydrating Regimen - Normal/Reseca,80.00,skin care,,2026-04-08
+10230673,Mary Kay Mattifying Regimen - Combinada/grasa,80.00,skin care,,2026-04-08
 10201304,Mary Kay Hydrating Cleanser,20.00,,,2026-04-08
 10201374,Mary Kay Hydrating Moisturizer,20.00,,,2026-04-08
 10201340,Mary Kay Mattifying Cleanser,20.00,,,2026-04-08
 10201376,Mary Kay Mattifying Moisturizer,20.00,,,2026-04-08
 10201395,Mary Kay Exfoliating Scrub,20.00,,,2026-04-08
 10201384,Mary Kay Balancing Toner,20.00,,,2026-04-08
-10204126,Mary Kay Hydrating Go Set,22.00,,,2026-04-08
-10204143,Mary Kay Mattifying Go Set,22.00,,,2026-04-08
+10204126,Mary Kay Hydrating Go Set - Normal/Reseca,22.00,,,2026-04-08
+10204143,Mary Kay Mattifying Go Set - Combinada/grasa,22.00,,,2026-04-08
 10219506,TimeWise Targeted-Action Toning Lotion,36.00,,,2026-04-08
-10217417,TimeWise Miracle Set - Normal/Dry,116.00,,,2026-04-08
-10217415,TimeWise Miracle Set - Combination/Oily,116.00,,,2026-04-08
-10223243,Ultimate TimeWise Miracle Set - Normal/Dry,150.00,,,2026-04-08
-10223244,Ultimate TimeWise Miracle Set - Combination/Oily,150.00,,,2026-04-08
-10223246,Beyond Ultimate TimeWise Miracle Set - Normal/Dry,208.00,,,2026-04-08
-10223245,Beyond Ultimate TimeWise Miracle Set - Combination/Oily,208.00,,,2026-04-08
+10217417,Juego Milagroso TimeWise - Normal/Reseca,116.00,,,2026-04-08
+10217415,Juego Milagroso TimeWise - Combinada/grasa,116.00,,,2026-04-08
+10223243,Juego Milagroso TimeWise Ultimate - Normal/reseca,150.00,,,2026-04-08
+10223244,Juego Milagroso TimeWise Ultimate - Combinada/Grasa,150.00,,,2026-04-08
+10223246,Juego Milagroso TimeWise Beyond Ultimate - Normal/Reseca,208.00,,,2026-04-08
+10223245,Juego Milagroso TimeWise Beyond Ultimate - Combinada/Grasa,208.00,,,2026-04-08
 10217385,TimeWise Daytime Defender Sunscreen Broad Spectrum SPF 30,34.00,,,2026-04-08
 10217387,TimeWise Nighttime Recovery,34.00,,,2026-04-08
-10217393,TimeWise Antioxidant Moisturizer - Normal/Dry,34.00,,,2026-04-08
-10217391,TimeWise Antioxidant Moisturizer - Combination/Oily,34.00,,,2026-04-08
+10217393,TimeWise Antioxidant Moisturizer - Normal/Reseca,34.00,,,2026-04-08
+10217391,TimeWise Antioxidant Moisturizer - Combinada/Grasa,34.00,,,2026-04-08
 10217408,TimeWise Eye Cream,38.00,,,2026-04-08
-10254234,TimeWise 4-in-1 Cleanser,26.00,,2026-04-08,2026-04-08
-10217404,TimeWise 4-in-1 Cleanser (Old SKU),26.00,,,2026-04-08
-10217456,TimeWise Miracle Set The Go Set - Normal/Dry,28.00,,,2026-04-08
-10217455,TimeWise Miracle Set The Go Set - Combination/Oily,28.00,,,2026-04-08
+10254234,TimeWise 4-in-1 Cleanser - Normal/Reseca,26.00,,2026-04-08,2026-04-08
+10217404,TimeWise 4-in-1 Cleanser - Combinada/Grasa,26.00,,2026-04-08,2026-04-08
+10217456,Juego Milagroso TimeWise The Go Set - Normal/Reseca,28.00,,,2026-04-08
+10217455,Juego Milagroso TimeWise The Go Set - Combinada/Grasa,28.00,,,2026-04-08
 10198866,TimeWise Microdermabrasion Plus Set,58.00,,,2026-04-08
 10198715,TimeWise Pore Minimizer,28.00,,,2026-04-08
 10171886,TimeWise Replenishing Serum C+E,60.00,,,2026-04-08
@@ -293,10 +293,10 @@ sku,product_name,price,search_terms,date_added,last_seen
 10143940,"Mary Kay Travel Roll-Up Bag, (vacío)",40.00,,,2026-04-08
 10202993,Mary Kay Pro Palette (vacía),28.00,,,2026-04-08
 10080376,"Hello, Clean",36.00,,,2026-04-08
-10162409,Mary Kay Apple & Almond Scented Body Lotion,16.00,,,2026-04-08
-10162408,Mary Kay Apple & Almond Scented Shower Gel,16.00,,,2026-04-08
-10162416,Mary Kay Berry & Vanilla Scented Body Lotion,16.00,,,2026-04-08
-10162443,Mary Kay Berry & Vanilla Scented Shower Gel,16.00,,,2026-04-08
+10162409,Mary Kay Apple & Almond Scented Body Lotion - Apple & Almond,16.00,,,2026-04-08
+10162408,Mary Kay Apple & Almond Scented Shower Gel - Apple & Almond,16.00,,,2026-04-08
+10162416,Mary Kay Berry & Vanilla Scented Body Lotion - Berry & Vanilla,16.00,,,2026-04-08
+10162443,Mary Kay Berry & Vanilla Scented Shower Gel - Berry & Vanilla,16.00,,,2026-04-08
 10136769,Mary Kay 2-In-1 Body Wash & Shave,18.00,,,2026-04-08
 10073789,Mary Kay Hydrating Lotion,18.00,,,2026-04-08
 10091504,White Tea & Citrus Satin Body Revitalizing Shea Scrub,22.00,,,2026-04-08
