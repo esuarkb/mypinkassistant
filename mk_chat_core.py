@@ -995,6 +995,9 @@ def birthday_display(normalized: str) -> str:
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
         y, mo, d = map(int, s.split("-"))
         month = calendar.month_name[mo]
+        # Year 2000 is our default placeholder when no year was provided — don't show it
+        if y == 2000:
+            return f"{month} {d}"
         return f"{month} {d}, {y}"
 
     # Month/day only
