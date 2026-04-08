@@ -81,11 +81,19 @@ def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment
 #    page.get_by_role("button", name="Add to Bag").click()
 #    page.wait_for_timeout(300)
 
+class SkuNotCdsEligible(Exception):
+    pass
+
 def add_sku_to_bag(page: Page, sku: str) -> None:
     # search for SKU and wait for results to populate
     page.get_by_role("searchbox", name="Note Title").fill(sku)
     # waits for the SKU to appear in search results
     page.locator(f"text={sku}").first.wait_for(timeout=12000)
+
+    # check for no-CDS chip before attempting to add
+    no_cds = page.locator('img[src*="noCdsChip"]')
+    if no_cds.count() > 0:
+        raise SkuNotCdsEligible(f"SKU {sku} is not available for CDS orders (expired or out of stock).")
 
     # click Add to Bag and give the UI a brief moment to update
     # waits for the Add to Bag button to be enabled for the SKU
@@ -136,8 +144,15 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
 
     open_customer_and_start_order(page, first, last, fulfillment_method)
 
+    skipped_skus = []
     for row in rows:
         sku = row["SKU"].strip()
-        add_sku_to_bag(page, sku)
+        try:
+            add_sku_to_bag(page, sku)
+        except SkuNotCdsEligible as e:
+            skipped_skus.append(str(e))
 
     finalize_order(page, leave_pending=leave_pending)
+
+    if skipped_skus:
+        raise SkuNotCdsEligible("\n".join(skipped_skus))

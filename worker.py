@@ -81,7 +81,7 @@ from worker_queue import (
 
 from playwright_automation.login import login_intouch
 from playwright_automation.new_customer import create_customer_basic
-from playwright_automation.orders import process_order_batch
+from playwright_automation.orders import process_order_batch, SkuNotCdsEligible
 from playwright_automation.inventory_import import import_inventory_orders
 from inventory_import_store import ensure_import_table
 ensure_import_table()
@@ -424,12 +424,18 @@ def main():
                             job_ids = [job_id] + [jid for (jid, _p) in extra]
 
                             # Process one MyCustomers order containing all SKUs
-                            process_order_batch(page, rows)
+                            skipped_msg = None
+                            try:
+                                process_order_batch(page, rows)
+                            except SkuNotCdsEligible as e:
+                                skipped_msg = str(e)
 
                             customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
                             fulfillment = payload.get("fulfillment_method", "inventory")
                             leave_pending = bool(payload.get("leave_pending", False))
-                            if fulfillment == "cds":
+                            if skipped_msg:
+                                done_msg = f"CDS order for {customer_name} saved, but some items were skipped: {skipped_msg}"
+                            elif fulfillment == "cds":
                                 done_msg = f"CDS order for {customer_name} saved — pending in MyCustomers. ✅"
                             elif leave_pending:
                                 done_msg = f"Order for {customer_name} saved as pending. ✅"
