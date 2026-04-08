@@ -265,6 +265,8 @@ def load_catalog(path: Path) -> List[dict]:
                 continue
             if "the look" in name_l or "booklet" in name_l or "look (" in name_l:
                 continue
+            if "(old sku)" in name_l:
+                continue
 
             try:
                 price_val = float(price) if price else None
@@ -306,6 +308,8 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         "3d",
         "cc cream",
         "miracle set",
+        "repair set",
+        "volu-firm set",
         "satin hands",
         "satin lips",
         "foundation primer",
@@ -477,6 +481,9 @@ def llm_pick_from_candidates(client: OpenAI, item_text: str, candidates: List[di
         "Return ONLY JSON like: {\"pick\": 3} or {\"pick\": null}.\n"
         "Rules:\n"
         "- If the user mentions a variant (Normal/Dry, Combination/Oily, shade/color), prefer the matching variant.\n"
+        "- If the user says 'ultimate', prefer items with 'Ultimate' in the name.\n"
+        "- If the user says 'go set' or 'travel', prefer items with 'Go Set' in the name.\n"
+        "- If the user does NOT say 'ultimate', 'beyond', or 'go', prefer the standard base set (shortest name, lowest price).\n"
         "- If multiple are plausible, pick the closest overall.\n"
         "- If none are clearly correct, return {\"pick\": null}.\n"
     )
@@ -888,6 +895,18 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
 
     # If it has a zip but didn't match full patterns, don't guess (avoid bad splits)
     return None
+
+def normalize_city(city: str) -> str:
+    s = (city or "").strip()
+    if not s:
+        return ""
+    # Fix "st X" → "St. X" (e.g. "st paul" → "St. Paul", "st st paul" → "St. Paul")
+    # Strip any leading duplicate "st" caused by address parsing bleed
+    s = re.sub(r"^st\s+st\b", "St.", s, flags=re.IGNORECASE)
+    s = re.sub(r"^st\s+", "St. ", s, flags=re.IGNORECASE)
+    # Title case the result
+    return s.title()
+
 
 def normalize_birthday(raw: str) -> str:
     s = (raw or "").strip()
@@ -1564,6 +1583,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
     c["Phone"] = normalize_phone(c.get("Phone", ""))
     c["Birthday"] = normalize_birthday(c.get("Birthday", ""))
     c["State"] = normalize_state(c.get("State", ""))
+    c["City"] = normalize_city(c.get("City", ""))
 
     return c, notes
 
@@ -2464,7 +2484,7 @@ class MKChatEngine:
         # -------------------------
         # Customer search by product
         # -------------------------
-        if not pending:
+        if not pending and not _looks_like_full_customer_entry(msg) and not re.match(r'^\s*tags?\s*:', msg, re.IGNORECASE):
             import re as _re2
             _product_term = None
 
@@ -2729,6 +2749,10 @@ class MKChatEngine:
 
                     with tx() as (conn, cur):
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+                        last_order = None
+                        if len(matches) == 1:
+                            orders = get_recent_orders_for_customer(cur, matches[0]["id"], limit=1)
+                            last_order = orders[0] if orders else None
 
                     if len(matches) == 0:
                         return ChatReply(ui["no_customer_found_yet"].format(name=guess))
@@ -2738,7 +2762,7 @@ class MKChatEngine:
                         state["last_ref_customer_id"] = int(c["id"])
                         state["last_ref_customer_name"] = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
                         save_session_state(state, session_id=sid)
-                        return ChatReply(format_customer_card(c))
+                        return ChatReply(format_customer_card(c, last_order=last_order))
 
                     # Multiple matches → trigger picker
                     top = matches[:3]
@@ -2788,7 +2812,10 @@ class MKChatEngine:
                 save_session_state(state, session_id=sid)
 
                 if action == "info":
-                    return ChatReply(format_customer_card(c))
+                    with tx() as (conn, cur):
+                        orders = get_recent_orders_for_customer(cur, c["id"], limit=1)
+                    last_order = orders[0] if orders else None
+                    return ChatReply(format_customer_card(c, last_order=last_order))
 
                 if action == "orders":
                     with tx() as (conn, cur):
@@ -3263,10 +3290,28 @@ class MKChatEngine:
                 action, rest = parse_add_remove(msg)
 
                 if action == "add":
-                    qty, item_text = parse_qty_prefix(rest)
-                    if not item_text:
+                    if not rest:
                         return ChatReply(ui["add_hint"])
-                    order["lines"].append({"text": item_text, "qty": qty, "chosen": None})
+                    # Parse items through OpenAI same as initial order entry so multi-item
+                    # text without commas works (e.g. "add cc cream timewise cleanser satin hands")
+                    cust_first = order.get("customer", {}).get("First Name", "")
+                    cust_last  = order.get("customer", {}).get("Last Name", "")
+                    try:
+                        _add_parsed = parse_with_openai(self.client, f"order for {cust_first} {cust_last}: {rest}", last_customer)
+                    except Exception:
+                        _add_parsed = {}
+                    _add_items = (_add_parsed.get("order") or {}).get("items") or []
+                    if not _add_items:
+                        # Fallback: treat whole rest as single item
+                        qty, item_text = parse_qty_prefix(rest)
+                        _add_items = [{"text": item_text, "qty": qty}] if item_text else []
+                    if not _add_items:
+                        return ChatReply(ui["add_hint"])
+                    for it in _add_items:
+                        item_text = (it.get("text") or "").strip()
+                        qty = int(it.get("qty") or 1)
+                        if item_text:
+                            order["lines"].append({"text": item_text, "qty": qty, "chosen": None})
                     state["pending"] = None
                     return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
 
@@ -3369,16 +3414,28 @@ class MKChatEngine:
         # -------------------------
         # Normal parse
         # -------------------------
+
+        # Strip tag/tags value from message before sending to OpenAI so tag
+        # content can't bleed into customer fields (e.g. "tag: 2026 Customers")
+        import re as _re
+        _tag_match = _re.search(r'\btags?\s*:\s*(.+?)(?=\s+\w+\s*:|$)', msg, flags=_re.IGNORECASE | _re.DOTALL)
+        _extracted_tag = _tag_match.group(1).strip() if _tag_match else None
+        msg_for_parse = _re.sub(r'\btags?\s*:\s*.+?(?=\s+\w+\s*:|$)', '', msg, flags=_re.IGNORECASE | _re.DOTALL).strip() if _extracted_tag else msg
+
         try:
-            parsed = parse_with_openai(self.client, msg, last_customer)
+            parsed = parse_with_openai(self.client, msg_for_parse, last_customer)
         except Exception:
             return ChatReply(ui["trouble"])
 
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}
+            # Inject the pre-extracted tag if OpenAI didn't find one
+            if _extracted_tag and not customer.get("Tags"):
+                customer["Tags"] = _extracted_tag
             customer["State"] = normalize_state(customer.get("State", ""))
             customer["Phone"] = normalize_phone(customer.get("Phone", ""))
             customer["Birthday"] = normalize_birthday(customer.get("Birthday", ""))
+            customer["City"] = normalize_city(customer.get("City", ""))
 
             state["pending"] = {"kind": "customer_confirm", "customer": customer}
             save_session_state(state, session_id=sid)

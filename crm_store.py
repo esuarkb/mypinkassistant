@@ -247,7 +247,7 @@ def find_customers_by_name(
     return [r for score, r in scored if score >= 75][:limit]
 
 
-def format_customer_card(c: Dict[str, Any]) -> str:
+def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = None) -> str:
     import re
     import calendar
     import html
@@ -307,6 +307,37 @@ def format_customer_card(c: Dict[str, Any]) -> str:
     notes = (c.get("notes") or "").strip()
     if notes:
         lines.append(f"• Notes: {html.escape(notes)}")
+
+    if last_order:
+        import calendar as _cal
+        order_date = (last_order.get("order_date") or "")
+        if order_date:
+            try:
+                from datetime import date as _date
+                d = _date.fromisoformat(str(order_date)[:10])
+                date_str = f"{_cal.month_abbr[d.month]} {d.day}"
+            except Exception:
+                date_str = str(order_date)[:10]
+        else:
+            date_str = "unknown date"
+
+        items = last_order.get("items") or []
+        # Clean product names using same logic as followup_store
+        def _short(name):
+            n = re.sub(r"Mary Kay[®\u00ae]?\s*", "", name, flags=re.IGNORECASE)
+            n = re.sub(r"[®™\u00ae\u2122\u2020]", "", n)
+            n = re.sub(r"\s+[-–]\s+.+$", "", n)
+            n = re.sub(r"\s+Sunscreen.*$", "", n, flags=re.IGNORECASE)
+            return n.strip(" .,") or name
+
+        names = [_short(i["product_name"]) for i in items]
+        if len(names) <= 3:
+            item_str = ", ".join(html.escape(n) for n in names)
+        else:
+            shown = ", ".join(html.escape(n) for n in names[:2])
+            item_str = f"{shown} +{len(names) - 2} more"
+
+        lines.append(f"• Last order: {date_str} · {item_str}" if item_str else f"• Last order: {date_str}")
 
     return "\n".join(lines)
 
