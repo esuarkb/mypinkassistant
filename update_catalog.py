@@ -75,7 +75,10 @@ def scrape_products(page, opos_url: str) -> list[dict]:
                 }
 
                 const sku  = skuEl.textContent.trim();
-                let name   = nameEl.textContent.trim().replace(/\u00ae/g, '').trim();
+                let name   = nameEl.textContent.trim()
+                    .replace(/\u00ae|\u2122|\u2020|[*]+/g, '')  // strip ®, ™, †, * (and **)
+                    .replace(/,?\\s*pk\\.\\/\\d+\\s*pairs?/gi, '')   // strip ", pk./30 pairs" suffix
+                    .trim();
                 const price = parseFloat(priceEl.getAttribute('data-value') || '0');
 
                 // Append shade/variant name if present (e.g. lipstick colors, foundation shades)
@@ -94,7 +97,7 @@ def scrape_products(page, opos_url: str) -> list[dict]:
                         variant = variantEl.textContent.trim();
                     }
                 }
-                if (variant) name = name + ' ' + variant;
+                if (variant) name = name + ' - ' + variant;
 
                 if (sku && name && price > 0) {
                     results.push({ sku, product_name: name, price });
@@ -122,6 +125,7 @@ def load_catalog(path: Path) -> dict[str, dict]:
                     "price":        row.get("price", ""),
                     "search_terms": row.get("search_terms", ""),
                     "date_added":   row.get("date_added", ""),
+                    "last_seen":    row.get("last_seen", ""),
                 }
     return catalog
 
@@ -132,17 +136,24 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
         opos_skus = [item["sku"] for item in scraped_order]
         opos_set  = set(opos_skus)
         active_rows = [catalog[sku] for sku in opos_skus if sku in catalog]
-        # Items no longer in OPOS (discontinued) — appended at bottom, sorted by date_added desc
+        # Items not in this scrape — only treat as dropped if last_seen > 60 days ago (or never seen)
+        cutoff = (date.today() - __import__("datetime").timedelta(days=60)).isoformat()
         dropped_rows = sorted(
-            [r for r in catalog.values() if r["sku"] not in opos_set],
+            [r for r in catalog.values() if r["sku"] not in opos_set
+             and (r.get("last_seen") or r.get("date_added") or "") < cutoff],
             key=lambda r: r.get("date_added") or "",
             reverse=True,
         )
-        rows = active_rows + dropped_rows
+        # Items not in scrape but seen recently — keep them in active position (end of active list)
+        recent_rows = [
+            r for r in catalog.values() if r["sku"] not in opos_set
+            and (r.get("last_seen") or r.get("date_added") or "") >= cutoff
+        ]
+        rows = active_rows + recent_rows + dropped_rows
     else:
         rows = sorted(catalog.values(), key=lambda r: r["sku"])
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added"])
+        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -154,8 +165,9 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
         name      = item["product_name"]
         price_str = f"{item['price']:.2f}"
 
+        today = date.today().isoformat()
         if sku not in catalog:
-            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": date.today().isoformat()}
+            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today}
             added += 1
         else:
             existing = catalog[sku]
@@ -166,6 +178,7 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
             if existing["price"] != price_str:
                 existing["price"] = price_str
                 changed = True
+            existing["last_seen"] = today
             if changed:
                 updated += 1
     return added, updated

@@ -28,8 +28,8 @@ def _clean_product_name(product_name: str) -> str:
     import re
     name = product_name
     name = re.sub(r"Mary Kay[®\u00ae]?\s*", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"[®™\u00ae\u2122]", "", name)
-    name = re.sub(r"\*", "", name)
+    name = re.sub(r"[®™\u00ae\u2122\u2020]", "", name)  # ®, ™, †
+    name = re.sub(r"\*+", "", name)                      # * and **
     # Remove shade/variant after " - " or " – " (space required on both sides)
     name = re.sub(r"\s+[-–]\s+.+$", "", name)
     # Remove "Sunscreen Broad Spectrum SPF..." and similar
