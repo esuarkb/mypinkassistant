@@ -79,13 +79,22 @@ def scrape_products(page, opos_url: str) -> list[dict]:
                 const price = parseFloat(priceEl.getAttribute('data-value') || '0');
 
                 // Append shade/variant name if present (e.g. lipstick colors, foundation shades)
+                // First try GTM data, then fall back to visible variant text on the page
+                let variant = '';
                 if (qtyEl) {
                     try {
                         const gtm = JSON.parse(qtyEl.getAttribute('data-gtmdata') || '{}');
-                        const variant = (gtm.itemVariantName || '').replace(/\\s*\\([^)]*\\)\\s*$/, '').trim();
-                        if (variant) name = name + ' - ' + variant;
+                        variant = (gtm.itemVariantName || '').replace(/\\s*\\([^)]*\\)\\s*$/, '').trim();
                     } catch (e) {}
                 }
+                if (!variant) {
+                    // Look for visible variant text element (skin type, shade name shown on page)
+                    const variantEl = row.querySelector('.product-variant-name, .variant-name, .product-shade, [class*="variant"]');
+                    if (variantEl) {
+                        variant = variantEl.textContent.trim();
+                    }
+                }
+                if (variant) name = name + ' ' + variant;
 
                 if (sku && name && price > 0) {
                     results.push({ sku, product_name: name, price });

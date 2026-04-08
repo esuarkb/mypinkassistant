@@ -115,8 +115,10 @@ def _norm(s: str) -> str:
 
 
 def _same_customer(a: dict, b: dict) -> bool:
-    return _norm(a.get("First Name", "")) == _norm(b.get("First Name", "")) and _norm(a.get("Last Name", "")) == _norm(
-        b.get("Last Name", "")
+    return (
+        _norm(a.get("First Name", "")) == _norm(b.get("First Name", ""))
+        and _norm(a.get("Last Name", "")) == _norm(b.get("Last Name", ""))
+        and _norm(a.get("fulfillment_method", "inventory")) == _norm(b.get("fulfillment_method", "inventory"))
     )
 
 
