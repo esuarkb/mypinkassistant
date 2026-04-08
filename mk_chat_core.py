@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from crm_store import find_customers_by_name, format_customer_card
+from crm_store import find_customers_by_name, format_customer_card, get_recent_orders_for_customer
 from intent_router import parse_intent
 from inventory_store import (
     upsert_inventory_quantity,
@@ -2383,7 +2383,6 @@ class MKChatEngine:
                     )
 
                 # Multiple matches -> richer delete picker
-                from crm_store import get_recent_orders_for_customer
 
                 top = matches[:3]
                 recent_orders_map = {}
@@ -2532,7 +2531,7 @@ class MKChatEngine:
         if not pending:
             if intent_result.intent == "recent_orders":
                     import re
-                    from crm_store import get_recent_orders_for_customer, format_recent_orders
+                    from crm_store import format_recent_orders
 
                     m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
                     stop_words = {
@@ -2808,7 +2807,7 @@ class MKChatEngine:
                 end_date = pending.get("end_date")
 
                 from db import tx
-                from crm_store import format_customer_card, get_recent_orders_for_customer, format_recent_orders, get_customer_spending, count_orders_for_customer
+                from crm_store import format_recent_orders, get_customer_spending, count_orders_for_customer
 
                 # Clear pending before doing work (prevents loops)
                 state["pending"] = None

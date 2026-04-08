@@ -109,11 +109,20 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     looks_like_name_info = bool(
         re.search(r"\b\w+\s+(info|email|phone|address|birthday)\b", lowered)
     )
+    # Single word (or two words) that looks like a name — treat as lookup
+    # e.g. "ruby" or "ruby perez" with no other context
+    _words = msg.strip().split()
+    looks_like_bare_name = (
+        1 <= len(_words) <= 2
+        and all(re.match(r"^[a-zA-Z'-]+$", w) for w in _words)
+        and not any(t in lowered for t in ("new", "order", "add", "cancel", "tag", "note"))
+    )
 
     if (
         any(t in lowered for t in ("what's", "whats", "what is", "lookup", "show", "info on", "information for"))
         or looks_like_possessive_info
         or looks_like_name_info
+        or looks_like_bare_name
     ) and "order" not in lowered:
         return IntentResult(intent="customer_info", confidence=0.85, raw_text=msg)
 
