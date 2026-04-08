@@ -99,8 +99,12 @@ def scrape_products(page, opos_url: str) -> list[dict]:
                 }
                 if (variant) name = name + ' - ' + variant;
 
+                // Detect "new part number" indicator on the row
+                const rowText = row.textContent || '';
+                const isNewPart = rowText.toLowerCase().includes('new part number');
+
                 if (sku && name && price > 0) {
-                    results.push({ sku, product_name: name, price });
+                    results.push({ sku, product_name: name, price, is_new_part: isNewPart });
                 }
             });
             return results;
@@ -159,7 +163,8 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
 
 
 def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
-    added = updated = 0
+    import re as _re
+    added = updated = auto_labeled = 0
     for item in scraped:
         sku       = item["sku"]
         name      = item["product_name"]
@@ -172,7 +177,13 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
         else:
             existing = catalog[sku]
             changed = False
-            if existing["product_name"] != name:
+            existing_name = existing["product_name"]
+            # Don't overwrite if we've manually added a suffix (variant, Old SKU label, etc.)
+            name_is_enriched = (
+                "(Old SKU)" in existing_name
+                or existing_name.lower().startswith(name.lower() + " ")
+            )
+            if existing_name != name and not name_is_enriched:
                 existing["product_name"] = name
                 changed = True
             if existing["price"] != price_str:
@@ -181,6 +192,25 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
             existing["last_seen"] = today
             if changed:
                 updated += 1
+
+        # If OPOS flagged this as a new part number, find and label matching old SKUs
+        if item.get("is_new_part"):
+            # Strip variant suffix from new name to get base for comparison
+            _variant_pat = r"\s*(Normal/Dry|Combination/Oily|[-–].+)$"
+            base_name = _re.sub(_variant_pat, "", name, flags=_re.IGNORECASE).strip().lower()
+            for other_sku, other in catalog.items():
+                if other_sku == sku:
+                    continue
+                other_name = other["product_name"]
+                if "(Old SKU)" in other_name:
+                    continue
+                # Strip variant suffix from old name too
+                clean_other = _re.sub(_variant_pat, "", other_name, flags=_re.IGNORECASE).strip().lower()
+                if clean_other == base_name:
+                    other["product_name"] = other_name + " (Old SKU)"
+                    auto_labeled += 1
+                    print(f"  Auto-labeled old SKU: {other_sku} → {other['product_name']}")
+
     return added, updated
 
 

@@ -8,7 +8,6 @@ sku,product_name,price,search_terms,date_added,last_seen
 10257563,Limited-Edition Citrus & Shea Bundle,28.00,,,2026-04-08
 10233594,Limited-Edition Mary Kay Illuminating Bronzer - Medium Glow,22.00,,,2026-04-08
 10233595,Limited-Edition Mary Kay Illuminating Bronzer - Deep Glow,22.00,,,2026-04-08
-10235578,Mary Kay Hydrating Cream Mask,24.00,,,2026-04-08
 10235072,Mary Kay Nourishing Oil,50.00,,,2026-04-08
 10230672,Mary Kay Hydrating Regimen,80.00,skin care,,2026-04-08
 10230673,Mary Kay Mattifying Regimen,80.00,skin care,,2026-04-08
@@ -21,21 +20,21 @@ sku,product_name,price,search_terms,date_added,last_seen
 10204126,Mary Kay Hydrating Go Set,22.00,,,2026-04-08
 10204143,Mary Kay Mattifying Go Set,22.00,,,2026-04-08
 10219506,TimeWise Targeted-Action Toning Lotion,36.00,,,2026-04-08
-10217417,TimeWise Miracle Set,116.00,,,2026-04-08
-10217415,TimeWise Miracle Set,116.00,,,2026-04-08
-10223243,Ultimate TimeWise Miracle Set,150.00,,,2026-04-08
-10223244,Ultimate TimeWise Miracle Set,150.00,,,2026-04-08
-10223246,Beyond Ultimate TimeWise Miracle Set,208.00,,,2026-04-08
-10223245,Beyond Ultimate TimeWise Miracle Set,208.00,,,2026-04-08
+10217417,TimeWise Miracle Set - Normal/Dry,116.00,,,2026-04-08
+10217415,TimeWise Miracle Set - Combination/Oily,116.00,,,2026-04-08
+10223243,Ultimate TimeWise Miracle Set - Normal/Dry,150.00,,,2026-04-08
+10223244,Ultimate TimeWise Miracle Set - Combination/Oily,150.00,,,2026-04-08
+10223246,Beyond Ultimate TimeWise Miracle Set - Normal/Dry,208.00,,,2026-04-08
+10223245,Beyond Ultimate TimeWise Miracle Set - Combination/Oily,208.00,,,2026-04-08
 10217385,TimeWise Daytime Defender Sunscreen Broad Spectrum SPF 30,34.00,,,2026-04-08
 10217387,TimeWise Nighttime Recovery,34.00,,,2026-04-08
-10217393,TimeWise Antioxidant Moisturizer,34.00,,,2026-04-08
-10217391,TimeWise Antioxidant Moisturizer,34.00,,,2026-04-08
+10217393,TimeWise Antioxidant Moisturizer - Normal/Dry,34.00,,,2026-04-08
+10217391,TimeWise Antioxidant Moisturizer - Combination/Oily,34.00,,,2026-04-08
 10217408,TimeWise Eye Cream,38.00,,,2026-04-08
 10254234,TimeWise 4-in-1 Cleanser,26.00,,2026-04-08,2026-04-08
-10217404,TimeWise 4-in-1 Cleanser,26.00,,,2026-04-08
-10217456,TimeWise Miracle Set The Go Set,28.00,,,2026-04-08
-10217455,TimeWise Miracle Set The Go Set,28.00,,,2026-04-08
+10217404,TimeWise 4-in-1 Cleanser (Old SKU),26.00,,,2026-04-08
+10217456,TimeWise Miracle Set The Go Set - Normal/Dry,28.00,,,2026-04-08
+10217455,TimeWise Miracle Set The Go Set - Combination/Oily,28.00,,,2026-04-08
 10198866,TimeWise Microdermabrasion Plus Set,58.00,,,2026-04-08
 10198715,TimeWise Pore Minimizer,28.00,,,2026-04-08
 10171886,TimeWise Replenishing Serum C+E,60.00,,,2026-04-08
@@ -69,11 +68,6 @@ sku,product_name,price,search_terms,date_added,last_seen
 10234778,MKMen Daily Facial Wash,20.00,,,2026-04-08
 10234520,MKMen Moisturizing Shave Cream,20.00,,,2026-04-08
 10234780,MKMen Ultimate Moisturizer,30.00,,,2026-04-08
-10233587,Clear Proof Acne System Set,56.00,,,2026-04-08
-10235578,Mary Kay Hydrating Cream Mask,24.00,,,2026-04-08
-10261957,Mix & Mask,50.00,,,2026-04-08
-10234061,Mary Kay Clinical Solutions Barrier Restore 1:1:3,46.00,,,2026-04-08
-10235072,Mary Kay Nourishing Oil,50.00,,,2026-04-08
 10183253,Mary Kay Mineral Facial Sunscreen Broad Spectrum SPF 30,28.00,,,2026-04-08
 10173736,Mary Kay Instant Puffiness Reducer,38.00,,,2026-04-08
 10190660,Indulge Soothing Eye Gel,20.00,,,2026-04-08
@@ -87,48 +81,7 @@ sku,product_name,price,search_terms,date_added,last_seen
 10072682,Mary Kay Extra Emollient Night Cream,18.00,,,2026-04-08
 10031541,Mary Kay Intense Moisturizing Cream (Dry),36.00,,,2026-04-08
 10197545,Mary Kay Oil-Free Hydrating Gel (Normal/Oily),36.00,,,2026-04-08
-10235578,Mary Kay Hydrating Cream Mask,24.00,,,2026-04-08
-10261957,Mix & Mask,50.00,,,2026-04-08
-10217393,TimeWise Antioxidant Moisturizer,34.00,,,2026-04-08
-10201374,Mary Kay Hydrating Moisturizer,20.00,,,2026-04-08
-10208384,TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30,54.00,,,2026-04-08
-10235072,Mary Kay Nourishing Oil,50.00,,,2026-04-08
-10031541,Mary Kay Intense Moisturizing Cream (Dry),36.00,,,2026-04-08
-10072682,Mary Kay Extra Emollient Night Cream,18.00,,,2026-04-08
-10208386,TimeWise Repair Volu-Firm Night Treatment With Retinol,54.00,,,2026-04-08
-10234061,Mary Kay Clinical Solutions Barrier Restore 1:1:3,46.00,,,2026-04-08
-10234780,MKMen Ultimate Moisturizer,30.00,,,2026-04-08
-10201376,Mary Kay Mattifying Moisturizer,20.00,,,2026-04-08
-10217391,TimeWise Antioxidant Moisturizer,34.00,,,2026-04-08
-10197545,Mary Kay Oil-Free Hydrating Gel (Normal/Oily),36.00,,,2026-04-08
-10177906,Mary Kay Clinical Solutions HA + Ceramide Hydrator,38.00,,,2026-04-08
-10241535,Clear Proof Oil-Free Moisturizer for Acne-Prone Skin,22.00,,,2026-04-08
-10203701,Mary Kay Hydrogel Eye Patches,44.00,,,2026-04-08
-10107547,TimeWise Repair Lifting Bio-Cellulose Mask,70.00,,,2026-04-08
-10198715,TimeWise Pore Minimizer,28.00,,,2026-04-08
-10233587,Clear Proof Acne System Set,56.00,,,2026-04-08
-10224657,TimeWise Microdermabrasion Refine,36.00,,,2026-04-08
 10237287,Mary Kay Sunscreen Broad Spectrum SPF 50,30.00,,,2026-04-08
-10183253,Mary Kay Mineral Facial Sunscreen Broad Spectrum SPF 30,28.00,,,2026-04-08
-10234778,MKMen Daily Facial Wash,20.00,,,2026-04-08
-10201304,Mary Kay Hydrating Cleanser,20.00,,,2026-04-08
-10201340,Mary Kay Mattifying Cleanser,20.00,,,2026-04-08
-10217404,TimeWise 4-in-1 Cleanser,26.00,,,2026-04-08
-10254234,TimeWise 4-in-1 Cleanser,26.00,,2026-04-08,2026-04-08
-10160886,Mary Kay Micellar Water,18.00,,,2026-04-08
-10177902,Mary Kay Clinical Solutions Ferulic + Niacinamide Brightener,38.00,,,2026-04-08
-10177904,Mary Kay Clinical Solutions PHA + AHA Resurfacer,38.00,,,2026-04-08
-10233551,Clear Proof Clarifying Cleansing Gel,20.00,,,2026-04-08
-10201395,Mary Kay Exfoliating Scrub,20.00,,,2026-04-08
-10224657,TimeWise Microdermabrasion Refine,36.00,,,2026-04-08
-10235578,Mary Kay Hydrating Cream Mask,24.00,,,2026-04-08
-10261957,Mix & Mask,50.00,,,2026-04-08
-10107547,TimeWise Repair Lifting Bio-Cellulose Mask,70.00,,,2026-04-08
-10242538,MKMen Regimen,70.00,,,2026-04-08
-10234778,MKMen Daily Facial Wash,20.00,,,2026-04-08
-10234520,MKMen Moisturizing Shave Cream,20.00,,,2026-04-08
-10234780,MKMen Ultimate Moisturizer,30.00,,,2026-04-08
-10234061,Mary Kay Clinical Solutions Barrier Restore 1:1:3,46.00,,,2026-04-08
 10152557,Mary Kay Makeup Finishing Spray by Skindinävia,20.00,,,2026-04-08
 10210476,Mary Kay Multi-Benefit Concealer - Light 1,18.00,,,2026-04-08
 10210477,Mary Kay Multi-Benefit Concealer - Light 2,18.00,,,2026-04-08
@@ -217,8 +170,6 @@ sku,product_name,price,search_terms,date_added,last_seen
 10252250,Mary Kay Chromafusion Blush - Shy Blush,14.00,,,2026-04-08
 10252247,Mary Kay Chromafusion Blush - Hot Coral,14.00,,,2026-04-08
 10252251,Mary Kay Chromafusion Blush - Wineberry,14.00,,,2026-04-08
-10233594,Limited-Edition Mary Kay Illuminating Bronzer - Medium Glow,22.00,,,2026-04-08
-10233595,Limited-Edition Mary Kay Illuminating Bronzer - Deep Glow,22.00,,,2026-04-08
 10252256,Mary Kay Chromafusion Contour - Cocoa,14.00,,,2026-04-08
 10252261,Mary Kay Chromafusion Highlighter - Honey Glow,14.00,,,2026-04-08
 10252257,Mary Kay Chromafusion Contour - Latte,14.00,,,2026-04-08
@@ -286,9 +237,6 @@ sku,product_name,price,search_terms,date_added,last_seen
 10249019,Mary Kay Unlimited Lip Gloss - Tawny Nude,18.00,,,2026-04-08
 10249013,Mary Kay Unlimited Lip Gloss - Nude Blush,18.00,,,2026-04-08
 10249006,Mary Kay Unlimited Lip Gloss - Beach Bronze,18.00,,,2026-04-08
-10237926,Limited-Edition Mary Kay Unlimited Lip Gloss - Lilac Love,18.00,,,2026-04-08
-10237927,Limited-Edition Mary Kay Unlimited Lip Gloss - Cherry Red,18.00,,,2026-04-08
-10237928,Limited-Edition Mary Kay Unlimited Lip Gloss - Rose Noir,18.00,,,2026-04-08
 10089644,Gel Semi-Matte Lipstick - Always Apricot,20.00,,,2026-04-08
 10089640,Gel Semi-Matte Lipstick - Bashful You,20.00,,,2026-04-08
 10141478,Gel Semi-Matte Lipstick - Berry Famous,20.00,,,2026-04-08
@@ -344,10 +292,6 @@ sku,product_name,price,search_terms,date_added,last_seen
 10122324,Mary Kay Eye Smudger Brush,12.00,,,2026-04-08
 10143940,"Mary Kay Travel Roll-Up Bag, (unfilled)",40.00,,,2026-04-08
 10202993,Mary Kay Pro Palette (unfilled),28.00,,,2026-04-08
-10229067,Special-Edition Mary Kay After-Sun Replenishing Gel,20.00,,,2026-04-08
-10257563,Limited-Edition Citrus & Shea Bundle,28.00,,,2026-04-08
-10237287,Mary Kay Sunscreen Broad Spectrum SPF 50,30.00,,,2026-04-08
-10219506,TimeWise Targeted-Action Toning Lotion,36.00,,,2026-04-08
 10080376,"Hello, Clean",36.00,,,2026-04-08
 10162409,Mary Kay Apple & Almond Scented Body Lotion,16.00,,,2026-04-08
 10162408,Mary Kay Apple & Almond Scented Shower Gel,16.00,,,2026-04-08
@@ -390,7 +334,7 @@ sku,product_name,price,search_terms,date_added,last_seen
 10048515,True Original Cologne Spray,42.00,,,2026-04-08
 10222709,Limited-Edition Mary Kay Lavender & Coconut Scented Shower Gel,16.00,,,2026-04-08
 10237969,Limited-Edition Mary Kay Lavender & Coconut Body Spray,18.00,,,2026-04-08
-10217406,TimeWise 4-in-1 Cleanser Normal/Dry,26.00,,2026-04-07,2026-04-07
+10217406,TimeWise 4-in-1 Cleanser - Normal/Dry (Old SKU),26.00,,2026-04-07,2026-04-07
 10092192,Mary Kay Perfecting Concealer - Deep Ivory,16.00,,2026-03-27,2026-03-27
 10153487,Mary Kay Unlimited Lip Gloss - Evening Berry Pearl,18.00,,2026-03-27,2026-03-27
 10155221,Mary Kay Supreme Hydrating Lipstick - Fuchsia Dream Shine,20.00,,2026-03-27,2026-03-27
@@ -459,5 +403,5 @@ sku,product_name,price,search_terms,date_added,last_seen
 10248996,Mary Kay Conifdently You Bundle,79.00,,2026-03-27,2026-03-27
 10249183,Mary Kay Unlimited Lip Gloss Set Deluxe Mini (Single),8.00,,2026-03-27,2026-03-27
 10249418,Mary Kay Sparkle Cream Lipstick in Empower,22.00,,2026-03-27,2026-03-27
-10206304,Mary Kay Supreme Hydrating Lipstick - Hushed Blush,20.00,,2026-03-27,2026-03-27
-10208549,TimeWise Repair Volu-Firm Foaming Cleanser,30.00,,2026-03-27,2026-03-27
+10206304,Mary Kay Supreme Hydrating Lipstick - Hushed Blush (Old SKU),20.00,,2026-03-27,2026-03-27
+10208549,TimeWise Repair Volu-Firm Foaming Cleanser (Old SKU),30.00,,2026-03-27,2026-03-27
