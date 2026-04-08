@@ -3422,6 +3422,10 @@ class MKChatEngine:
         _extracted_tag = _tag_match.group(1).strip() if _tag_match else None
         msg_for_parse = _re.sub(r'\btags?\s*:\s*.+?(?=\s+\w+\s*:|$)', '', msg, flags=_re.IGNORECASE | _re.DOTALL).strip() if _extracted_tag else msg
 
+        # Fix "st st" → "st, st" so OpenAI can correctly split street abbreviation
+        # from St. city names (e.g. "555 5th st st paul" → "555 5th st, st paul")
+        msg_for_parse = _re.sub(r'\bst\s+st\b', 'st, st', msg_for_parse, flags=_re.IGNORECASE)
+
         try:
             parsed = parse_with_openai(self.client, msg_for_parse, last_customer)
         except Exception:
@@ -3429,9 +3433,13 @@ class MKChatEngine:
 
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}
-            # Inject the pre-extracted tag if OpenAI didn't find one
-            if _extracted_tag and not customer.get("Tags"):
+            # Tags: always use our pre-extracted value (authoritative).
+            # If we found tag: keyword → use that. If no tag: keyword → clear
+            # whatever OpenAI guessed (it tends to pull random words into Tags).
+            if _extracted_tag:
                 customer["Tags"] = _extracted_tag
+            else:
+                customer["Tags"] = ""
             customer["State"] = normalize_state(customer.get("State", ""))
             customer["Phone"] = normalize_phone(customer.get("Phone", ""))
             customer["Birthday"] = normalize_birthday(customer.get("Birthday", ""))
