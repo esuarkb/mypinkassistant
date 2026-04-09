@@ -900,10 +900,10 @@ def normalize_city(city: str) -> str:
     s = (city or "").strip()
     if not s:
         return ""
-    # Fix "st X" → "St. X" (e.g. "st paul" → "St. Paul", "st st paul" → "St. Paul")
-    # Strip any leading duplicate "st" caused by address parsing bleed
-    s = re.sub(r"^st\s+st\b", "St.", s, flags=re.IGNORECASE)
-    s = re.sub(r"^st\s+", "St. ", s, flags=re.IGNORECASE)
+    # Fix "st X" → "St. X" (e.g. "st paul" → "St. Paul")
+    # Also handle "st." prefix and bleed cases like "st st paul" or "st. st paul"
+    s = re.sub(r"^st\.?\s+st\.?\s*", "St. ", s, flags=re.IGNORECASE)
+    s = re.sub(r"^st\.?\s+", "St. ", s, flags=re.IGNORECASE)
     # Title case the result
     return s.title()
 
@@ -1253,8 +1253,14 @@ def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None)
         lines.append(f"{i}) {name} {price}{score_str}")
     return "\n".join(lines)
 
-def render_customer_picker(matches: List[dict], intro: str = "I found multiple matches — reply with 1, 2, or 3:") -> str:
+def render_customer_picker(matches: List[dict], intro: str = "") -> str:
     top = (matches or [])[:3]
+    n = len(top)
+    if not intro:
+        if n == 1:
+            intro = "Is this who you mean? Reply 1 to confirm:"
+        else:
+            intro = f"I found multiple matches — reply with 1-{n}:"
     lines = [intro]
 
     for i, c in enumerate(top, start=1):
@@ -3320,10 +3326,18 @@ class MKChatEngine:
                 if action == "remove":
                     target = (rest or "").strip()
                     if not target:
-                        return ChatReply(ui["remove_hint"])
+                        return ChatReply(
+                            ui["remove_hint"] + "\n\n"
+                            + self._format_order_confirm(order, ui) + "\n\n"
+                            + ui["order_adjust_hint"]
+                        )
                     removed = self._remove_line(order, target)
                     if not removed:
-                        return ChatReply(ui["remove_not_found"])
+                        return ChatReply(
+                            ui["remove_not_found"] + "\n\n"
+                            + self._format_order_confirm(order, ui) + "\n\n"
+                            + ui["order_adjust_hint"]
+                        )
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
@@ -3424,9 +3438,12 @@ class MKChatEngine:
         _extracted_tag = _tag_match.group(1).strip() if _tag_match else None
         msg_for_parse = _re.sub(r'\btags?\s*:\s*.+?(?=\s+\w+\s*:|$)', '', msg, flags=_re.IGNORECASE | _re.DOTALL).strip() if _extracted_tag else msg
 
-        # Fix "st st" → "st, st" so OpenAI can correctly split street abbreviation
-        # from St. city names (e.g. "555 5th st st paul" → "555 5th st, st paul")
-        msg_for_parse = _re.sub(r'\bst\s+st\b', 'st, st', msg_for_parse, flags=_re.IGNORECASE)
+        # Fix doubled street-type/city-prefix ambiguity so OpenAI can split correctly:
+        # "555 5th st st paul" → "555 5th st, st paul"
+        # "555 5th st. st paul" → "555 5th st., st paul"
+        # "123 Oak dr dr phillips" → "123 Oak dr, dr phillips"
+        # "1 College ave ave maria" → "1 College ave, ave maria"
+        msg_for_parse = _re.sub(r'\b(st|dr|ave)(\.?)\s+(st|dr|ave)\b', r'\1\2, \3', msg_for_parse, flags=_re.IGNORECASE)
 
         try:
             parsed = parse_with_openai(self.client, msg_for_parse, last_customer)

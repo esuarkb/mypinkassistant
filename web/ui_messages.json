@@ -26,7 +26,8 @@
         "Set my Satin Hands set par to 2",
         "Show my inventory report",
         "What am I low on?",
-        "Who are my top 7 customers this month"
+        "Who are my top 7 customers this month",
+        "New customer Jane Doe jane@gmail.com 5551231234 tag: vip, 2026 (add tags at the end, separated by commas!)"
     ],
     "hero_headlines_es": [
         "Hola 👋 Vamos a trabajar.",
@@ -55,7 +56,8 @@
         "Pon el par de mi set Satin Hands en 2",
         "Muestra mi reporte de inventario",
         "¿Qué me está faltando en inventario?",
-        "¿Quiénes son mis 7 mejores clientas este mes?"
+        "¿Quiénes son mis 7 mejores clientas este mes?",
+        "Nueva cliente Jane Doe jane@gmail.com 5551231234 tag: vip, 2026 (¡agrega las etiquetas al final, separadas por comas!)"
     ],
     "emergency": {
         "enabled": false,
