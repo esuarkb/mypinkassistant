@@ -289,7 +289,10 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
     if bday_raw:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", bday_raw):
             y, mo, d = map(int, bday_raw.split("-"))
-            birthday = html.escape(f"{calendar.month_name[mo]} {d}, {y}")
+            if y == 2000:
+                birthday = html.escape(f"{calendar.month_name[mo]} {d}")
+            else:
+                birthday = html.escape(f"{calendar.month_name[mo]} {d}, {y}")
         elif re.fullmatch(r"\d{2}-\d{2}", bday_raw):
             mo, d = map(int, bday_raw.split("-"))
             birthday = html.escape(f"{calendar.month_name[mo]} {d}")
@@ -331,11 +334,13 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
             return n.strip(" .,") or name
 
         names = [_short(i["product_name"]) for i in items]
+        cmd = html.escape(f"last order for {first} {last}")
         if len(names) <= 3:
             item_str = ", ".join(html.escape(n) for n in names)
         else:
             shown = ", ".join(html.escape(n) for n in names[:2])
-            item_str = f"{shown} +{len(names) - 2} more"
+            extra = len(names) - 2
+            item_str = f'{shown} <a href="#" data-send="{cmd}" style="white-space:nowrap;">+{extra} more</a>'
 
         lines.append(f"• Last order: {date_str} · {item_str}" if item_str else f"• Last order: {date_str}")
 
@@ -543,7 +548,7 @@ def format_recent_orders(customer_name: str, orders: list) -> str:
 
     lines = [f"Recent orders for {customer_name}:"]
 
-    for o in orders:
+    for o in reversed(orders):
         # Format date properly (works for sqlite string or postgres datetime)
         od = o.get("order_date")
 

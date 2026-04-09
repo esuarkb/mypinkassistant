@@ -253,6 +253,20 @@ msg.addEventListener("keydown", (e) => {
     }
 });
 
+// Delegated handler for [data-send] links — clicking sends a chat message
+chat.addEventListener("click", function(e) {
+    var link = e.target.closest("[data-send]");
+    if (link) {
+        e.preventDefault();
+        var text = link.dataset.send;
+        if (text) {
+            msg.value = text;
+            sendMessage();
+        }
+        return;
+    }
+});
+
 // Delegated handler for follow-up circles — avoids inline onclick CSP issues
 chat.addEventListener("click", function(e) {
     var btn = e.target.closest(".followup-circle");

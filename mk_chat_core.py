@@ -3166,7 +3166,10 @@ class MKChatEngine:
                     return ChatReply(ui["cust_reject"])
 
                 if looks_like_command(msg):
-                    return ChatReply(ui["confirming_customer"])
+                    return ChatReply(
+                        ui["confirming_customer"] + "\n\n"
+                        + self._format_customer_confirm(pending["customer"], ui)
+                    )
                 updated, notes = apply_customer_edits(pending["customer"], msg)
                 pending["customer"] = updated
                 state["pending"] = pending
@@ -3344,7 +3347,11 @@ class MKChatEngine:
 
                 # ✅ THEN: guardrail for random commands (but not add/remove)
                 if looks_like_command(msg) and not yes(msg) and not no(msg):
-                    return ChatReply(ui["confirming_order"])
+                    return ChatReply(
+                        ui["confirming_order"] + "\n\n"
+                        + self._format_order_confirm(order, ui) + "\n\n"
+                        + ui["order_adjust_hint"]
+                    )
 
                 # ... keep your existing yes/no handling below ...
 

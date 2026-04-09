@@ -169,10 +169,16 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
         writer.writerows(rows)
 
 
-def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
-    import re as _re
-    added = updated = auto_labeled = 0
+def _normalize_name(name: str) -> str:
+    import re
+    return re.sub(r"[®™\u00ae\u2122\u2020]", "", name).strip().lower()
+
+
+def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int, int, list[dict]]:
+    added = updated = old_sku_labeled = 0
+    new_part_items = []
     scraped_skus = {item["sku"] for item in scraped}
+
     for item in scraped:
         sku       = item["sku"]
         name      = item["product_name"]
@@ -201,27 +207,26 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int]:
             if changed:
                 updated += 1
 
-        # If OPOS flagged this as a new part number, find and label matching old SKUs
         if item.get("is_new_part"):
-            # Strip variant suffix from new name to get base for comparison
-            _variant_pat = r"\s*(Normal/Dry|Combination/Oily|[-–].+)$"
-            base_name = _re.sub(_variant_pat, "", name, flags=_re.IGNORECASE).strip().lower()
-            for other_sku, other in catalog.items():
-                if other_sku == sku:
-                    continue
-                if other_sku in scraped_skus:
-                    continue  # still active in OPOS — never label as old
-                other_name = other["product_name"]
-                if "(Old SKU)" in other_name:
-                    continue
-                # Strip variant suffix from old name too
-                clean_other = _re.sub(_variant_pat, "", other_name, flags=_re.IGNORECASE).strip().lower()
-                if clean_other == base_name:
-                    other["product_name"] = other_name + " (Old SKU)"
-                    auto_labeled += 1
-                    print(f"  Auto-labeled old SKU: {other_sku} → {other['product_name']}")
+            new_part_items.append({"sku": sku, "product_name": name, "price": price_str})
 
-    return added, updated
+    # Exact-match label: for each new part number item, find the catalog entry with the
+    # same product name (normalized) that is no longer in the OPOS and label it (Old SKU)
+    for item in new_part_items:
+        target = _normalize_name(item["product_name"])
+        for other_sku, other in catalog.items():
+            if other_sku == item["sku"]:
+                continue
+            if other_sku in scraped_skus:
+                continue  # still active — never label
+            if "(Old SKU)" in other["product_name"]:
+                continue  # already labeled
+            if _normalize_name(other["product_name"]) == target:
+                other["product_name"] = other["product_name"] + " (Old SKU)"
+                old_sku_labeled += 1
+                print(f"  Auto-labeled: {other_sku} → {other['product_name']}")
+
+    return added, updated, old_sku_labeled, new_part_items
 
 
 def main(username: str, password: str) -> None:
@@ -251,7 +256,7 @@ def main(username: str, password: str) -> None:
         path    = CATALOG_DIR / f"{lang}.csv"
         catalog = load_catalog(path)
         before  = len(catalog)
-        added, updated = upsert(catalog, scraped)
+        added, updated, old_sku_labeled, new_part_items = upsert(catalog, scraped)
         save_catalog(catalog, path, scraped_order=scraped)
 
         print(f"\n[{lang.upper()}] Done.")
@@ -259,8 +264,17 @@ def main(username: str, password: str) -> None:
         print(f"  Scraped        : {len(scraped)} products")
         print(f"  Added          : {added}")
         print(f"  Updated        : {updated}")
+        print(f"  Old SKU labels : {old_sku_labeled}")
         print(f"  Total now      : {len(catalog)} SKUs")
         print(f"  Saved to       : {path}")
+
+        if new_part_items:
+            # Deduplicate by SKU (same item can appear under multiple categories)
+            seen: set[str] = set()
+            unique = [i for i in new_part_items if not (i["sku"] in seen or seen.add(i["sku"]))]
+            print(f"\n  ⚠️  New part number items ({len(unique)}) — check catalog for any unmatched old SKUs:")
+            for i in unique:
+                print(f"    {i['sku']}  {i['product_name']}  ${i['price']}")
 
 
 if __name__ == "__main__":

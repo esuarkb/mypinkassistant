@@ -18,6 +18,11 @@ PH = "%s" if is_postgres() else "?"
 # Suppress scheduling for consultants with this many consecutive login failures
 LOGIN_FAILURE_LIMIT = 2
 
+# Consultant emails that should never get IMPORT_INVENTORY_ORDERS queued.
+# briankrause is a screenshot/test account that shares InTouch credentials
+# with akrause.marykay@gmail.com — importing for both would double inventory.
+SKIP_INVENTORY_IMPORT = {"briankrause@gmail.com"}
+
 
 def _has_pending_job(cur, consultant_id: int, job_type: str) -> bool:
     """Return True if a queued or running job of this type already exists."""
@@ -86,7 +91,9 @@ def run() -> None:
                 skipped_pending += 1
 
             # Queue IMPORT_INVENTORY_ORDERS if not already pending
-            if not _has_pending_job(cur, cid, "IMPORT_INVENTORY_ORDERS"):
+            if email in SKIP_INVENTORY_IMPORT:
+                print(f"[Scheduler] Skipping inventory import for {email} (screenshot/test account)")
+            elif not _has_pending_job(cur, cid, "IMPORT_INVENTORY_ORDERS"):
                 if _has_inventory_watermark(cur, cid):
                     # Normal nightly import — only new orders
                     insert_job(
