@@ -1446,6 +1446,42 @@ def import_customers(request: Request):
     except PermissionError:
         return RedirectResponse(billing_redirect_for_cid(cid), status_code=302)
 
+    # Cooldown: block if a queued/running job exists, or any import finished in the last 5 minutes
+    from db import tx as _tx
+    from db import is_postgres as _isp
+    _PH = "%s" if _isp() else "?"
+    with _tx() as (_conn, _cur):
+        if _isp():
+            _cur.execute(
+                f"""
+                SELECT 1 FROM jobs
+                WHERE consultant_id = {_PH}
+                  AND type = 'IMPORT_CUSTOMERS'
+                  AND (
+                    status IN ('queued', 'running')
+                    OR (status IN ('done', 'failed') AND finished_at >= NOW() - INTERVAL '5 minutes')
+                  )
+                LIMIT 1
+                """,
+                (cid,),
+            )
+        else:
+            _cur.execute(
+                f"""
+                SELECT 1 FROM jobs
+                WHERE consultant_id = {_PH}
+                  AND type = 'IMPORT_CUSTOMERS'
+                  AND (
+                    status IN ('queued', 'running')
+                    OR (status IN ('done', 'failed') AND finished_at >= datetime('now', '-5 minutes'))
+                  )
+                LIMIT 1
+                """,
+                (cid,),
+            )
+        if _cur.fetchone():
+            return RedirectResponse("/app?notice=import_cooldown", status_code=302)
+
     insert_job("IMPORT_CUSTOMERS", {}, consultant_id=cid)
     return RedirectResponse("/app", status_code=302)
 
@@ -1601,7 +1637,8 @@ def jobs(request: Request):
                 "payload": payload,  # ✅ THIS IS THE KEY ADD
             }
         )
-    return {"jobs": out}
+    failures = int((c.get("consecutive_login_failures") or 0))
+    return {"jobs": out, "creds_failed": failures >= 1}
 
 # -------------------------
 # Admin diagnostics (protected)

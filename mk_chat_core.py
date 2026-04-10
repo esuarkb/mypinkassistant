@@ -1322,7 +1322,7 @@ def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[i
                 if hasattr(raw_dt, "strftime"):
                     dt = raw_dt.strftime("%Y-%m-%d")
                 else:
-                    dt = str(raw_dt).strip() if raw_dt else ""
+                    dt = str(raw_dt)[:10] if raw_dt else ""
 
                 total = o.get("total")
                 total_txt = f"${float(total):.2f}" if isinstance(total, (int, float)) else ""
@@ -1372,7 +1372,7 @@ def looks_like_command(msg: str) -> bool:
         "show ", "lookup ", "info ", "information ",
         "what is", "what's", "whats",
         "top ", "leaderboard", "spent", "last ", "recent ", "history",
-        "new customer", "add customer", "create customer",
+        "new customer", "add customer", "create customer", "create ",
         "new order", "order for", "add order",
         "delete ", "remove ",
     )
@@ -3097,9 +3097,10 @@ class MKChatEngine:
                     state_val = (customer.get("State") or "").strip()
                     postal = (customer.get("Postal Code") or "").strip()
 
+                    first = (customer.get("First Name") or "").strip()
                     last = (customer.get("Last Name") or "").strip()
 
-                    if not last:
+                    if not first or not last:
                         return ChatReply(
                             "I need both a first and last name before MyCustomers can save this customer. "
                             "Please type `cancel` and re-enter the customer with the full name."
@@ -3239,6 +3240,18 @@ class MKChatEngine:
                     return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
 
                 if no(msg):
+                    if not matches:
+                        state["pending"] = {
+                            "kind": "order_line_pick_top5_or_search",
+                            "order": order,
+                            "line_index": line_index,
+                            "matches": [],
+                        }
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(
+                            "I couldn't find that product in the catalog. "
+                            "Try typing a different description and I'll search again, or say cancel to start over."
+                        )
                     state["pending"] = {
                         "kind": "order_line_pick_top5_or_search",
                         "order": order,
@@ -3247,6 +3260,13 @@ class MKChatEngine:
                     }
                     save_session_state(state, session_id=sid)
                     return ChatReply(render_top5(matches, show_scores=show_scores, ui=ui))
+
+                if looks_like_command(msg):
+                    return ChatReply(
+                        ui["confirming_order"] + "\n\n"
+                        + self._format_order_confirm(order, ui) + "\n\n"
+                        + ui["order_adjust_hint"]
+                    )
 
                 return ChatReply(ui["reply_yes_no_qty"])
 
@@ -3282,7 +3302,21 @@ class MKChatEngine:
                 fulfillment_method = pending.get("fulfillment_method", "inventory")
                 leave_pending = bool(pending.get("leave_pending", False))
                 resolved_customer_id = pending.get("customer_id")
-                items = [{"text": msg.strip(), "qty": 1}]
+
+                if looks_like_command(msg):
+                    return ChatReply(
+                        f"I don't see an item I can add to {cust_first} {cust_last}'s order. "
+                        f"You can type what you would like to add to the order or say cancel to start over."
+                    )
+
+                try:
+                    _parsed = parse_with_openai(self.client, f"order for {cust_first} {cust_last}: {msg.strip()}", last_customer)
+                    items = (_parsed.get("order") or {}).get("items") or []
+                except Exception:
+                    items = []
+                if not items:
+                    qty, item_text = parse_qty_prefix(msg.strip())
+                    items = [{"text": item_text, "qty": qty}] if item_text else []
                 order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
                 order_draft["customer_id"] = resolved_customer_id
                 if not order_draft["lines"]:
@@ -3331,6 +3365,12 @@ class MKChatEngine:
                     if not target:
                         return ChatReply(
                             ui["remove_hint"] + "\n\n"
+                            + self._format_order_confirm(order, ui) + "\n\n"
+                            + ui["order_adjust_hint"]
+                        )
+                    if re.search(r'\band\b|,', target, re.IGNORECASE):
+                        return ChatReply(
+                            "I can only remove one item at a time. Which one would you like to remove first?\n\n"
                             + self._format_order_confirm(order, ui) + "\n\n"
                             + ui["order_adjust_hint"]
                         )
@@ -3459,6 +3499,13 @@ class MKChatEngine:
 
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}
+
+            # If no name was parsed, ask for it before showing the card
+            _first = (customer.get("First Name") or "").strip()
+            _last = (customer.get("Last Name") or "").strip()
+            if not _first and not _last:
+                return ChatReply("What's the customer's name?")
+
             # Tags: always use our pre-extracted value (authoritative).
             # If we found tag: keyword → use that. If no tag: keyword → clear
             # whatever OpenAI guessed (it tends to pull random words into Tags).

@@ -358,6 +358,17 @@ async function refreshJobs() {
         const data = await res.json();
         const jobs = data.jobs || [];
 
+        // Bad credentials warning — inject once per browser session
+        if (data.creds_failed && !sessionStorage.getItem("credsFailedShown")) {
+            sessionStorage.setItem("credsFailedShown", "1");
+            enterChatModeIfNeeded();
+            addMessage(
+                "⚠️ Your InTouch login isn't working — orders and customer imports won't process until it's fixed. " +
+                "Please <a href='/settings'>update your InTouch credentials in Settings</a>.",
+                "bot"
+            );
+        }
+
         if (!jobsInitialized) {
             // Seed the map with current state — no toasts for pre-existing jobs
             for (const j of jobs) trackedJobs.set(j.id, j.status);

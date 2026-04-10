@@ -118,6 +118,10 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         and not any(t in lowered for t in ("new", "order", "add", "cancel", "tag", "note"))
     )
 
+    # "create X" without "order" → new customer (e.g. "create nichole giveaway")
+    if lowered.startswith("create ") and "order" not in lowered:
+        return IntentResult(intent="new_customer", confidence=0.9, raw_text=msg)
+
     if (
         any(t in lowered for t in ("what's", "whats", "what is", "lookup", "show", "info on", "information for"))
         or looks_like_possessive_info

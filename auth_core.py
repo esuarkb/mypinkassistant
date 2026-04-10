@@ -254,7 +254,8 @@ def get_consultant_full(cid: int) -> Optional[dict]:
                 current_period_end,
                 cancel_at_period_end,
                 onboarding_complete,
-                last_billing_event_at
+                last_billing_event_at,
+                consecutive_login_failures
             FROM consultants
             WHERE id={PH}
             """,
@@ -289,6 +290,7 @@ def get_consultant_full(cid: int) -> Optional[dict]:
         "cancel_at_period_end": int(_row_get(row, "cancel_at_period_end", 12) or 0),
         "onboarding_complete": int(_row_get(row, "onboarding_complete", 13) or 0),
         "last_billing_event_at": (_row_get(row, "last_billing_event_at", 14) or ""),
+        "consecutive_login_failures": int(_row_get(row, "consecutive_login_failures", 15) or 0),
     }
 
 
