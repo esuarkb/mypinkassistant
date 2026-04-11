@@ -3873,8 +3873,18 @@ class MKChatEngine:
             customer["Tags"] = tags  # normalize in-place for storage/payload
         tags_line = f"• Tags: {tags}\n" if tags else ""
 
+        # Warn if email looks invalid so consultant can correct before confirming
+        email_val = (customer.get("Email") or "").strip()
+        email_warning = ""
+        if email_val:
+            _at = email_val.find("@")
+            _dot = email_val.rfind(".")
+            _tld_len = len(email_val) - _dot - 1
+            if _at <= 0 or _dot <= _at or _tld_len < 2:
+                email_warning = f"⚠️ Email looks incomplete: {email_val} — please correct it before saving.\n\n"
+
         return (
-            f"{ui['cust_submit_intro']}\n"
+            f"{email_warning}{ui['cust_submit_intro']}\n"
             f"• {ui['name']}: {customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}\n"
             f"• {ui['email']}: {(customer.get('Email','') or '').strip() or ui['none']}\n"
             f"• {ui['phone']}: {phone_disp or ui['none']}\n"
