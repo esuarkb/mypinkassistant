@@ -2796,8 +2796,9 @@ class MKChatEngine:
 
                     if len(matches) == 1:
                         c = matches[0]
-                        state["last_ref_customer_id"] = int(c["id"])
-                        state["last_ref_customer_name"] = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+                        state["last_ref_customer_id"] = None
+                        state["last_ref_customer_name"] = None
+                        state["last_customer"] = None
                         save_session_state(state, session_id=sid)
                         return ChatReply(format_customer_card(c, last_order=last_order))
 
@@ -2852,6 +2853,10 @@ class MKChatEngine:
                     with tx() as (conn, cur):
                         orders = get_recent_orders_for_customer(cur, c["id"], limit=1)
                     last_order = orders[0] if orders else None
+                    state["last_ref_customer_id"] = None
+                    state["last_ref_customer_name"] = None
+                    state["last_customer"] = None
+                    save_session_state(state, session_id=sid)
                     return ChatReply(format_customer_card(c, last_order=last_order))
 
                 if action == "orders":
