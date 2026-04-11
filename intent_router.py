@@ -118,6 +118,10 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         and not any(t in lowered for t in ("new", "order", "add", "cancel", "tag", "note"))
     )
 
+    # "new order for X" or "order for X" → new_order (must check before new_customer)
+    if re.match(r'^(new\s+)?order\s+for\b', lowered):
+        return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
+
     # "create X" without "order" → new customer (e.g. "create nichole giveaway")
     if lowered.startswith("create ") and "order" not in lowered:
         return IntentResult(intent="new_customer", confidence=0.9, raw_text=msg)

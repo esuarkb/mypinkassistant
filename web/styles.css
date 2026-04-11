@@ -577,3 +577,124 @@ body.noticeActive .layout {
 .fdp-copy:hover {
     background: var(--pinkHover);
 }
+
+/* -------- Quick-reply buttons (mobile confirms) -------- */
+.quick-replies {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.qr-btn {
+    padding: 11px 28px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+}
+
+/* Yes = Save button (solid pink) */
+.qr-btn.qr-yes {
+    background: var(--pink);
+    border-color: var(--pink);
+    color: #fff;
+}
+.qr-btn.qr-yes:hover { background: var(--pinkHover); border-color: var(--pinkHover); }
+
+/* No = English toggle (white, gray border) */
+.qr-btn.qr-no {
+    background: #fff;
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.quick-replies.done .qr-btn {
+    pointer-events: none;
+    opacity: 0.4;
+}
+
+.quick-replies.done .qr-btn.selected {
+    opacity: 1;
+}
+
+@media (min-width: 601px) {
+    .quick-replies { display: none; }
+}
+
+/* -------- Select lists (product / customer picks) -------- */
+.select-intro {
+    margin-bottom: 6px;
+    font-size: 15px;
+}
+
+.select-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.select-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.1s, border-color 0.1s;
+}
+
+.select-row:active { background: #f0f0f0; }
+
+.select-list.done .select-row {
+    pointer-events: none;
+    opacity: 0.4;
+}
+
+.select-list.done .select-row.selected {
+    opacity: 1;
+    border-color: var(--pink);
+    background: rgba(233, 30, 99, .06);
+}
+
+.select-num {
+    font-weight: 700;
+    color: var(--pink);
+    min-width: 16px;
+    flex-shrink: 0;
+    padding-top: 1px;
+}
+
+.select-text {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.select-detail {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 1px;
+}
+
+.select-score { color: var(--muted); font-size: 12px; }
+
+@media (max-width: 600px) {
+    .select-row {
+        border-color: var(--border);
+        background: #fff;
+        padding: 10px 12px;
+    }
+}
+
+/* Delete picker extras */
+.delete-name  { display: block; font-weight: 600; font-size: 14px; }
+.delete-detail { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.delete-label { font-weight: 600; color: var(--text); }
+.delete-order { margin-right: 8px; }

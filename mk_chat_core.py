@@ -1,6 +1,7 @@
 ## update sql placeholders 2-14 10:15am
 
 # mk_chat_core.py
+import html as _html
 import json
 import calendar
 import datetime
@@ -576,6 +577,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         "- Street is the street number and name only. Put apt/unit/suite/lot/# info in Street2.\n"
         "- Extract comma-separated tags from 'tag:' or 'tags:' keyword into Tags as a plain comma-separated string.\n"
         "- Birthday may be provided as MM/DD, Month Day, or YYYY-MM-DD. Output as YYYY-MM-DD. If year missing, use 2000.\n"
+        "- Each word or phrase separated by 'and' or a comma is a separate item unless it is clearly a shade/variant of the immediately adjacent product (e.g. 'Normal/Dry', 'Ivory 1', 'Berry Kissable'). When in doubt, treat it as a separate product.\n"
         "- For shades/colors/variants (Normal/Dry, Combination/Oily), include them in item text if present.\n"
         "- If the user says a variant applies to multiple items (e.g., 'normal/dry both'), append that variant phrase to each affected item.\n"
         "- Do NOT treat numbers that are part of a product name as quantity (examples: '4-in-1 cleanser', '2-in-1', '3D').\n"
@@ -1237,7 +1239,21 @@ def propose_top(top: dict, current_qty: int, ui: dict = None) -> str:
 
     line = " ".join(parts) + qtxt
 
-    return ui["propose_top"].format(line=line)
+    return ui["propose_top"].format(line=line) + _QR_YN
+
+def _qr(options: list) -> str:
+    """HTML quick-reply buttons (shown on mobile only via CSS)."""
+    btns = "".join(
+        f'<button class="qr-btn qr-{opt["cls"]}" data-send="{opt["send"]}">{opt["label"]}</button>'
+        for opt in options
+    )
+    return f'<div class="quick-replies">{btns}</div>'
+
+_QR_YN = _qr([
+    {"cls": "yes", "send": "yes", "label": "Yes"},
+    {"cls": "no",  "send": "no",  "label": "No"},
+])
+
 
 def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None) -> str:
     if ui is None:
@@ -1245,50 +1261,63 @@ def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None)
     top = matches[:TOP5]
     n = len(top)
     reply_range = "1" if n == 1 else f"1-{n}"
-    lines = [ui["render_top5_intro"].format(range=reply_range)]
+    intro = _html.escape(ui["render_top5_intro"].format(range=reply_range))
+    rows = ""
     for i, m in enumerate(top, start=1):
-        name = m["product_name"]
-        price = fmt_price(m.get("price"))
-        score_str = f" [{int(m.get('score') or 0)}%]" if show_scores else ""
-        lines.append(f"{i}) {name} {price}{score_str}")
-    return "\n".join(lines)
+        name = _html.escape(m["product_name"])
+        price = _html.escape(fmt_price(m.get("price")))
+        score_str = f' <span class="select-score">[{int(m.get("score") or 0)}%]</span>' if show_scores else ""
+        rows += f'<div class="select-row" data-send="{i}"><span class="select-num">{i}</span><span class="select-text">{name} {price}{score_str}</span></div>'
+    return f'<div class="select-intro">{intro}</div><div class="select-list">{rows}</div>'
 
 def render_customer_picker(matches: List[dict], intro: str = "") -> str:
     top = (matches or [])[:3]
     n = len(top)
-    if not intro:
-        if n == 1:
-            intro = "Is this who you mean? Reply 1 to confirm:"
-        else:
-            intro = f"I found multiple matches — reply with 1-{n}:"
-    lines = [intro]
 
-    for i, c in enumerate(top, start=1):
-        full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
-
-        phone_hint = format_phone_display(c.get("phone") or "")
-        email_hint = (c.get("email") or "").strip()
-
+    # Single match — show name card + Yes/No buttons
+    if n == 1 and not intro:
+        c = top[0]
+        full = _html.escape(f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip())
+        phone_hint = _html.escape(format_phone_display(c.get("phone") or ""))
+        email_hint = _html.escape((c.get("email") or "").strip())
         hint_parts = [p for p in (phone_hint, email_hint) if p]
+        detail = f'<span class="select-detail">{" • ".join(hint_parts)}</span>' if hint_parts else ""
+        yn = _qr([
+            {"cls": "yes", "send": "1",  "label": "Yes"},
+            {"cls": "no",  "send": "no", "label": "No"},
+        ])
+        return (
+            f'<div class="select-intro">Is this who you mean?</div>'
+            f'<div class="select-list">'
+            f'<div class="select-row" data-send="1"><span class="select-num">→</span>'
+            f'<div class="select-text"><span>{full}</span>{detail}</div></div>'
+            f'</div>{yn}'
+        )
 
-        if hint_parts:
-            hint = " • ".join(hint_parts)
-            lines.append(f"{i}. {full} • {hint}")
-        else:
-            lines.append(f"{i}. {full}")
-
-    return "\n".join(lines)
+    if not intro:
+        intro = f"I found multiple matches — reply with 1-{n}:"
+    rows = ""
+    for i, c in enumerate(top, start=1):
+        full = _html.escape(f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip())
+        phone_hint = _html.escape(format_phone_display(c.get("phone") or ""))
+        email_hint = _html.escape((c.get("email") or "").strip())
+        hint_parts = [p for p in (phone_hint, email_hint) if p]
+        detail = f' <span class="select-detail">• {" • ".join(hint_parts)}</span>' if hint_parts else ""
+        rows += f'<div class="select-row" data-send="{i}"><span class="select-num">{i}</span><span class="select-text">{full}{detail}</span></div>'
+    return f'<div class="select-intro">{_html.escape(intro)}</div><div class="select-list">{rows}</div>'
 
 def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[int, list[dict]]) -> str:
     top = (matches or [])[:3]
-    lines = ["I found multiple matches. Reply with 1, 2, or 3 to choose which customer to delete:"]
+    n = len(top)
+    intro = f"I found multiple matches. Reply with 1{f'-{n}' if n > 1 else ''} to choose which customer to delete:"
+    rows = ""
 
     for i, c in enumerate(top, start=1):
         cid = int(c["id"])
-        full = f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip()
+        full = _html.escape(f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip())
 
-        email = (c.get("email") or "").strip() or "(none)"
-        phone = format_phone_display(c.get("phone") or "") or "(none)"
+        email = _html.escape((c.get("email") or "").strip() or "(none)")
+        phone = _html.escape(format_phone_display(c.get("phone") or "") or "(none)")
 
         street = (c.get("street") or "").strip()
         city = (c.get("city") or "").strip()
@@ -1304,41 +1333,38 @@ def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[i
         if line2:
             addr_parts.append(line2)
 
-        address = ", ".join(addr_parts) if addr_parts else "(none)"
-        birthday = birthday_display(c.get("birthday") or "") or "(none)"
-
-        lines.append(f"{i}. {full}")
-        lines.append(f"   • Email: {email}")
-        lines.append(f"   • Phone: {phone}")
-        lines.append(f"   • Address: {address}")
-        lines.append(f"   • Birthday: {birthday}")
+        address = _html.escape(", ".join(addr_parts) if addr_parts else "(none)")
+        birthday = _html.escape(birthday_display(c.get("birthday") or "") or "(none)")
 
         recent_orders = recent_orders_map.get(cid) or []
+        order_lines = ""
         if recent_orders:
-            lines.append("   • Recent orders:")
             for o in recent_orders[:2]:
                 raw_dt = o.get("order_date_display") or o.get("order_date") or ""
-
                 if hasattr(raw_dt, "strftime"):
                     dt = raw_dt.strftime("%Y-%m-%d")
                 else:
                     dt = str(raw_dt)[:10] if raw_dt else ""
-
                 total = o.get("total")
                 total_txt = f"${float(total):.2f}" if isinstance(total, (int, float)) else ""
-
-                if dt and total_txt:
-                    lines.append(f"     - {dt} • {total_txt}")
-                elif dt:
-                    lines.append(f"     - {dt}")
-                else:
-                    lines.append("     - Order found")
+                order_lines += f'<span class="delete-order">{_html.escape(dt + (" • " + total_txt if total_txt else ""))}</span>'
+            orders_html = f'<span class="delete-label">Orders:</span> {order_lines}'
         else:
-            lines.append("   • Recent orders: none")
+            orders_html = '<span class="delete-label">Orders:</span> none'
 
-        lines.append("")
+        rows += (
+            f'<div class="select-row delete-row" data-send="{i}">'
+            f'<span class="select-num">{i}</span>'
+            f'<div class="select-text">'
+            f'<span class="delete-name">{full}</span>'
+            f'<span class="delete-detail">{email} • {phone}</span>'
+            f'<span class="delete-detail">{address}</span>'
+            f'<span class="delete-detail">Birthday: {birthday}</span>'
+            f'<span class="delete-detail">{orders_html}</span>'
+            f'</div></div>'
+        )
 
-    return "\n".join(lines).rstrip()
+    return f'<div class="select-intro">{_html.escape(intro)}</div><div class="select-list">{rows}</div>'
 
 def _looks_like_new_order_entry(text: str) -> bool:
                 t = (text or "").strip().lower()
@@ -2712,6 +2738,9 @@ class MKChatEngine:
             pending and pending.get("kind") == "delete_customer_confirm"
         ):
             state["pending"] = None
+            state["last_ref_customer_id"] = None
+            state["last_ref_customer_name"] = None
+            state["last_customer"] = None
             save_session_state(state, session_id=sid)
             return ChatReply(ui["canceled"])
         
@@ -3149,9 +3178,10 @@ class MKChatEngine:
                     # 2) Keep existing behavior: job for worker/playwright
                     insert_job("NEW_CUSTOMER", customer, consultant_id=consultant_id)
 
-                    state["last_customer"] = customer
-                    state["last_ref_customer_name"] = f"{customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}".strip()
                     state["pending"] = None
+                    state["last_ref_customer_id"] = None
+                    state["last_ref_customer_name"] = None
+                    state["last_customer"] = None
                     save_session_state(state, session_id=sid)
 
                     return ChatReply(
@@ -3461,7 +3491,9 @@ class MKChatEngine:
                                 )
 
                     state["pending"] = None
-                    state["last_ref_customer_name"] = f"{cust_first} {cust_last}".strip()
+                    state["last_ref_customer_id"] = None
+                    state["last_ref_customer_name"] = None
+                    state["last_customer"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["order_confirmed"].format(first=cust_first, last=cust_last))
 
@@ -3842,6 +3874,7 @@ class MKChatEngine:
             f"{tags_line}"
             f"{ui['cust_confirm_q']}\n"
             f"{ui['cust_edit_hint']}"
+            + _QR_YN
         )
 
 
@@ -3992,7 +4025,7 @@ class MKChatEngine:
             out.append("\nReminder: you will need to finalize this CDS order on InTouch by navigating to Orders and completing the order.")
 
         out.append(ui["order_confirm_q"])
-        return "\n".join(out)
+        return "\n".join(out) + _QR_YN
 
 
     def _next_unresolved_index(self, order: dict) -> Optional[int]:

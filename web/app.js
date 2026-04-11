@@ -260,6 +260,20 @@ chat.addEventListener("click", function(e) {
         e.preventDefault();
         var text = link.dataset.send;
         if (text) {
+            // Lock select-list so only one row can be picked
+            var list = link.closest(".select-list");
+            if (list) {
+                if (list.classList.contains("done")) return; // already picked
+                list.classList.add("done");
+                link.classList.add("selected");
+            }
+            // Lock quick-reply buttons after one is tapped
+            var qr = link.closest(".quick-replies");
+            if (qr) {
+                if (qr.classList.contains("done")) return; // already picked
+                qr.classList.add("done");
+                link.classList.add("selected");
+            }
             msg.value = text;
             sendMessage();
         }
