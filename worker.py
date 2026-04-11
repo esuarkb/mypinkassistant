@@ -89,6 +89,9 @@ ensure_import_table()
 # How long to keep the browser open after the last job (seconds)
 IDLE_GRACE_SECONDS = 90
 
+class _RequeueSilently(Exception):
+    """Raised to skip failure handling when a job has been requeued for a silent retry."""
+
 # Order batching controls (tweak via env vars without code changes)
 MAX_ORDER_ROWS_PER_BATCH = int(os.getenv("MAX_ORDER_ROWS_PER_BATCH", "25"))
 ORDER_BATCH_GRACE_MS = int(os.getenv("ORDER_BATCH_GRACE_MS", "800"))  # brief window to catch rapid-fire items
@@ -507,6 +510,9 @@ def main():
                         else:
                             mark_job_failed(job_id, "Something unexpected happened. Please refresh the page and try again.")
 
+                    except _RequeueSilently:
+                        pass  # jobs already requeued above; skip alert + mark_failed
+
                     except Exception as e:
                         raw_err = str(e)
 
@@ -520,6 +526,67 @@ def main():
                             )
 
                         elif "Customer not found" in raw_err:
+                            # Check if this customer was just created via a NEW_CUSTOMER job
+                            # in the last 10 minutes. If so, InTouch may not have indexed them
+                            # yet — requeue silently instead of failing.
+                            if job_type == "NEW_ORDER_ROW":
+                                cust_first = (payload.get("First Name") or "").strip().lower()
+                                cust_last  = (payload.get("Last Name")  or "").strip().lower()
+                                try:
+                                    _rc_conn = connect()
+                                    _rc_cur = _rc_conn.cursor()
+                                    # Check attempt count for the first job — if > 1 this
+                                    # has already been retried once; don't loop forever.
+                                    _rc_cur.execute(
+                                        f"SELECT attempts FROM jobs WHERE id={PH_W}",
+                                        (job_ids[0],),
+                                    )
+                                    _att_row = _rc_cur.fetchone()
+                                    _attempts = int(_att_row[0]) if _att_row else 99
+
+                                    _recent = None
+                                    if _attempts <= 1:
+                                        if is_postgres():
+                                            _rc_cur.execute(
+                                                f"""
+                                                SELECT id FROM jobs
+                                                WHERE consultant_id = {PH_W}
+                                                  AND type = 'NEW_CUSTOMER'
+                                                  AND status = 'done'
+                                                  AND finished_at >= NOW() - INTERVAL '10 minutes'
+                                                  AND LOWER(payload_json::text) LIKE {PH_W}
+                                                LIMIT 1
+                                                """,
+                                                (cid, f"%{cust_first}%"),
+                                            )
+                                        else:
+                                            _rc_cur.execute(
+                                                f"""
+                                                SELECT id FROM jobs
+                                                WHERE consultant_id = {PH_W}
+                                                  AND type = 'NEW_CUSTOMER'
+                                                  AND status = 'done'
+                                                  AND finished_at >= datetime('now', '-600 seconds')
+                                                  AND LOWER(payload_json) LIKE {PH_W}
+                                                LIMIT 1
+                                                """,
+                                                (cid, f"%{cust_first}%"),
+                                            )
+                                        _recent = _rc_cur.fetchone()
+                                    _rc_conn.close()
+                                except Exception:
+                                    _recent = None
+
+                                if _recent:
+                                    print(
+                                        f"[Worker] Customer not found for job(s) {job_ids} "
+                                        f"but NEW_CUSTOMER ran recently — requeueing silently."
+                                    )
+                                    for jid in job_ids:
+                                        requeue_job(jid, "Queued")
+                                    # Skip the failure alert + mark_job_failed below
+                                    raise _RequeueSilently()
+
                             err_text = raw_err
 
                         elif "Change Delivery Status Icon" in raw_err or "Add to Bag" in raw_err:
