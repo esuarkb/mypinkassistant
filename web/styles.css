@@ -474,6 +474,13 @@ body.noticeActive .layout {
     }
 }
 
+/* -------- Short desktop screens (e.g. 13-inch MacBook) -------- */
+@media (min-width: 601px) and (max-height: 820px) {
+    :root {
+        --dockBottom: 24px;
+    }
+}
+
 /* -------- Follow-up cards -------- */
 .followup-list {
     display: flex;
@@ -624,6 +631,12 @@ body.noticeActive .layout {
 
 @media (min-width: 601px) {
     .quick-replies { display: none; }
+}
+
+/* When quick-reply buttons appear inside a bot bubble, force the bubble
+   wide enough so the buttons render at a comfortable tap size */
+.msg.bot .quick-replies {
+    min-width: 180px;
 }
 
 /* -------- Select lists (product / customer picks) -------- */

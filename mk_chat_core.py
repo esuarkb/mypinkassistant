@@ -1219,9 +1219,9 @@ def _split_order_for_prefix(message: str) -> tuple[str, str]:
             break
 
     customer_hint = " ".join(name_parts).strip()
-    item_hint = " ".join(
-        w for w in words[item_start_idx:] if w.lower().strip(",") not in stop_words
-    ).strip()
+    # Take everything after the name boundary as items — do NOT filter stop words
+    # out of the item text (they are product names, e.g. "charcoal", "repair set")
+    item_hint = " ".join(words[item_start_idx:]).strip().strip(",").strip()
 
     return customer_hint, item_hint
 
@@ -3523,6 +3523,15 @@ class MKChatEngine:
         # "123 Oak dr dr phillips" → "123 Oak dr, dr phillips"
         # "1 College ave ave maria" → "1 College ave, ave maria"
         msg_for_parse = _re.sub(r'\b(st|dr|ave)(\.?)\s+(st|dr|ave)\b', r'\1\2, \3', msg_for_parse, flags=_re.IGNORECASE)
+
+        # For "new order for X item1, item2" inline syntax, pre-process into the
+        # clean "order for NAME: items" format that entries 2 & 3 use, so OpenAI
+        # doesn't confuse product names (charcoal, poppy) with the customer's last name.
+        _mfp_lower = msg_for_parse.lower()
+        if _mfp_lower.startswith("new order for ") or _mfp_lower.startswith("order for "):
+            _pre_cust, _pre_items = _split_order_for_prefix(msg_for_parse)
+            if _pre_cust and _pre_items:
+                msg_for_parse = f"order for {_pre_cust}: {_pre_items}"
 
         try:
             parsed = parse_with_openai(self.client, msg_for_parse, last_customer)
