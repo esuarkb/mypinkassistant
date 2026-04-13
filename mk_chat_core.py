@@ -1520,7 +1520,8 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
 
         # birthday:
         if low.startswith("birthday") or low.startswith("bday") or low.startswith("dob"):
-            b = normalize_birthday(txt.replace("birthday", "").replace("bday", "").replace("dob", "").strip())
+            b_raw = re.sub(r"^(birthday|bday|dob)\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
+            b = normalize_birthday(b_raw)
             if b:
                 c["Birthday"] = b
                 notes.append("Birthday updated")

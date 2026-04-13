@@ -87,7 +87,7 @@ from inventory_import_store import ensure_import_table
 ensure_import_table()
 
 # How long to keep the browser open after the last job (seconds)
-IDLE_GRACE_SECONDS = 90
+IDLE_GRACE_SECONDS = 45
 
 class _RequeueSilently(Exception):
     """Raised to skip failure handling when a job has been requeued for a silent retry."""
