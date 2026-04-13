@@ -151,9 +151,9 @@ def create_customer_basic(page: Page, customer: dict) -> None:
             page.wait_for_timeout(1000)
             dialog = page.get_by_role("dialog")
             dialog.locator("c-cmt-custom-toggle").nth(0).locator("label").click()
-            page.wait_for_timeout(500)
+            page.wait_for_timeout(800)
             dialog.locator("c-cmt-custom-toggle").nth(1).locator("label").click()
-            page.wait_for_timeout(500)
+            page.wait_for_timeout(1000)
             dialog.get_by_role("button", name="Save & Exit").click()
             page.wait_for_timeout(1000)
         except Exception as e:
