@@ -145,6 +145,7 @@ def create_customer_basic(page: Page, customer: dict) -> None:
         add_address_on_detail_page(page, customer)
 
     # Enable subscriptions if customer has email
+    subscription_ok = True
     if str(customer.get("Email") or "").strip():
         try:
             subscriptions = page.locator("c-cmt-my-customer-details-subscriptions")
@@ -160,7 +161,9 @@ def create_customer_basic(page: Page, customer: dict) -> None:
             page.wait_for_timeout(1000)
         except Exception as e:
             logger.warning(f"Subscription toggle failed (non-fatal): {e}")
+            subscription_ok = False
 
     # Save customer (goes to customer detail page)
     #page.get_by_role("button", name="Save New Customer").click()
     ensure_mycustomers_ready(page,timeout_ms=30000)
+    return subscription_ok

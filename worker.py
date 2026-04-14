@@ -410,10 +410,11 @@ def main():
                         # -------------------------
                         if job_type == "NEW_CUSTOMER":
                             page.goto("https://apps.marykayintouch.com/customer-list")
-                            create_customer_basic(page, payload)
+                            subscription_ok = create_customer_basic(page, payload)
 
                             full_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
-                            mark_job_done(job_id, f"Customer {full_name} complete! ✅")
+                            sub_note = "" if subscription_ok else " (subscription toggle failed — verify opt-in in InTouch)"
+                            mark_job_done(job_id, f"Customer {full_name} complete! ✅{sub_note}")
 
                         # -------------------------
                         # NEW_ORDER_ROW (✅ batching)
