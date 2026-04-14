@@ -620,7 +620,7 @@ def billing_success(request: Request, session_id: str = ""):
             cur = conn.cursor()
             try:
                 cur.execute(
-                    f"SELECT email, first_name FROM consultants WHERE id={PH}",
+                    f"SELECT email, first_name, language FROM consultants WHERE id={PH}",
                     (cid_int,),
                 )
                 row = cur.fetchone()
@@ -634,7 +634,8 @@ def billing_success(request: Request, session_id: str = ""):
             if row:
                 email = (row[0] or "").strip()
                 first_name = (row[1] or "").strip()
-                send_welcome_email(to_email=email, first_name=first_name)
+                language = (row[2] or "en").strip().lower()
+                send_welcome_email(to_email=email, first_name=first_name, lang=language)
 
         except Exception as e:
             print("[WelcomeEmail after billing] failed:", repr(e))

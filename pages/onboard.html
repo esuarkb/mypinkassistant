@@ -179,6 +179,30 @@
             color: #666;
             margin-top: 8px;
         }
+
+        .lang-toggle {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .lang-btn {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #e8e8ee;
+            border-radius: 14px;
+            background: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            color: #888;
+            cursor: pointer;
+            transition: border-color .15s, color .15s;
+        }
+
+        .lang-btn.active {
+            border-color: #e91e63;
+            color: #e91e63;
+        }
     </style>
     <link rel="icon" type="image/svg+xml" href="/web/icon.svg">
     <link rel="apple-touch-icon" href="/web/apple-touch-icon.png">
@@ -189,65 +213,76 @@
 <body>
     <div class="card">
         {{REF_WELCOME}}
-        <h1>Welcome to MyPinkAssistant.com 💕</h1>
-        <p class="welcome">
-            Ready to automate your customer & order entry?
+        <h1 data-en="Welcome to MyPinkAssistant.com 💕" data-es="Bienvenida a MyPinkAssistant.com 💕">Welcome to MyPinkAssistant.com 💕</h1>
+        <p class="welcome" data-en="Ready to automate your customer &amp; order entry?" data-es="¿Lista para automatizar la entrada de clientes y pedidos?">
+            Ready to automate your customer &amp; order entry?
         </p>
-        <p>Let's get you set up; this only takes a minute!</p>
+        <p data-en="Let's get you set up; this only takes a minute!" data-es="¡Vamos a configurarte; esto solo toma un minuto!">Let's get you set up; this only takes a minute!</p>
 
         {{ERROR_BLOCK}}
 
         <form method="post" action="/onboard" id="onboardForm">
 
             <input type="hidden" name="ref" value="{{REF}}">
+            <input type="hidden" name="language" id="language" value="en">
 
-            <div class="section-header"><span>Your MyPinkAssistant Account</span><hr></div>
+            <div class="section-header"><span>Language / Idioma</span><hr></div>
+            <div class="lang-toggle">
+                <button type="button" class="lang-btn active" id="langEn">English</button>
+                <button type="button" class="lang-btn" id="langEs">Español</button>
+            </div>
 
-            <label for="first_name">First Name</label>
+            <div class="section-header"><span data-en="Your MyPinkAssistant Account" data-es="Tu Cuenta de MyPinkAssistant">Your MyPinkAssistant Account</span><hr></div>
+
+            <label for="first_name" data-en="First Name" data-es="Nombre">First Name</label>
             <input id="first_name" name="first_name" value="{{FIRST_NAME}}" autocomplete="given-name" required />
 
-            <label for="last_name">Last Name</label>
+            <label for="last_name" data-en="Last Name" data-es="Apellido">Last Name</label>
             <input id="last_name" name="last_name" value="{{LAST_NAME}}" autocomplete="family-name" required />
 
-            <label for="email">Email</label>
+            <label for="email" data-en="Email" data-es="Correo Electrónico">Email</label>
             <input id="email" name="email" type="email" value="{{EMAIL}}" autocomplete="email" required />
 
-            <label for="email2">Confirm Email</label>
+            <label for="email2" data-en="Confirm Email" data-es="Confirmar Correo">Confirm Email</label>
             <input id="email2" type="email" autocomplete="email" required />
 
             <div id="emailErr" class="err" style="display:none;"></div>
 
-            <label for="pw1">Password</label>
+            <label for="pw1" data-en="Password" data-es="Contraseña">Password</label>
             <input name="password" id="pw1" type="password" autocomplete="new-password" required />
 
-            <label for="pw2">Confirm Password</label>
+            <label for="pw2" data-en="Confirm Password" data-es="Confirmar Contraseña">Confirm Password</label>
             <input name="password2" id="pw2" type="password" autocomplete="off" required />
 
             <div id="pwErr" class="err" style="display:none;"></div>
 
-            <div class="section-header"><span>Connect Your InTouch Account</span><hr></div>
+            <div class="section-header"><span data-en="Connect Your InTouch Account" data-es="Conecta Tu Cuenta de InTouch">Connect Your InTouch Account</span><hr></div>
 
-            <label for="intouch_username">InTouch Username</label>
-            <input id="intouch_username" name="intouch_username" placeholder="Your Mary Kay consultant ID" autocomplete="off" required />
+            <label for="intouch_username" data-en="InTouch Username" data-es="Usuario de InTouch">InTouch Username</label>
+            <input id="intouch_username" name="intouch_username"
+                   placeholder="Your Mary Kay consultant ID"
+                   data-en-ph="Your Mary Kay consultant ID"
+                   data-es-ph="Tu ID de consultora Mary Kay"
+                   autocomplete="off" required />
 
-            <label for="intouch_password">InTouch Password</label>
+            <label for="intouch_password" data-en="InTouch Password" data-es="Contraseña de InTouch">InTouch Password</label>
             <input id="intouch_password" name="intouch_password" type="password" autocomplete="off" required />
 
-            <div class="small">
+            <div class="small" data-en="Your InTouch password is encrypted and never shared." data-es="Tu contraseña de InTouch está encriptada y nunca se comparte.">
                 Your InTouch password is encrypted and never shared.
             </div>
 
             <div class="checkbox-row">
                 <input type="checkbox" id="agree_terms" name="agree_terms" value="1" required>
-                <label for="agree_terms">
+                <label for="agree_terms" id="termsLabel">
                     I agree to the
-                    <a href="/legal#terms" target="_blank">Terms & Conditions</a>
+                    <a href="/legal#terms" target="_blank">Terms &amp; Conditions</a>
                     and
                     <a href="/legal#privacy" target="_blank">Privacy Policy</a>
                 </label>
             </div>
 
-            <button type="submit">Create My Account</button>
+            <button type="submit" id="submitBtn" data-en="Create My Account" data-es="Crear Mi Cuenta">Create My Account</button>
         </form>
     </div>
 

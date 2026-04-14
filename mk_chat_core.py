@@ -1289,7 +1289,7 @@ def render_customer_picker(matches: List[dict], intro: str = "") -> str:
         return (
             f'<div class="select-intro">Is this who you mean?</div>'
             f'<div class="select-list">'
-            f'<div class="select-row" data-send="1"><span class="select-num">→</span>'
+            f'<div class="select-row" data-send="1"><span class="select-num">1</span>'
             f'<div class="select-text"><span>{full}</span>{detail}</div></div>'
             f'</div>{yn}'
         )

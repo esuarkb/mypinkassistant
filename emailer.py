@@ -2,19 +2,177 @@ import os
 import requests
 from html import escape
 
-def send_welcome_email(to_email: str, first_name: str = "") -> None:
+def send_welcome_email(to_email: str, first_name: str = "", lang: str = "en") -> None:
     api_key = (os.getenv("RESEND_API_KEY") or "").strip()
     mail_from = (os.getenv("MAIL_FROM") or "").strip()  # e.g. "MyPinkAssistant <support@mypinkassistant.com>"
     if not api_key or not mail_from:
         raise RuntimeError("Missing RESEND_API_KEY or MAIL_FROM")
 
-    name = (first_name or "").strip() or "there"
+    lang = (lang or "en").strip().lower()
+    if lang not in ("en", "es"):
+        lang = "en"
+
+    name = (first_name or "").strip() or ("there" if lang == "en" else "")
     safe_name = escape(name)
 
-    subject = "Welcome to MyPinkAssistant.com — here are your starter tips! ✨"
+    if lang == "es":
+        subject = "¡Bienvenida a MyPinkAssistant.com — aquí tienes tus consejos iniciales! ✨"
 
-    # Plain text (fallback)
-    text = f"""Hi {name}!
+        text = f"""¡Hola {name}!
+
+¡Bienvenida a MyPinkAssistant — estamos muy contentos de tenerte aquí!
+
+Comienza a chatear ahora: https://mypinkassistant.com
+
+Aquí tienes algunos consejos rápidos para empezar:
+
+AGREGAR UN NUEVO CLIENTE
+Incluye tanto o tan poco como quieras: nombre, dirección, correo electrónico, teléfono, cumpleaños.
+
+Ejemplo:
+Nueva cliente Jane Doe, 444 4th St, Anytown, Alabama 55555, jane@gmail.com, 5551231234, 12-25-02
+
+Lo organizaré y lo enviaré a MyCustomers automáticamente.
+
+BUSCAR UN CLIENTE
+Solo escribe un nombre — encontraré la coincidencia más cercana aunque lo escribas mal.
+
+Ejemplo:
+Jane Doe
+¿Cuáles fueron los últimos 3 pedidos de Jane?
+
+AGREGAR UN PEDIDO DE CLIENTE
+Agrega varios artículos y cantidades en un solo mensaje — confirmaré todo antes de enviarlo.
+
+Ejemplo:
+Nuevo pedido para Jane Doe; quiere un labial rojo, 2 máscaras de carbón y un limpiador 4-en-1 para piel normal/seca.
+
+INVENTARIO PERSONAL
+Cuando hagas un pedido de inventario a través de MaryKayInTouch.com, tu stock se actualiza automáticamente — sin necesidad de entrada manual. También puedes consultar el stock, actualizar cantidades, configurar alertas de stock bajo e imprimir un PDF en cualquier momento con solo pedirlo.
+
+Ejemplo:
+¿Cuántos sets TimeWise tengo? Establece mi par para máscaras de carbón en 3.
+
+PROGRAMA DE REFERIDOS
+¡Da un mes, gana un mes! Tu enlace de referido personal está en Configuración en https://mypinkassistant.com
+
+SÍGUENOS EN FACEBOOK
+Consejos, nuevas funciones y actualizaciones: https://www.facebook.com/mypinkassistant1
+
+¿Tienes preguntas? Consulta nuestras Preguntas Frecuentes: https://mypinkassistant.com/faq
+
+Creamos MyPinkAssistant para ahorrarte tiempo y simplificar tu negocio — y es un honor tenerte aquí.
+
+¿Necesitas ayuda o tienes una solicitud de función?
+support@mypinkassistant.com
+"""
+
+        html = f"""<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#ffffff;">
+    <div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
+      <p style="margin:0 0 12px 0;">¡Hola {safe_name}!</p>
+
+      <h2 style="margin:0 0 12px 0;font-size:22px;line-height:1.25;">
+        Bienvenida a <strong>MyPinkAssistant</strong> 💕
+      </h2>
+
+      <p style="margin:0 0 16px 0;">
+        Puede que ya hayas entrado — pero si no, puedes empezar aquí:
+      </p>
+
+      <p style="margin:0 0 22px 0;">
+        <a href="https://mypinkassistant.com"
+           style="display:inline-block;background:#e91e63;color:#ffffff;text-decoration:none;
+                  padding:12px 16px;border-radius:10px;font-weight:bold;">
+          Comenzar a Chatear
+        </a>
+      </p>
+
+      <div style="border-top:1px solid #e6e6e6;padding-top:16px;margin-top:10px;"></div>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">💁‍♀️ Agregar un Nuevo Cliente</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Incluye tanto o tan poco detalle como quieras: nombre, dirección, correo electrónico, número de teléfono, cumpleaños.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Ejemplo:</strong><br>
+        Nueva cliente Jane Doe, 444 4th St, Anytown, Alabama 55555, jane@gmail.com, 5551231234, 12-25-02
+      </p>
+      <p style="margin:0 0 16px 0;color:#111;">
+        Organizaré lo que ingreses y lo enviaré a <strong>MyCustomers</strong> automáticamente.
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📇 Buscar Información de Clientes y Pedidos</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Encuentra instantáneamente los detalles del cliente y los pedidos anteriores — solo escribe un nombre.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Ejemplo:</strong><br>
+        Jane Doe<br>
+        ¿Cuáles fueron los últimos 3 pedidos de Jane?
+      </p>
+      <p style="margin:0 0 16px 0;color:#111;">
+        Encontraré la coincidencia más cercana aunque no recuerdes la ortografía exacta.
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">🛍 Agregar un Pedido de Cliente</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Agrega varios artículos y cantidades en un solo mensaje — no se necesitan números de SKU.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Ejemplo:</strong><br>
+        Nuevo pedido para Jane Doe; quiere un labial rojo, 2 máscaras de carbón y un limpiador 4-en-1 para piel normal/seca.
+      </p>
+      <p style="margin:0 0 16px 0;color:#111;">
+        Confirmaré cada artículo antes de enviarlo, y siempre puedes agregar o quitar artículos antes de la aprobación final.
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📦 Inventario Personal</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Cuando hagas un pedido de inventario a través de MaryKayInTouch.com, tu stock se actualiza automáticamente — sin necesidad de entrada manual. También puedes consultar el stock, actualizar cantidades, configurar alertas de stock bajo e imprimir un PDF en cualquier momento con solo pedirlo.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Ejemplo:</strong><br>
+        ¿Cuántos sets TimeWise tengo? Establece mi par para máscaras de carbón en 3.
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">🎁 Programa de Referidos</h3>
+      <p style="margin:0 0 16px 0;color:#111;">
+        ¡Da un mes, gana un mes! Tu enlace de referido personal está en <strong>Configuración</strong>.
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📣 Síguenos en Facebook</h3>
+      <p style="margin:0 0 16px 0;color:#111;">
+        Síguenos en Facebook para consejos, nuevas funciones y actualizaciones:
+        <a href="https://www.facebook.com/mypinkassistant1" style="color:#e91e63;text-decoration:none;font-weight:bold;">facebook.com/mypinkassistant1</a>
+      </p>
+
+      <p style="margin:0 0 18px 0;font-size:15px;color:#111;font-weight:500;">
+        Creamos MyPinkAssistant para ahorrarte tiempo y simplificar tu negocio — y es un honor tenerte aquí. 💗
+      </p>
+
+      <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:18px;"></div>
+
+      <p style="margin:10px 0 0 0;font-size:14px;color:#5a5a5a;">
+        ¿Tienes preguntas? Consulta nuestras <a href="https://mypinkassistant.com/faq" style="color:#e91e63;text-decoration:none;font-weight:bold;">Preguntas Frecuentes</a> o escríbenos a
+        <a href="mailto:support@mypinkassistant.com" style="color:#e91e63;text-decoration:none;">support@mypinkassistant.com</a>.
+      </p>
+
+      <p style="margin:10px 0 0 0;font-size:12px;color:#5a5a5a;">
+        Abre MyPinkAssistant en cualquier momento: <a href="https://mypinkassistant.com" style="color:#e91e63;text-decoration:none;">
+          mypinkassistant.com
+        </a>
+      </p>
+    </div>
+  </body>
+</html>
+"""
+
+    else:
+        subject = "Welcome to MyPinkAssistant.com — here are your starter tips! ✨"
+
+        text = f"""Hi {name}!
 
 Welcome to MyPinkAssistant — we’re so glad you’re here!
 
@@ -34,7 +192,8 @@ LOOK UP A CUSTOMER
 Just type a name — I’ll find the closest match even if you misspell it.
 
 Example:
-What is Jane’s phone number? What did Jane order last time?
+Jane Doe
+What were Jane’s last 3 orders?
 
 ADD A CUSTOMER ORDER
 Add multiple items and quantities in one message — I’ll confirm everything before submitting.
@@ -62,8 +221,7 @@ Need help or have a feature request?
 support@mypinkassistant.com
 """
 
-    # HTML (pretty + mobile-friendly)
-    html = f"""<!doctype html>
+        html = f"""<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#ffffff;">
     <div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
@@ -105,10 +263,11 @@ support@mypinkassistant.com
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
-        What is Jane’s phone number? What did Jane order last time?
+        Jane Doe<br>
+        What were Jane’s last 3 orders?
       </p>
       <p style="margin:0 0 16px 0;color:#111;">
-        Can’t remember the exact name? No worries — just give me what you have and I’ll find the closest match.
+        I’ll find the closest match even if you don’t remember the exact spelling.
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🛍 Add a Customer Order</h3>
