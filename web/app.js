@@ -55,7 +55,9 @@ async function loadUiMessages() {
     if (heroSub && s) heroSub.textContent = s;
 
     if (footerLine && youCanSayArr && youCanSayArr.length > 0) {
-        let youCanSayIndex = Math.floor(Math.random() * youCanSayArr.length);
+        const _ycKey = "youCanSayIndex";
+        let youCanSayIndex = (parseInt(localStorage.getItem(_ycKey), 10) || 0) % youCanSayArr.length;
+        localStorage.setItem(_ycKey, (youCanSayIndex + 1) % youCanSayArr.length);
 
         const textSpan = document.createElement("span");
         textSpan.id = "youCanSayText";

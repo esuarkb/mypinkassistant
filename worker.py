@@ -283,7 +283,7 @@ def main():
                 try:
                     _c_info_cur = _c_info_conn.cursor()
                     _c_info_cur.execute(
-                        f"SELECT first_name, last_name, email FROM consultants WHERE id = {PH_W}",
+                        f"SELECT first_name, last_name, email, language FROM consultants WHERE id = {PH_W}",
                         (cid,),
                     )
                     _c_info_row = _c_info_cur.fetchone()
@@ -293,8 +293,10 @@ def main():
                     _c_first = (_c_info_row[0] if not isinstance(_c_info_row, dict) else _c_info_row["first_name"]) or ""
                     _c_last = (_c_info_row[1] if not isinstance(_c_info_row, dict) else _c_info_row["last_name"]) or ""
                     _c_email = (_c_info_row[2] if not isinstance(_c_info_row, dict) else _c_info_row["email"]) or ""
+                    _c_lang = (_c_info_row[3] if not isinstance(_c_info_row, dict) else _c_info_row["language"]) or "en"
                 else:
                     _c_first = _c_last = _c_email = ""
+                    _c_lang = "en"
                 _c_name = f"{_c_first} {_c_last}".strip() or f"ID {cid}"
 
                 # Headless only if explicitly set to true
@@ -381,7 +383,7 @@ def main():
                                 _creds_email_sent = hours_since < 24
 
                             if is_bad_creds and not _is_intouch_outage() and not _creds_email_sent:
-                                send_wrong_credentials_email(_c_email, _c_first or "")
+                                send_wrong_credentials_email(_c_email, _c_first or "", lang=_c_lang)
                                 print(f"[Worker] Credentials email sent to consultant_id={cid}")
                             elif not is_bad_creds:
                                 print(f"[Worker] Login failed but not a credentials error — suppressing credentials email for consultant_id={cid}")

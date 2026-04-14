@@ -342,18 +342,73 @@ support@mypinkassistant.com
         raise RuntimeError(f"Resend error {r.status_code}: {r.text}")
 
 
-def send_wrong_credentials_email(to_email: str, first_name: str = "") -> None:
+def send_wrong_credentials_email(to_email: str, first_name: str = "", lang: str = "en") -> None:
     api_key = (os.getenv("RESEND_API_KEY") or "").strip()
     mail_from = (os.getenv("MAIL_FROM") or "").strip()
     if not api_key or not mail_from:
         raise RuntimeError("Missing RESEND_API_KEY or MAIL_FROM")
 
-    name = (first_name or "").strip() or "there"
+    lang = (lang or "en").strip().lower()
+    if lang not in ("en", "es"):
+        lang = "en"
+
+    name = (first_name or "").strip() or ("there" if lang == "en" else "")
     safe_name = escape(name)
 
-    subject = "MyPinkAssistant — incorrect InTouch credentials"
+    if lang == "es":
+        subject = "MyPinkAssistant — credenciales de InTouch incorrectas"
 
-    text = f"""Hi {name}!
+        text = f"""¡Hola {name}!
+
+Parece que guardaste el usuario o la contraseña incorrectos de InTouch en MyPinkAssistant. Puedes corregirlo en mypinkassistant.com/settings — solo vuelve a ingresar las credenciales correctas, presiona Guardar y regresa al chat para comenzar.
+
+¡Avísame si tienes algún otro problema!
+
+-Brian
+support@mypinkassistant.com
+"""
+
+        html = f"""<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#ffffff;">
+    <div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
+      <p style="margin:0 0 12px 0;">¡Hola {safe_name}!</p>
+
+      <p style="margin:0 0 16px 0;">
+        Parece que guardaste el usuario o la contraseña incorrectos de InTouch en MyPinkAssistant. Puedes corregirlo en unos pocos pasos:
+      </p>
+
+      <ol style="margin:0 0 16px 0;padding-left:20px;color:#111;">
+        <li style="margin-bottom:6px;">Toca el botón de abajo para abrir Configuración</li>
+        <li style="margin-bottom:6px;">Vuelve a ingresar tu usuario y contraseña correctos de InTouch</li>
+        <li style="margin-bottom:6px;">Presiona <strong>Guardar</strong> y regresa al chat para comenzar</li>
+      </ol>
+
+      <p style="margin:0 0 22px 0;">
+        <a href="https://mypinkassistant.com/settings"
+           style="display:inline-block;background:#e91e63;color:#ffffff;text-decoration:none;
+                  padding:12px 16px;border-radius:10px;font-weight:bold;">
+          Ir a Configuración
+        </a>
+      </p>
+
+      <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:10px;"></div>
+
+      <p style="margin:10px 0 0 0;font-size:14px;color:#5a5a5a;">
+        ¡Gracias por usar MyPinkAssistant! Estamos aquí si tienes preguntas, sugerencias o problemas —
+        <a href="mailto:support@mypinkassistant.com" style="color:#e91e63;text-decoration:none;">support@mypinkassistant.com</a>
+      </p>
+
+      <p style="margin:6px 0 0 0;font-size:13px;color:#5a5a5a;">-Brian</p>
+    </div>
+  </body>
+</html>
+"""
+
+    else:
+        subject = "MyPinkAssistant — incorrect InTouch credentials"
+
+        text = f"""Hi {name}!
 
 It looks like you might have saved the wrong InTouch username or password in MyPinkAssistant. You can fix this at mypinkassistant.com/settings — just re-enter the correct credentials, hit Save, and head back to chat to get started.
 
@@ -363,7 +418,7 @@ Let me know if you have any other issues!
 support@mypinkassistant.com
 """
 
-    html = f"""<!doctype html>
+        html = f"""<!doctype html>
 <html>
   <body style="margin:0;padding:0;background:#ffffff;">
     <div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
