@@ -147,7 +147,9 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     # Enable subscriptions if customer has email
     if str(customer.get("Email") or "").strip():
         try:
-            page.locator("c-cmt-my-customer-details-subscriptions").get_by_role("button").click()
+            subscriptions = page.locator("c-cmt-my-customer-details-subscriptions")
+            subscriptions.wait_for(state="visible", timeout=15000)
+            subscriptions.get_by_role("button").click()
             page.wait_for_timeout(1000)
             dialog = page.get_by_role("dialog")
             dialog.locator("c-cmt-custom-toggle").nth(0).locator("label").click()
