@@ -3142,6 +3142,9 @@ class MKChatEngine:
                         )
 
                     phone_digits = normalize_phone(customer.get("Phone") or "")
+                    if len(phone_digits) == 11 and phone_digits.startswith("1"):
+                        phone_digits = phone_digits[1:]
+                        customer["Phone"] = phone_digits
                     if phone_digits and len(phone_digits) != 10:
                         return ChatReply(
                             f"The phone number I have ({phone_digits}) isn't 10 digits — MyCustomers requires a 10-digit US number. "

@@ -84,7 +84,17 @@ from playwright_automation.new_customer import create_customer_basic
 from playwright_automation.orders import process_order_batch, SkuNotCdsEligible
 from playwright_automation.inventory_import import import_inventory_orders
 from inventory_import_store import ensure_import_table
-ensure_import_table()
+for _startup_attempt in range(5):
+    try:
+        ensure_import_table()
+        break
+    except Exception as _startup_err:
+        print(f"[Worker] DB not ready yet (attempt {_startup_attempt + 1}/5): {_startup_err}")
+        if _startup_attempt < 4:
+            time.sleep(10)
+        else:
+            print("[Worker] DB unavailable after 5 attempts — exiting for restart")
+            raise
 
 # How long to keep the browser open after the last job (seconds)
 IDLE_GRACE_SECONDS = 45
@@ -248,7 +258,12 @@ def main():
                 time.sleep(5)
                 continue
 
-            cid = claim_next_consultant()
+            try:
+                cid = claim_next_consultant()
+            except Exception as _claim_err:
+                print(f"[Worker] DB error claiming consultant — will retry: {_claim_err}")
+                time.sleep(10)
+                continue
             if not cid:
                 time.sleep(1)
                 continue
