@@ -108,9 +108,10 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
 
     # Wait for the address modal to fully close before moving on.
-    # If it's still open it will intercept pointer events and block the subscription click.
+    # The AddressFirstName field is inside the dialog — when it goes hidden the modal is gone.
+    # If still open it will intercept pointer events and block the subscription click.
     try:
-        page.locator("c-cmt-my-customer-notes .slds-modal__content").wait_for(state="hidden", timeout=10000)
+        first_name_field.wait_for(state="hidden", timeout=10000)
     except PlaywrightTimeoutError:
         logger.warning("Address modal did not close cleanly — proceeding anyway.")
     page.wait_for_timeout(1000)
