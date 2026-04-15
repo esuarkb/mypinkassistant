@@ -149,9 +149,26 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     if str(customer.get("Email") or "").strip():
         try:
             subscriptions = page.locator("c-cmt-my-customer-details-subscriptions")
-            subscriptions.wait_for(state="visible", timeout=15000)
-            subscriptions.get_by_role("button").click()
-            page.wait_for_timeout(1000)
+            subscriptions.wait_for(state="visible", timeout=20000)
+
+            # Retry opening the subscriptions dialog (same pattern as address dialog)
+            sub_btn = subscriptions.get_by_role("button")
+            dialog_toggle = page.locator("c-cmt-custom-toggle").nth(0).locator("label")
+            max_attempts = 3
+            dialog_opened = False
+            for attempt in range(max_attempts):
+                sub_btn.click()
+                page.wait_for_timeout(500)
+                try:
+                    dialog_toggle.wait_for(state="visible", timeout=1500)
+                    dialog_opened = True
+                    break
+                except PlaywrightTimeoutError:
+                    logger.warning(f"Subscription dialog attempt {attempt + 1} failed, retrying...")
+
+            if not dialog_opened:
+                raise Exception("Subscription dialog failed to open after 3 attempts.")
+
             dialog = page.get_by_role("dialog")
             dialog.locator("c-cmt-custom-toggle").nth(0).locator("label").click()
             page.wait_for_timeout(800)
