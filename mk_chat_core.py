@@ -3147,10 +3147,7 @@ class MKChatEngine:
                     from crm_store import upsert_customer_from_pending
                     customer = pending["customer"]
 
-                    street = (customer.get("Street") or "").strip()
-                    city = (customer.get("City") or "").strip()
                     state_val = (customer.get("State") or "").strip()
-                    postal = (customer.get("Postal Code") or "").strip()
 
                     first = (customer.get("First Name") or "").strip()
                     last = (customer.get("Last Name") or "").strip()
@@ -3190,12 +3187,8 @@ class MKChatEngine:
 
                     valid_states = set(STATE_MAP.values())
                     state_ok = state_val in valid_states
-                    if not (street and city and state_val and postal):
-                        return ChatReply(
-                            "I need the full address before I can save this customer, as MyCustomers now requires it for all orders. "
-                            "Please type the street, city, state, and ZIP, or say cancel."
-                        )
-                    if not state_ok:
+                    # Address is optional — only validate state if one was provided
+                    if state_val and not state_ok:
                         return ChatReply(
                             f"I wasn't able to recognize \"{state_val}\" as a valid state. "
                             "Please re-enter the address with the full state name (e.g. Texas) or abbreviation (e.g. TX), or say cancel."
@@ -3796,6 +3789,14 @@ class MKChatEngine:
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
                 return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft['lines'][nxt]['qty'], ui=ui)}")
 
+            # CDS orders require an address — hard block before showing confirm
+            if fulfillment_method == "cds" and not self._customer_has_address(consultant_id, order_draft.get("customer_id")):
+                cust_name = f"{cust_first} {cust_last}".strip()
+                return ChatReply(
+                    f"CDS orders ship directly to the customer, so {cust_name} needs an address on file in MyCustomers before this order can be placed. "
+                    "Please add her address there and try again."
+                )
+
             state["pending"] = {"kind": "order_confirm", "order": order_draft}
 
             save_session_state(state, session_id=sid)
@@ -3976,6 +3977,28 @@ class MKChatEngine:
                 groups[key]["price"] = price
 
         return list(groups.values())
+
+    def _customer_has_address(self, consultant_id: int, customer_id: int | None) -> bool:
+        if not customer_id:
+            return False
+        conn = db_connect()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                f"SELECT street FROM customers WHERE consultant_id={PH} AND id={PH} LIMIT 1",
+                (int(consultant_id), int(customer_id)),
+            )
+            row = cur.fetchone()
+            if not row:
+                return False
+            street = (row["street"] if isinstance(row, dict) else row[0]) or ""
+            return bool(street.strip())
+        finally:
+            try:
+                cur.close()
+            except Exception:
+                pass
+            conn.close()
 
     def _get_order_readiness_warning(self, customer_row: dict | None) -> str:
         if not customer_row:

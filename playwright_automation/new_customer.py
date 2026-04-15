@@ -106,7 +106,14 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
 
     # Complete and Save address (button inside dialog)
     page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
-    page.wait_for_timeout(2000)
+
+    # Wait for the address modal to fully close before moving on.
+    # If it's still open it will intercept pointer events and block the subscription click.
+    try:
+        page.locator("c-cmt-my-customer-notes .slds-modal__content").wait_for(state="hidden", timeout=10000)
+    except PlaywrightTimeoutError:
+        logger.warning("Address modal did not close cleanly — proceeding anyway.")
+    page.wait_for_timeout(1000)
     
 
 def create_customer_basic(page: Page, customer: dict) -> None:
