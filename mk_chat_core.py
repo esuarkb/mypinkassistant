@@ -825,6 +825,26 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
             "Postal Code": m.group("zip").strip(),
         }
 
+    # Special case (no comma): "232 Queens St Sun Prairie WI 53590"
+    # Same suffix-split logic as above but without requiring a comma before state.
+    m = re.match(
+        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
+        txt,
+        re.IGNORECASE,
+    )
+    if m:
+        street = m.group("street").strip()
+        extra = (m.group("extra") or "").strip()
+        street, street2 = _append_unit_suffix_if_present(street, extra)
+
+        return {
+            "Street": street,
+            "Street2": street2,
+            "City": m.group("city").strip(),
+            "State": m.group("state").strip(),
+            "Postal Code": m.group("zip").strip(),
+        }
+
     # Pull ZIP first (required for full parse)
     mzip = re.search(r"\b(\d{5})(?:-\d{4})?\b", txt)
     zip5 = mzip.group(1) if mzip else ""
@@ -836,7 +856,7 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
         txt
     )
     if m:
-        street = m.group("street").strip()
+        street = m.group("street").strip().rstrip(",").strip()
         extra = (m.group("extra") or "").strip()
         street, street2 = _append_unit_suffix_if_present(street, extra)
 
