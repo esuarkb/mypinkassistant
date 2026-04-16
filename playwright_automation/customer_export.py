@@ -15,17 +15,21 @@ def ensure_customer_list_ready(page: Page, timeout_ms: int = 30000) -> None:
         raise RuntimeError("MyCustomers customer list was not ready: Export button not found.")
 
 
-def download_customer_export(page: Page, save_path: str) -> str:
+def download_customer_export(page: Page, save_path: str) -> str | None:
     """
     Opens MyCustomers customer list, exports the customer file,
     and saves it to `save_path`.
 
-    Returns the saved file path.
+    Returns the saved file path, or None if there are no customers to export.
     """
     ensure_customer_list_ready(page)
 
-    # Select all customers
-    page.locator(".slds-checkbox_faux").first.click()
+    # Select all customers — checkbox only appears if there are rows
+    try:
+        page.locator(".slds-checkbox_faux").first.click(timeout=10000)
+    except PlaywrightTimeoutError:
+        # No checkbox means the customer list is empty — nothing to import
+        return None
     page.wait_for_timeout(500)
 
     # Start export flow

@@ -476,6 +476,11 @@ def main():
                             # Step 1: download export from MyCustomers
                             saved_path = download_customer_export(page, str(import_path))
 
+                            # No customers in MyCustomers yet — nothing to import
+                            if saved_path is None:
+                                mark_job_done(job_id, "No customers found in MyCustomers — import skipped.")
+                                continue
+
                             # Step 2: parse file into structured rows
                             rows = parse_customer_export_xlsx(saved_path)
 
