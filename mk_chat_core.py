@@ -3168,24 +3168,6 @@ class MKChatEngine:
                             "Please type the correct number or say cancel."
                         )
 
-                    email_val = (customer.get("Email") or "").strip()
-                    if email_val and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_val):
-                        return ChatReply(
-                            f"The email I have ({email_val}) doesn't look valid — please type the correct email or say cancel."
-                        )
-
-                    bday_val = (customer.get("Birthday") or "").strip()
-                    if bday_val:
-                        try:
-                            parsed_bday = datetime.datetime.strptime(bday_val, "%Y-%m-%d").date()
-                            if parsed_bday > datetime.date.today():
-                                return ChatReply(
-                                    f"The birthday I have ({birthday_display(bday_val)}) is in the future — please type the correct birthday or say cancel."
-                                )
-                        except ValueError:
-                            pass
-
-                    # If a partial address was provided, block and ask for the full one
                     street_val = (customer.get("Street") or "").strip()
                     city_val   = (customer.get("City") or "").strip()
                     zip_val    = (customer.get("Postal Code") or "").strip()
@@ -3201,6 +3183,27 @@ class MKChatEngine:
                             f"I wasn't able to recognize \"{state_val}\" as a valid state. "
                             "Please re-enter the address with the full state name (e.g. Texas) or abbreviation (e.g. TX), or say cancel."
                         )
+
+                    email_val = (customer.get("Email") or "").strip()
+                    if email_val:
+                        _at = email_val.find("@")
+                        _dot = email_val.rfind(".")
+                        _tld_len = len(email_val) - _dot - 1
+                        if _at <= 0 or _dot <= _at or _tld_len < 2:
+                            return ChatReply(
+                                f"The email I have ({email_val}) doesn't look valid — please type the correct email or say cancel."
+                            )
+
+                    bday_val = (customer.get("Birthday") or "").strip()
+                    if bday_val:
+                        try:
+                            parsed_bday = datetime.datetime.strptime(bday_val, "%Y-%m-%d").date()
+                            if parsed_bday > datetime.date.today():
+                                return ChatReply(
+                                    f"The birthday I have ({birthday_display(bday_val)}) is in the future — please type the correct birthday or say cancel."
+                                )
+                        except ValueError:
+                            pass
 
                     with tx() as (conn, cur):
                         upsert_customer_from_pending(cur, consultant_id=consultant_id, customer=customer)
@@ -3911,18 +3914,27 @@ class MKChatEngine:
             customer["Tags"] = tags  # normalize in-place for storage/payload
         tags_line = f"• Tags: {tags}\n" if tags else ""
 
-        # Warn if email looks invalid so consultant can correct before confirming
+        # Show one warning at a time (phone → partial address → email).
+        # All three also block confirmation in the yes-handler.
+        phone_digits = normalize_phone(customer.get("Phone") or "")
+        if len(phone_digits) == 11 and phone_digits.startswith("1"):
+            phone_digits = phone_digits[1:]
         email_val = (customer.get("Email") or "").strip()
-        email_warning = ""
-        if email_val:
+
+        warning = ""
+        if phone_digits and len(phone_digits) != 10:
+            warning = f"⚠️ Phone number looks incomplete ({phone_digits}) — please correct it before confirming.\n\n"
+        elif street_base and not (city and st and postal):
+            warning = "⚠️ I only see a partial address — please enter the full address (street, city, state, and zip) or type cancel to save without one.\n\n"
+        elif email_val:
             _at = email_val.find("@")
             _dot = email_val.rfind(".")
             _tld_len = len(email_val) - _dot - 1
             if _at <= 0 or _dot <= _at or _tld_len < 2:
-                email_warning = f"⚠️ Email looks incomplete: {email_val} — please correct it before saving.\n\n"
+                warning = f"⚠️ Email looks incomplete: {email_val} — please correct it before confirming.\n\n"
 
         return (
-            f"{email_warning}{ui['cust_submit_intro']}\n"
+            f"{warning}{ui['cust_submit_intro']}\n"
             f"• {ui['name']}: {customer.get('First Name','').strip()} {customer.get('Last Name','').strip()}\n"
             f"• {ui['email']}: {(customer.get('Email','') or '').strip() or ui['none']}\n"
             f"• {ui['phone']}: {phone_disp or ui['none']}\n"
