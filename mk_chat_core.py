@@ -3185,9 +3185,17 @@ class MKChatEngine:
                         except ValueError:
                             pass
 
+                    # If a partial address was provided, block and ask for the full one
+                    street_val = (customer.get("Street") or "").strip()
+                    city_val   = (customer.get("City") or "").strip()
+                    zip_val    = (customer.get("Postal Code") or "").strip()
+                    if street_val and not (city_val and state_val and zip_val):
+                        return ChatReply(
+                            "I only see a partial address. Please enter the full address (street, city, state, and zip) or type cancel to save without one."
+                        )
+
                     valid_states = set(STATE_MAP.values())
                     state_ok = state_val in valid_states
-                    # Address is optional — only validate state if one was provided
                     if state_val and not state_ok:
                         return ChatReply(
                             f"I wasn't able to recognize \"{state_val}\" as a valid state. "

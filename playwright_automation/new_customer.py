@@ -23,10 +23,12 @@ def ensure_mycustomers_ready(page: Page, timeout_ms: int = 20000) -> None:
         raise RuntimeError("MyCustomers not ready: 'New Customer' button not found.")
 
 def has_address(customer: dict) -> bool:
-    # Need at minimum a Street and State to successfully save an address in InTouch.
+    # All four fields required — InTouch needs a complete address or none at all.
     return (
         bool((customer.get("Street") or "").strip())
+        and bool((customer.get("City") or "").strip())
         and bool((customer.get("State") or "").strip())
+        and bool((customer.get("Postal Code") or "").strip())
     )
 
 def add_address_on_detail_page(page: Page, customer: dict) -> None:
