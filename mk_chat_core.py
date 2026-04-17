@@ -569,6 +569,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         '    "customer_last": "",\n'
         '    "fulfillment_method": "inventory",\n'
         '    "leave_pending": false,\n'
+        '    "order_date": "",\n'
         '    "items": [{"text": "", "qty": 1}]\n'
         "  }\n"
         "}\n\n"
@@ -587,6 +588,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         '- Do NOT include "cds", "pending", "customer delivery" as items in the items list — these are order flags only.\n'
         '- Set leave_pending to true if the user says "pending order", "save as pending", or "leave it pending". Default is false.\n'
         '- A CDS order always implies leave_pending true.\n'
+        f"- Today's date is {__import__('datetime').date.today().isoformat()}. Extract order_date if a specific date is mentioned (e.g. 'April 5', 'last Tuesday', 'sold this on March 10'). Output as YYYY-MM-DD. Leave empty string if no full specific date is clearly stated — do not guess from a day number or month alone.\n"
     )
 
     last_ctx = ""
@@ -1053,7 +1055,7 @@ UI_EN = {
     "got_it_ordering_for": "Got it — order for {name}.",
     "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
     "reply_yes_no_qty": "Reply yes or no — or add a quantity like 'x2'",
-    "order_adjust_hint": "You can also say `add` or `remove`.",
+    "order_adjust_hint": "You can also say `add` or `remove`, or `cancel` to start over.",
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Parse error: {err}",
@@ -3372,6 +3374,7 @@ class MKChatEngine:
                         f"You can type what you would like to add to the order or say cancel to start over."
                     )
 
+                _parsed = {}
                 try:
                     _parsed = parse_with_openai(self.client, f"order for {cust_first} {cust_last}: {msg.strip()}", last_customer)
                     items = (_parsed.get("order") or {}).get("items") or []
@@ -3382,6 +3385,7 @@ class MKChatEngine:
                     items = [{"text": item_text, "qty": qty}] if item_text else []
                 order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
                 order_draft["customer_id"] = resolved_customer_id
+                order_draft["order_date"] = ((_parsed.get("order") or {}).get("order_date") or "").strip()
                 if not order_draft["lines"]:
                     return ChatReply(ui["no_items_caught"])
                 for line in order_draft["lines"]:
@@ -3489,11 +3493,13 @@ class MKChatEngine:
                             customer_id=customer_id,
                             order_lines=order["lines"],
                             source="chat",
+                            order_date=(order.get("order_date") or None),
                         )
 
                     # 2) Queue jobs for worker/playwright
                     _fulfillment = order.get("fulfillment_method", "inventory")
                     _leave_pending = bool(order.get("leave_pending", False))
+                    _order_date = (order.get("order_date") or "").strip() or None
                     for line in order["lines"]:
                         sku = line["chosen"]["sku"]
                         qty = int(line["qty"])
@@ -3506,6 +3512,7 @@ class MKChatEngine:
                                     "SKU": sku,
                                     "fulfillment_method": _fulfillment,
                                     "leave_pending": _leave_pending,
+                                    "order_date": _order_date,
                                 },
                                 consultant_id=consultant_id,
                             )
@@ -3705,6 +3712,7 @@ class MKChatEngine:
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
                     order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                    order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
                         "candidates": matches[:3],
@@ -3726,6 +3734,7 @@ class MKChatEngine:
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
                     order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                    order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
                         "candidates": matches[:3],
@@ -3741,6 +3750,7 @@ class MKChatEngine:
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
                     order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                    order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
                         "candidates": matches[:3],
@@ -3773,6 +3783,7 @@ class MKChatEngine:
 
             order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
             order_draft["customer_id"] = resolved_customer_id
+            order_draft["order_date"] = (order.get("order_date") or "").strip()
             if not order_draft["lines"]:
                 return ChatReply(ui["no_items_caught"])
 
@@ -4082,6 +4093,7 @@ class MKChatEngine:
             conn.close()
 
     def _format_order_confirm(self, order: dict, ui: dict) -> str:
+        from datetime import date as _date
         cust = order["customer"]
         fulfillment = order.get("fulfillment_method", "inventory")
         leave_pending = bool(order.get("leave_pending", False))
@@ -4093,6 +4105,21 @@ class MKChatEngine:
             label = ""
         intro = ui["order_intro"].format(first=cust["First Name"], last=cust["Last Name"])
         out = [intro.replace(":", f"{label}:")]
+
+        # Order date display + warning
+        order_date_str = (order.get("order_date") or "").strip()
+        if order_date_str:
+            try:
+                od = _date.fromisoformat(order_date_str)
+                today = _date.today()
+                formatted = od.strftime("%-m/%-d/%Y")
+                out.append(f"Order date: {formatted}")
+                if od > today:
+                    out.append("⚠️ This date is in the future. Please double-check before confirming.")
+                elif (today - od).days > 730:
+                    out.append("⚠️ This date is over 2 years ago. Please double-check before confirming.")
+            except Exception:
+                pass
 
         total = 0.0
         any_prices = False

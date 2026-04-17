@@ -446,7 +446,7 @@ def get_customer_id_by_name(cur, consultant_id: int, first: str, last: str) -> O
     return int(row[0]) if row else None
 
 
-def create_order_from_confirmed(cur, consultant_id: int, customer_id: int, order_lines: list, source: str = "chat") -> int:
+def create_order_from_confirmed(cur, consultant_id: int, customer_id: int, order_lines: list, source: str = "chat", order_date: str = None) -> int:
     """
     Create an order + order_items in CRM tables.
 
@@ -469,7 +469,16 @@ def create_order_from_confirmed(cur, consultant_id: int, customer_id: int, order
             unit_price = 0.0
         total += unit_price * max(1, qty)
 
-    # Order date = confirmation time (Option A)
+    # Use provided order_date if valid, else fall back to now
+    _use_date = None
+    if order_date:
+        try:
+            from datetime import date as _d
+            _d.fromisoformat(order_date)  # validates format
+            _use_date = order_date
+        except Exception:
+            pass
+
     now_iso = datetime.now(timezone.utc).isoformat()
 
     # Insert order row
@@ -477,14 +486,21 @@ def create_order_from_confirmed(cur, consultant_id: int, customer_id: int, order
         cur.execute("""
             INSERT INTO orders (consultant_id, customer_id, order_date, total, source, created_at)
             VALUES (?,?,?,?,?, datetime('now'))
-        """, (consultant_id, customer_id, now_iso, total, source))
+        """, (consultant_id, customer_id, _use_date or now_iso, total, source))
         order_id = int(cur.lastrowid)
     else:
-        cur.execute("""
-            INSERT INTO orders (consultant_id, customer_id, order_date, total, source, created_at)
-            VALUES (%s,%s, NOW(), %s, %s, NOW())
-            RETURNING id
-        """, (consultant_id, customer_id, total, source))
+        if _use_date:
+            cur.execute("""
+                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, created_at)
+                VALUES (%s,%s,%s,%s,%s, NOW())
+                RETURNING id
+            """, (consultant_id, customer_id, _use_date, total, source))
+        else:
+            cur.execute("""
+                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, created_at)
+                VALUES (%s,%s, NOW(), %s, %s, NOW())
+                RETURNING id
+            """, (consultant_id, customer_id, total, source))
         order_id = int(cur.fetchone()[0])
 
     # Insert items (one row per line, with quantity stored)

@@ -30,10 +30,11 @@ def open_customer_list(page: Page) -> None:
 # -------------------------
 # Order helpers
 # -------------------------
-def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment_method: str = "inventory") -> None:
+def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment_method: str = "inventory", order_date: str = None) -> None:
     """
     Opens a customer and starts a new order.
     fulfillment_method: "inventory" (default) or "cds"
+    order_date: optional YYYY-MM-DD string to set on the order form
     Safely handles duplicate customer names by selecting the first match.
     """
     full_name = f"{first} {last}"
@@ -41,11 +42,11 @@ def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment
     #go to customer list and wait for load
     open_customer_list(page)
     page.wait_for_timeout(3000)
-    
+
     # Search customer, small wait for search results to populate
     page.get_by_role("searchbox", name="Note Title").fill(full_name)
     page.wait_for_timeout(500)
-    
+
     # Existence check (duplicate-safe)
     try:
         page.get_by_text(full_name).first.wait_for(timeout=3000)
@@ -62,6 +63,16 @@ def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment
     # Click New Order Button and load order page
     page.get_by_role("button", name="Add Order").click()
     page.wait_for_timeout(3000)
+
+    # Set order date if provided (field is pre-filled with today — only override if specified)
+    if order_date:
+        try:
+            date_input = page.locator("input[id^='order-date']").first
+            date_input.wait_for(state="visible", timeout=5000)
+            date_input.fill(order_date)
+            page.wait_for_timeout(300)
+        except PlaywrightTimeoutError:
+            pass  # date field not found — proceed with today's date
 
     # Select fulfillment method
     if fulfillment_method == "cds":
@@ -142,8 +153,9 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
     last = rows[0]["Last Name"].strip()
     fulfillment_method = rows[0].get("fulfillment_method", "inventory")
     leave_pending = bool(rows[0].get("leave_pending", False))
+    order_date = rows[0].get("order_date") or None
 
-    open_customer_and_start_order(page, first, last, fulfillment_method)
+    open_customer_and_start_order(page, first, last, fulfillment_method, order_date=order_date)
 
     skipped_skus = []
     for row in rows:
