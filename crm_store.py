@@ -1,7 +1,24 @@
 # crm_store.py
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
+import csv
+from pathlib import Path
 from rapidfuzz import fuzz
+
+# Catalog display name overrides keyed by SKU string
+_CATALOG_CARD: dict = {}
+def _load_catalog_display() -> None:
+    path = Path(__file__).resolve().parent / "catalog" / "en.csv"
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                sku  = (row.get("sku") or "").strip()
+                card = (row.get("display_name_card") or "").strip()
+                if sku and card:
+                    _CATALOG_CARD[sku] = card
+    except FileNotFoundError:
+        pass
+_load_catalog_display()
 
 
 def _rows_to_dicts(cur) -> List[Dict[str, Any]]:
@@ -325,15 +342,19 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
             date_str = "unknown date"
 
         items = last_order.get("items") or []
-        # Clean product names using same logic as followup_store
-        def _short(name):
+        _spf_sunscreen_products = re.compile(r"\b(Mineral\s+Facial|Sun\s+Care)\s+Sunscreen\b", re.IGNORECASE)
+        def _short(name, sku=None):
+            if sku and str(sku) in _CATALOG_CARD:
+                return _CATALOG_CARD[str(sku)]
             n = re.sub(r"Mary Kay[®\u00ae]?\s*", "", name, flags=re.IGNORECASE)
             n = re.sub(r"[®™\u00ae\u2122\u2020]", "", n)
-            n = re.sub(r"\s+[-–]\s+.+$", "", n)
-            n = re.sub(r"\s+Sunscreen.*$", "", n, flags=re.IGNORECASE)
+            n = re.sub(r"\s+Broad\s+Spectrum\s+SPF\s*[\d]+[*]?", "", n, flags=re.IGNORECASE)
+            n = re.sub(r"\s+SPF\s*[\d]+[*]?\s*$", "", n, flags=re.IGNORECASE)
+            if not _spf_sunscreen_products.search(n):
+                n = re.sub(r"\s+Sunscreen\b", "", n, flags=re.IGNORECASE)
             return n.strip(" .,") or name
 
-        names = [_short(i["product_name"]) for i in items]
+        names = [_short(i["product_name"], i.get("sku")) for i in items]
         cmd = html.escape(f"last order for {first} {last}")
         if len(names) <= 3:
             item_str = ", ".join(html.escape(n) for n in names)
@@ -577,7 +598,7 @@ def format_recent_orders(customer_name: str, orders: list) -> str:
         for it in items:
             qty = it.get("quantity") or 1
             name = it.get("product_name") or it.get("sku") or "Item"
-            lines.append(f"- {qty} × {name}")
+            lines.append(f"- {qty} × {name}" if qty > 1 else f"- {name}")
 
     return "\n".join(lines)
 

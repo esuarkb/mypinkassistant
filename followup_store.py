@@ -8,8 +8,25 @@ Windows (days since order):
 """
 from __future__ import annotations
 from urllib.parse import quote
+import csv
+from pathlib import Path
 
 from db import is_postgres
+
+# Catalog display name overrides for SMS keyed by SKU string
+_CATALOG_SMS: dict = {}
+def _load_catalog_display() -> None:
+    path = Path(__file__).resolve().parent / "catalog" / "en.csv"
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                sku = (row.get("sku") or "").strip()
+                sms = (row.get("display_name_sms") or "").strip()
+                if sku and sms:
+                    _CATALOG_SMS[sku] = sms
+    except FileNotFoundError:
+        pass
+_load_catalog_display()
 
 PH = "%s" if is_postgres() else "?"
 NOW_SQL = "NOW()" if is_postgres() else "datetime('now')"
@@ -24,17 +41,20 @@ WINDOWS = {
 
 # Strips MK boilerplate from product names to make them text-friendly
 # e.g. "Mary Kay® CC Cream Sunscreen Broad Spectrum SPF 15* - Medium to Deep Natural" → "CC Cream"
-def _clean_product_name(product_name: str) -> str:
+def _clean_product_name(product_name: str, sku: str = None) -> str:
     import re
+    if sku and str(sku) in _CATALOG_SMS:
+        return _CATALOG_SMS[str(sku)]
     name = product_name
     name = re.sub(r"Mary Kay[®\u00ae]?\s*", "", name, flags=re.IGNORECASE)
     name = re.sub(r"[®™\u00ae\u2122\u2020]", "", name)  # ®, ™, †
     name = re.sub(r"\*+", "", name)                      # * and **
     # Remove shade/variant after " - " or " – " (space required on both sides)
     name = re.sub(r"\s+[-–]\s+.+$", "", name)
-    # Remove "Sunscreen Broad Spectrum SPF..." and similar
-    name = re.sub(r"\s+Sunscreen.*$", "", name, flags=re.IGNORECASE)
-    # Remove trailing registered/trademark noise
+    name = re.sub(r"\s+Broad\s+Spectrum\s+SPF\s*[\d]+[*]?", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+SPF\s*[\d]+[*]?\s*$", "", name, flags=re.IGNORECASE)
+    if not re.search(r"\b(Mineral\s+Facial|Sun\s+Care)\s+Sunscreen\b", name, re.IGNORECASE):
+        name = re.sub(r"\s+Sunscreen\b", "", name, flags=re.IGNORECASE)
     name = name.strip(" .,")
     return name or product_name
 
@@ -98,11 +118,11 @@ def _detect_category(product_lower: str) -> str:
     return "fallback"
 
 
-def _followup_message(product_name: str, customer_first: str, consultant_first: str, is_first_contact: bool, window_days: int, item_count: int = 1) -> str:
+def _followup_message(product_name: str, customer_first: str, consultant_first: str, is_first_contact: bool, window_days: int, item_count: int = 1, sku: str = None) -> str:
     from followup_scripts import SCRIPTS
     import re as _re
 
-    clean = _clean_product_name(product_name)
+    clean = _clean_product_name(product_name, sku=sku)
     category = _detect_category(product_name.lower())
     window = window_days if window_days in (2, 14, 60) else 2
     slot = "single" if item_count == 1 else "multi"
@@ -234,19 +254,20 @@ def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int =
 
         # Fetch order items for this order
         if is_sqlite:
-            cur.execute("SELECT product_name, unit_price, quantity FROM order_items WHERE order_id = ?", (order_id,))
+            cur.execute("SELECT sku, product_name, unit_price, quantity FROM order_items WHERE order_id = ?", (order_id,))
         else:
-            cur.execute("SELECT product_name, unit_price, quantity FROM order_items WHERE order_id = %s", (order_id,))
+            cur.execute("SELECT sku, product_name, unit_price, quantity FROM order_items WHERE order_id = %s", (order_id,))
         item_rows = cur.fetchall()
         items = []
         for ir in item_rows:
             if isinstance(ir, dict):
                 items.append(ir)
             else:
-                items.append({"product_name": ir[0], "unit_price": ir[1], "quantity": ir[2]})
+                items.append({"sku": ir[0], "product_name": ir[1], "unit_price": ir[2], "quantity": ir[3]})
 
         hero = _pick_hero_item(items)
         product_name = hero.get("product_name") or "your recent products"
+        hero_sku = hero.get("sku") or None
 
         # Check if this is first contact (no completed followup for this customer)
         if is_sqlite:
@@ -262,15 +283,16 @@ def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int =
         is_first_contact = cur.fetchone() is None
 
         results.append({
-            "order_id":       order_id,
-            "customer_id":    customer_id,
-            "first_name":     first_name,
-            "last_name":      last_name,
-            "phone":          phone,
-            "days_ago":       days_ago,
-            "window_days":    window_days,
-            "product_name":   product_name,
-            "item_count":     len(items),
+            "order_id":         order_id,
+            "customer_id":      customer_id,
+            "first_name":       first_name,
+            "last_name":        last_name,
+            "phone":            phone,
+            "days_ago":         days_ago,
+            "window_days":      window_days,
+            "product_name":     product_name,
+            "hero_sku":         hero_sku,
+            "item_count":       len(items),
             "is_first_contact": is_first_contact,
         })
 
@@ -355,12 +377,12 @@ def get_pending_birthday_followups(cur, consultant_id: int) -> list[dict]:
             """
             SELECT c.id, c.first_name, c.last_name, c.phone,
                    CASE
-                     WHEN c.birthday ~ '^\d{4}-\d{2}-\d{2}$'
+                     WHEN c.birthday ~ '^\\d{4}-\\d{2}-\\d{2}$'
                        THEN EXTRACT(MONTH FROM c.birthday::date)::INT
                      ELSE SPLIT_PART(c.birthday, '-', 1)::INT
                    END AS bday_month,
                    CASE
-                     WHEN c.birthday ~ '^\d{4}-\d{2}-\d{2}$'
+                     WHEN c.birthday ~ '^\\d{4}-\\d{2}-\\d{2}$'
                        THEN EXTRACT(DAY FROM c.birthday::date)::INT
                      ELSE SPLIT_PART(c.birthday, '-', 2)::INT
                    END AS bday_day
@@ -369,7 +391,7 @@ def get_pending_birthday_followups(cur, consultant_id: int) -> list[dict]:
               AND c.birthday IS NOT NULL AND c.birthday <> ''
               AND (
                 CASE
-                  WHEN c.birthday ~ '^\d{4}-\d{2}-\d{2}$'
+                  WHEN c.birthday ~ '^\\d{4}-\\d{2}-\\d{2}$'
                     THEN EXTRACT(MONTH FROM c.birthday::date)::INT
                   ELSE SPLIT_PART(c.birthday, '-', 1)::INT
                 END
@@ -522,13 +544,14 @@ def render_followup_cards(followups: list[dict], consultant_first: str) -> str:
             order_id   = f["order_id"]
             window     = f["window_days"]
             product    = f["product_name"]
+            hero_sku   = f.get("hero_sku")
             item_count = f["item_count"]
             days_ago   = f["days_ago"]
 
             label         = _window_label(window)
-            sms_text      = _followup_message(product, first, consultant_first, is_first, window, item_count=item_count)
+            sms_text      = _followup_message(product, first, consultant_first, is_first, window, item_count=item_count, sku=hero_sku)
             sms_uri       = f"sms:{clean_phone}&body={quote(sms_text)}"
-            clean_product = _clean_product_name(product)
+            clean_product = _clean_product_name(product, sku=hero_sku)
             extra         = f" +{item_count - 1} more" if item_count > 1 else ""
             product_meta  = f"{clean_product}{extra}"
             msg_attr      = _html.escape(sms_text, quote=True)

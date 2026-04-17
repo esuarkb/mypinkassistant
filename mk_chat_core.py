@@ -4099,7 +4099,7 @@ class MKChatEngine:
 
         preview_lines = self._aggregate_lines_for_preview(order)
 
-        for i, pl in enumerate(preview_lines, start=1):
+        for pl in preview_lines:
             qty = int(pl["qty"])
             price = pl.get("price")
 
@@ -4107,7 +4107,7 @@ class MKChatEngine:
                 any_prices = True
                 total += float(price) * qty
 
-            out.append(f"• {i}) {pl['name']} {fmt_price(price)} x{qty}")
+            out.append(f"• {pl['name']} {fmt_price(price)} x{qty}")
 
         if any_prices:
             out.append(ui["estimated_total"].format(total=f"${total:.2f}"))
