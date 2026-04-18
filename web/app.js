@@ -452,6 +452,19 @@ refreshJobs();
 // One clean startup sequence:
 // 1) Clear server pending so “yes/no” never survives reload
 // 2) Reset UI
+// Address links — open Apple Maps on iPhone/iPad, Google Maps elsewhere
+document.addEventListener("click", function(e) {
+    const link = e.target.closest("a.address-link");
+    if (!link) return;
+    e.preventDefault();
+    const addr = encodeURIComponent(link.dataset.address);
+    const isAppleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const url = isAppleMobile
+        ? `https://maps.apple.com/?q=${addr}`
+        : `https://www.google.com/maps/search/?api=1&query=${addr}`;
+    window.open(url, "_blank");
+});
+
 // 3) Load rotating hero messages
 (async () => {
     updateKeyboardOffset();

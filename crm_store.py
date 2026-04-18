@@ -296,8 +296,7 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
     addr_parts = [p for p in [street, city, state, postal] if p]
     if addr_parts:
         address_text = ", ".join(addr_parts)
-        maps_url = f"https://maps.google.com/?q={quote(address_text)}"
-        address_val = f'<a href="{maps_url}" target="_blank">{html.escape(address_text)}</a>'
+        address_val = f'<a href="#" class="address-link" data-address="{html.escape(address_text)}" target="_blank">{html.escape(address_text)}</a>'
     else:
         address_val = "(none)"
 
