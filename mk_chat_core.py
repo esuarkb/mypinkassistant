@@ -588,7 +588,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         '- Do NOT include "cds", "pending", "customer delivery" as items in the items list — these are order flags only.\n'
         '- Set leave_pending to true if the user says "pending order", "save as pending", or "leave it pending". Default is false.\n'
         '- A CDS order always implies leave_pending true.\n'
-        f"- Today's date is {__import__('datetime').date.today().isoformat()}. Extract order_date if a specific date is mentioned (e.g. 'April 5', 'last Tuesday', 'sold this on March 10'). Output as YYYY-MM-DD. Leave empty string if no full specific date is clearly stated — do not guess from a day number or month alone.\n"
+        f"- Today's date is {__import__('datetime').date.today().isoformat()}. Extract order_date if a specific date is mentioned (e.g. 'April 5', 'last Tuesday', 'sold this on March 10', '1-16-24', '1/16/24', '01/16/2024', 'Jan 16 2024'). Output as YYYY-MM-DD. For 2-digit years, assume 2000s (e.g. '24' = 2024). Leave empty string if no full specific date is clearly stated — do not guess from a day number or month alone.\n"
     )
 
     last_ctx = ""

@@ -16,7 +16,7 @@ def ensure_orders_ready(page: Page, timeout_ms: int = 20000) -> None:
     try:
         page.get_by_role("button", name="New Order").wait_for(timeout=timeout_ms)
     except PlaywrightTimeoutError:
-        raise RuntimeError("Orders not ready: 'New Order' button not found.")
+        raise RuntimeError("Timeout: Orders page not ready — 'New Order' button not found.")
 
 
 def open_customer_list(page: Page) -> None:

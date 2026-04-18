@@ -539,6 +539,26 @@ def main():
                     except Exception as e:
                         raw_err = str(e)
 
+                        # Auto-retry transient InTouch timeouts (up to 3 attempts total)
+                        if "Timeout" in raw_err:
+                            try:
+                                _rt_conn = connect()
+                                _rt_cur = _rt_conn.cursor()
+                                _first_jid = job_ids[0] if job_type == "NEW_ORDER_ROW" else job_id
+                                _rt_cur.execute(f"SELECT attempts FROM jobs WHERE id={PH_W}", (_first_jid,))
+                                _att_row = _rt_cur.fetchone()
+                                _attempts = int(_att_row[0]) if _att_row else 99
+                                _rt_conn.close()
+                            except Exception:
+                                _attempts = 99
+
+                            if _attempts <= 2:
+                                _retry_ids = job_ids if job_type == "NEW_ORDER_ROW" else [job_id]
+                                print(f"[Worker] Timeout on job(s) {_retry_ids} (attempt {_attempts}/3) — requeueing for retry.")
+                                for jid in _retry_ids:
+                                    requeue_job(jid, "Queued")
+                                raise _RequeueSilently()
+
                         # Default user-facing message should be safe and non-technical
                         err_text = "Something went wrong submitting this. Please try again."
 

@@ -20,7 +20,7 @@ def ensure_mycustomers_ready(page: Page, timeout_ms: int = 20000) -> None:
     try:
         page.get_by_role("button", name="New Customer").wait_for(timeout=timeout_ms)
     except PlaywrightTimeoutError:
-        raise RuntimeError("MyCustomers not ready: 'New Customer' button not found.")
+        raise RuntimeError("Timeout: MyCustomers page not ready — 'New Customer' button not found.")
 
 def has_address(customer: dict) -> bool:
     # All four fields required — InTouch needs a complete address or none at all.
@@ -47,7 +47,7 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
     max_attempts = 4
     success = False
 
-    for attempt in range (max_attempts):
+    for _ in range(max_attempts):
     # 1) Click once
         add_address_btn.click()
         page.wait_for_timeout(500)
@@ -57,7 +57,7 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
             success = True
             break  # if found, break out of the loop
         except PlaywrightTimeoutError:
-            logger.error(f"Attempt {attempt + 1} failed. Retrying...")
+            pass
     
     if not success:
         raise Exception("Add Address dialog failed to open after 3 attempts.")
@@ -170,10 +170,11 @@ def create_customer_basic(page: Page, customer: dict) -> None:
             max_attempts = 3
             dialog_opened = False
             for attempt in range(max_attempts):
-                sub_btn.click()
-                page.wait_for_timeout(500)
+                if not dialog_toggle.is_visible():
+                    sub_btn.click()
+                    page.wait_for_timeout(500)
                 try:
-                    dialog_toggle.wait_for(state="visible", timeout=1500)
+                    dialog_toggle.wait_for(state="visible", timeout=4000)
                     dialog_opened = True
                     break
                 except PlaywrightTimeoutError:
