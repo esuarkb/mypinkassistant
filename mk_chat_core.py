@@ -1753,6 +1753,8 @@ def _looks_like_inventory_count(msg: str) -> bool:
         return True
     if "how many" in s and "inventory" in s:
         return True
+    if s.startswith("how many ") and not any(w in s for w in ("order", "customer", "followup", "client", "people")):
+        return True
     return False
 
 
@@ -1831,6 +1833,10 @@ def _parse_inventory_lookup_text(msg: str) -> str:
     if m:
         return m.group(1).strip()
 
+    m = re.match(r"^\s*how\s+many\s+(.+?)\s*$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
     return ""
 
 def _format_inventory_list(rows: List[dict], catalog: List[dict]) -> str:
@@ -1893,14 +1899,10 @@ def _find_exact_catalog_match(catalog: List[dict], product_text: str) -> Optiona
     return None
 
 def _format_inventory_item(row: dict | None, catalog_item: dict | None, requested_text: str) -> str:
+    name = (catalog_item or {}).get("product_name") or requested_text
     if not row:
-        return f"You have 0 {requested_text} in inventory."
-
+        return f"You have 0 {name} in inventory."
     qty = int(row.get("qty_on_hand") or 0)
-    name = (
-        (catalog_item or {}).get("product_name")
-        or requested_text
-    )
     return f"You have {qty} {name} in inventory."
 
 
@@ -2167,10 +2169,25 @@ class MKChatEngine:
         if _looks_like_inventory_count(msg):
             product_text = _parse_inventory_lookup_text(msg)
             if product_text:
-                picked, matches = auto_pick_match(catalog, product_text)
-                chosen = picked or (matches[0] if matches else None)
-                if not chosen:
-                    return ChatReply(ui["no_catalog_match"])
+                exact = _find_exact_catalog_match(catalog, product_text)
+                if exact:
+                    chosen = exact
+                else:
+                    matches = best_matches(catalog, product_text, limit=MATCH_LIMIT)
+                    if not matches:
+                        return ChatReply(ui["no_catalog_match"])
+                    top = matches[0]
+                    if int(top.get("score") or 0) >= 100:
+                        chosen = top
+                    else:
+                        state["pending"] = {
+                            "kind": "inventory_count_confirm_top",
+                            "product_text": product_text,
+                            "top": top,
+                            "matches": matches[:MATCH_LIMIT],
+                        }
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(propose_top(top, current_qty=1, ui=ui))
                 sku = (chosen.get("sku") or "").strip()
                 with tx() as (conn, cur):
                     row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
@@ -3140,6 +3157,48 @@ class MKChatEngine:
                 save_session_state(state, session_id=sid)
 
                 return ChatReply(ui["low_stock_set"].format(product=product_name, qty=qty))
+
+            if kind == "inventory_count_confirm_top":
+                top = pending["top"]
+                matches = pending.get("matches") or []
+
+                if yes(msg):
+                    sku = (top.get("sku") or "").strip()
+                    with tx() as (conn, cur):
+                        row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(_format_inventory_item(row, top, pending.get("product_text", "")))
+
+                if no(msg):
+                    state["pending"] = {
+                        "kind": "inventory_count_pick_top5",
+                        "product_text": pending.get("product_text", ""),
+                        "matches": matches,
+                    }
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(render_top5(matches, show_scores=show_scores, ui=ui))
+
+                return ChatReply(ui["reply_yes_no"])
+
+            if kind == "inventory_count_pick_top5":
+                choice = (msg or "").strip()
+                matches = pending.get("matches") or []
+
+                if not choice.isdigit():
+                    return ChatReply(ui["pick_match_5"])
+
+                idx = int(choice)
+                if idx < 1 or idx > min(TOP5, len(matches)):
+                    return ChatReply(ui["pick_match_5"])
+
+                chosen = matches[idx - 1]
+                sku = (chosen.get("sku") or "").strip()
+                with tx() as (conn, cur):
+                    row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
+                state["pending"] = None
+                save_session_state(state, session_id=sid)
+                return ChatReply(_format_inventory_item(row, chosen, pending.get("product_text", "")))
 
             if kind == "customer_confirm":
                 if yes(msg):
