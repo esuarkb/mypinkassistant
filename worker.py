@@ -557,7 +557,7 @@ def main():
                                 print(f"[Worker] Timeout on job(s) {_retry_ids} (attempt {_attempts}/3) — requeueing for retry.")
                                 for jid in _retry_ids:
                                     requeue_job(jid, "Queued")
-                                raise _RequeueSilently()
+                                continue
 
                         # Default user-facing message should be safe and non-technical
                         err_text = "Something went wrong submitting this. Please try again."
