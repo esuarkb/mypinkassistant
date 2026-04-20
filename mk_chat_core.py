@@ -3437,7 +3437,8 @@ class MKChatEngine:
                 try:
                     _parsed = parse_with_openai(self.client, f"order for {cust_first} {cust_last}: {msg.strip()}", last_customer)
                     items = (_parsed.get("order") or {}).get("items") or []
-                except Exception:
+                except Exception as _openai_err:
+                    print(f"[OpenAI] awaiting_order_items parse failed for consultant_id={consultant_id}: {_openai_err}")
                     items = []
                 if not items:
                     qty, item_text = parse_qty_prefix(msg.strip())
@@ -3469,7 +3470,8 @@ class MKChatEngine:
                     cust_last  = order.get("customer", {}).get("Last Name", "")
                     try:
                         _add_parsed = parse_with_openai(self.client, f"order for {cust_first} {cust_last}: {rest}", last_customer)
-                    except Exception:
+                    except Exception as _openai_err:
+                        print(f"[OpenAI] add_items parse failed for consultant_id={consultant_id}: {_openai_err}")
                         _add_parsed = {}
                     _add_items = (_add_parsed.get("order") or {}).get("items") or []
                     if not _add_items:
@@ -3634,7 +3636,8 @@ class MKChatEngine:
 
         try:
             parsed = parse_with_openai(self.client, msg_for_parse, last_customer)
-        except Exception:
+        except Exception as _openai_err:
+            print(f"[OpenAI] parse_with_openai failed for consultant_id={consultant_id}: {_openai_err}")
             return ChatReply(ui["trouble"])
 
         if parsed.get("type") == "customer":
@@ -4177,8 +4180,8 @@ class MKChatEngine:
                     out.append("⚠️ This date is in the future. Please double-check before confirming.")
                 elif (today - od).days > 730:
                     out.append("⚠️ This date is over 2 years ago. Please double-check before confirming.")
-            except Exception:
-                pass
+            except Exception as _date_err:
+                print(f"[OrderDate] date parse failed for value '{order_date_str}': {_date_err}")
 
         total = 0.0
         any_prices = False
