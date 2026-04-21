@@ -362,7 +362,8 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
             extra = len(names) - 2
             item_str = f'{shown} <a href="#" data-send="{cmd}" style="white-space:nowrap;">+{extra} more</a>'
 
-        lines.append(f"• Last order: {date_str} · {item_str}" if item_str else f"• Last order: {date_str}")
+        source_label = " · CDS" if (last_order.get("source") or "") == "chat" else ""
+        lines.append(f"• Last order: {date_str}{source_label} · {item_str}" if item_str else f"• Last order: {date_str}{source_label}")
 
     return "\n".join(lines)
 

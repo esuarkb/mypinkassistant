@@ -540,7 +540,8 @@ def main():
                         raw_err = str(e)
 
                         # Auto-retry transient InTouch timeouts (up to 3 attempts total)
-                        if "Timeout" in raw_err:
+                        # Exclude post-save/post-confirm timeouts — job already completed in InTouch
+                        if "Timeout" in raw_err and "Post-save" not in raw_err and "Post-confirm" not in raw_err:
                             try:
                                 _rt_conn = connect()
                                 _rt_cur = _rt_conn.cursor()
@@ -562,7 +563,19 @@ def main():
                         # Default user-facing message should be safe and non-technical
                         err_text = "Something went wrong submitting this. Please try again."
 
-                        if "Timeout" in raw_err and "New Customer" in raw_err:
+                        if "Post-save" in raw_err:
+                            err_text = (
+                                "Customer was saved to MyCustomers, but we couldn't confirm it completed. "
+                                "Please verify in MyCustomers before trying again."
+                            )
+
+                        elif "Post-confirm" in raw_err:
+                            err_text = (
+                                "Order was placed in MyCustomers, but we couldn't confirm it completed. "
+                                "Please verify in MyCustomers before trying again."
+                            )
+
+                        elif "Timeout" in raw_err and "New Customer" in raw_err:
                             err_text = (
                                 "Could not reach MyCustomers after login. "
                                 "Please verify your InTouch credentials in Settings and try again."

@@ -196,5 +196,10 @@ def create_customer_basic(page: Page, customer: dict) -> None:
 
     # Save customer (goes to customer detail page)
     #page.get_by_role("button", name="Save New Customer").click()
-    ensure_mycustomers_ready(page,timeout_ms=30000)
+    try:
+        ensure_mycustomers_ready(page, timeout_ms=30000)
+    except RuntimeError as e:
+        if "Timeout" in str(e):
+            raise RuntimeError("Timeout: Post-save confirmation — customer was already saved")
+        raise
     return subscription_ok

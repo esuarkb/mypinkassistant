@@ -138,7 +138,12 @@ def finalize_order(page: Page, leave_pending: bool = False) -> None:
     # Process order: confirm delivery status change
     page.get_by_role("button", name="Change Delivery Status Icon").click()
     page.get_by_role("button", name="Yes, Confirm").click()
-    ensure_orders_ready(page)
+    try:
+        ensure_orders_ready(page)
+    except RuntimeError as e:
+        if "Timeout" in str(e):
+            raise RuntimeError("Timeout: Post-confirm — order was already placed")
+        raise
 
 def process_order_batch(page: Page, rows: list[dict]) -> None:
     """
