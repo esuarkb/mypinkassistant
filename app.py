@@ -1769,7 +1769,7 @@ def admin_diagnostics(request: Request):
         """
         SELECT id, consultant_id, type, error, finished_at
         FROM jobs
-        WHERE status='failed'
+        WHERE status='failed' AND COALESCE(admin_hidden, false) = false
         ORDER BY id DESC
         LIMIT 15
         """
@@ -2100,7 +2100,7 @@ def admin_clear_failed(request: Request):
     conn = _conn()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM jobs WHERE status='failed'")
+        cur.execute("UPDATE jobs SET admin_hidden=true WHERE status='failed'")
         conn.commit()
     finally:
         conn.close()
