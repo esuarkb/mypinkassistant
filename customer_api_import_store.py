@@ -12,7 +12,8 @@ Source status:
   - archived=True in InTouch  →  source_status='removed'
   - archived=False             →  source_status='active'
 
-Phone is not available from this API and is never modified.
+Phone is attempted from personMobilePhone → personHomePhone → phone fields.
+COALESCE preserves an existing phone if the API returns none.
 Tags are stored as a JSON array string; existing tags are preserved if the
 API returns no tags for that customer.
 """
@@ -98,6 +99,7 @@ def import_customers_from_api(cur, consultant_id: int, raw_customers: list[dict]
 
         intouch_account_id = (c.get("id") or "").strip() or None
         email = (c.get("personEmail") or "").strip().lower() or None
+        phone = (c.get("personMobilePhone") or c.get("personHomePhone") or c.get("phone") or "").strip() or None
         street = (c.get("personMailingStreet") or "").strip() or None
         street2 = (c.get("personMailingStreet2") or "").strip() or None
         city = (c.get("personMailingCity") or "").strip() or None
@@ -125,6 +127,7 @@ def import_customers_from_api(cur, consultant_id: int, raw_customers: list[dict]
                     SET first_name          = {PH},
                         last_name           = {PH},
                         email               = COALESCE({PH}, email),
+                        phone               = COALESCE({PH}, phone),
                         street              = COALESCE({PH}, street),
                         street2             = COALESCE({PH}, street2),
                         city                = COALESCE({PH}, city),
@@ -137,7 +140,7 @@ def import_customers_from_api(cur, consultant_id: int, raw_customers: list[dict]
                         updated_at          = {NOW}
                     WHERE id = {PH} AND consultant_id = {PH}""",
                 (
-                    first, last, email, street, street2, city, state,
+                    first, last, email, phone, street, street2, city, state,
                     postal_code, birthday, tags, intouch_account_id,
                     source_status, existing_id, consultant_id,
                 ),
@@ -148,13 +151,13 @@ def import_customers_from_api(cur, consultant_id: int, raw_customers: list[dict]
             if _is_sqlite(cur):
                 cur.execute(
                     f"""INSERT INTO customers
-                        (consultant_id, first_name, last_name, email, street, street2,
+                        (consultant_id, first_name, last_name, email, phone, street, street2,
                          city, state, postal_code, birthday, notes, tags,
                          intouch_account_id, is_order_ready, missing_order_fields,
                          source_status, created_at, updated_at)
-                        VALUES ({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},
+                        VALUES ({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},
                                 '',{PH},{PH}, 1, '[]', {PH}, {NOW}, {NOW})""",
-                    (consultant_id, first, last, email, street, street2,
+                    (consultant_id, first, last, email, phone, street, street2,
                      city, state, postal_code, birthday, tags,
                      intouch_account_id, source_status),
                 )
@@ -165,14 +168,14 @@ def import_customers_from_api(cur, consultant_id: int, raw_customers: list[dict]
             else:
                 cur.execute(
                     f"""INSERT INTO customers
-                        (consultant_id, first_name, last_name, email, street, street2,
+                        (consultant_id, first_name, last_name, email, phone, street, street2,
                          city, state, postal_code, birthday, notes, tags,
                          intouch_account_id, is_order_ready, missing_order_fields,
                          source_status, created_at, updated_at)
-                        VALUES ({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},
+                        VALUES ({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},
                                 '',{PH},{PH}, 1, '[]', {PH}, {NOW}, {NOW})
                         RETURNING id""",
-                    (consultant_id, first, last, email, street, street2,
+                    (consultant_id, first, last, email, phone, street, street2,
                      city, state, postal_code, birthday, tags,
                      intouch_account_id, source_status),
                 )

@@ -36,8 +36,8 @@ def fetch_customer_list(page: Page) -> list[dict]:
             body = response.json()
             customers = _parse_customers(body)
             if customers:
-                sample_keys = list(customers[0].keys())[:8]
-                print(f"[CustomerApiImport] returnValue[0] keys: {sample_keys}")
+                print(f"[CustomerApiImport] returnValue[0] ALL keys: {sorted(customers[0].keys())}")
+                print(f"[CustomerApiImport] returnValue[0] sample: { {k: v for k, v in customers[0].items() if 'phone' in k.lower() or 'mobile' in k.lower() or 'contact' in k.lower()} }")
             if _looks_like_customers(customers):
                 print(f"[CustomerApiImport] found {len(customers)} customer records")
                 for c in customers:
