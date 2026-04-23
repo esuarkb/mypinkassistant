@@ -15,7 +15,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 CUSTOMERS_URL = "https://apps.marykayintouch.com/customer-list"
-DEFAULT_SKU   = "10203701"
+DEFAULT_SKU   = "10094148"  # Clear Proof Deep-Cleansing Charcoal Mask
+SEARCH_CUSTOMER = "Angie Davis"
 
 
 def dump(page, name: str) -> None:
@@ -26,12 +27,8 @@ def dump(page, name: str) -> None:
 
 def login(page, username: str, password: str) -> None:
     print("Logging in...")
-    page.goto(CUSTOMERS_URL, wait_until="domcontentloaded")
-    page.get_by_role("textbox", name="Consultant Number").wait_for(state="visible", timeout=30000)
-    page.get_by_role("textbox", name="Consultant Number").fill(username)
-    page.get_by_role("textbox", name="Password").fill(password)
-    page.get_by_text("Log In").click()
-    page.get_by_role("button", name="New Customer").wait_for(timeout=45000)
+    from playwright_automation.login import login_intouch
+    login_intouch(page, username, password)
     print("  Logged in.")
 
 
@@ -47,19 +44,14 @@ def main(username: str, password: str, sku: str) -> None:
         page.wait_for_timeout(1000)
         dump(page, "1_customer_list")
 
-        # Find first customer
-        cards = page.locator(".customer-row:not(.customer-row-header)").all()
-        if not cards:
-            print("  ERROR: No customers found in list. Cannot continue.")
-            browser.close()
-            return
-
-        first_name = cards[0].text_content().strip()
-        print(f"  Using first customer: {first_name!r}")
+        # Search for specific customer
+        print(f"  Searching for {SEARCH_CUSTOMER!r}...")
+        page.get_by_role("searchbox", name="Note Title").fill(SEARCH_CUSTOMER)
+        page.wait_for_timeout(1500)
 
         # --- Step 2: Customer detail ---
         print("\nStep 2: Customer detail page")
-        cards[0].click()
+        page.get_by_text(SEARCH_CUSTOMER).first.click()
         page.wait_for_timeout(1500)
         dump(page, "2_customer_detail")
 

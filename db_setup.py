@@ -129,6 +129,12 @@ try:
 except Exception:
     pass  # already exists
 
+# ---- intouch_order_id for deduplication on order history import ----
+try:
+    cur.execute("ALTER TABLE orders ADD COLUMN intouch_order_id TEXT")
+except Exception:
+    pass  # already exists
+
 # ---- customer followups (2+2+2) ----
 cur.execute("""
 CREATE TABLE IF NOT EXISTS customer_followups (

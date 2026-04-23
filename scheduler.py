@@ -1,7 +1,6 @@
 # scheduler.py
 #
-# Queues nightly IMPORT_CUSTOMERS and IMPORT_INVENTORY_ORDERS jobs
-# for every active consultant with InTouch credentials.
+# Queues nightly FULL_SYNC jobs for every active consultant with InTouch credentials.
 #
 # Run via Render Cron Job at 0 9 * * * (3 AM CST / 9 AM UTC).
 # Safe to run manually for testing.
@@ -64,8 +63,7 @@ def run() -> None:
         )
         consultants = cur.fetchall()
 
-        queued_customers = 0
-        queued_inventory = 0
+        queued = 0
         skipped_failures = 0
         skipped_pending = 0
 
@@ -83,39 +81,24 @@ def run() -> None:
                 skipped_failures += 1
                 continue
 
-            # Queue IMPORT_CUSTOMERS if not already pending
-            if not _has_pending_job(cur, cid, "IMPORT_CUSTOMERS"):
-                insert_job("IMPORT_CUSTOMERS", {"source": "scheduler"}, consultant_id=cid)
-                queued_customers += 1
-            else:
+            if _has_pending_job(cur, cid, "FULL_SYNC"):
                 skipped_pending += 1
+                continue
 
-            # Queue IMPORT_INVENTORY_ORDERS if not already pending
             if email in SKIP_INVENTORY_IMPORT:
-                print(f"[Scheduler] Skipping inventory import for {email} (screenshot/test account)")
-            elif not _has_pending_job(cur, cid, "IMPORT_INVENTORY_ORDERS"):
-                if _has_inventory_watermark(cur, cid):
-                    # Normal nightly import — only new orders
-                    insert_job(
-                        "IMPORT_INVENTORY_ORDERS",
-                        {"date_range": "days90", "source": "scheduler"},
-                        consultant_id=cid,
-                    )
-                else:
-                    # First run — set watermark only, no SKUs added
-                    insert_job(
-                        "IMPORT_INVENTORY_ORDERS",
-                        {"date_range": "lastTwelveMonths", "seed_only": True, "source": "scheduler"},
-                        consultant_id=cid,
-                    )
-                queued_inventory += 1
+                print(f"[Scheduler] Skipping inventory for {email} (screenshot/test account)")
+                inventory_payload = {"skip_inventory": True}
+            elif _has_inventory_watermark(cur, cid):
+                inventory_payload = {"date_range": "days90"}
             else:
-                skipped_pending += 1
+                inventory_payload = {"date_range": "lastTwelveMonths", "seed_only": True}
+
+            insert_job("FULL_SYNC", {"source": "scheduler", **inventory_payload}, consultant_id=cid)
+            queued += 1
 
         print(
             f"[Scheduler] Done — "
-            f"queued {queued_customers} customer import(s), "
-            f"{queued_inventory} inventory job(s), "
+            f"queued {queued} FULL_SYNC job(s), "
             f"skipped {skipped_failures} (login failures), "
             f"skipped {skipped_pending} (already pending)"
         )

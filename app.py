@@ -2,6 +2,9 @@
 
 # app.py
 import os
+from dotenv import load_dotenv
+load_dotenv(override=True)  # must run before any module that reads DATABASE_URL at import time
+
 import json
 import time
 import secrets
@@ -19,7 +22,6 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -38,8 +40,6 @@ from auth_core import (
     get_consultant_full,  # must return dict-like with needed fields
     update_profile_and_intouch,
 )
-
-load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
@@ -1188,6 +1188,16 @@ def settings_get(request: Request):
     base = (os.getenv("APP_BASE_URL") or "").strip() or str(request.base_url).rstrip("/")
     referral_link = f"{base}/r/{code}"
 
+    tax_rate_val = ""
+    try:
+        _tr = c.get("tax_rate")
+        if _tr is not None:
+            tax_rate_val = str(float(_tr))
+            if tax_rate_val.endswith(".0"):
+                tax_rate_val = tax_rate_val[:-2]
+    except Exception:
+        pass
+
     replaces = {
         "{{EMAIL}}": _esc(c.get("email") or ""),
         "{{INTOUCH_USERNAME}}": _esc(c.get("intouch_username") or ""),
@@ -1198,7 +1208,8 @@ def settings_get(request: Request):
         # new:
         "{{REFERRAL_CODE}}": _esc(code),
         "{{REFERRAL_LINK}}": _esc(referral_link),
-        "{{LAST_CUSTOMER_IMPORT}}": "",
+
+        "{{TAX_RATE}}": _esc(tax_rate_val),
     }
     return render_page("settings.html", replaces=replaces)
 
@@ -1232,6 +1243,27 @@ def settings_post(
             maybe_queue_initial_customer_import(cur, consultant_id=cid)
 
     return RedirectResponse("/settings", status_code=302)
+
+@app.post("/settings/tax-rate")
+def settings_tax_rate(request: Request, tax_rate: str = Form("")):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return JSONResponse({"ok": False}, status_code=401)
+    tax_rate = (tax_rate or "").strip()
+    if tax_rate == "":
+        rate_val = None
+    else:
+        try:
+            rate_val = float(tax_rate)
+            if rate_val < 0 or rate_val > 100:
+                return JSONResponse({"ok": False, "error": "Tax rate must be between 0 and 100."})
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Invalid tax rate."})
+    with tx() as (conn, cur):
+        cur.execute(f"UPDATE consultants SET tax_rate = {PH} WHERE id = {PH}", (rate_val, cid))
+    return JSONResponse({"ok": True})
+
 
 @app.post("/settings/language")
 def settings_language(request: Request, language: str = Form("en")):
@@ -1486,6 +1518,75 @@ def import_customers(request: Request):
     return RedirectResponse("/app", status_code=302)
 
 
+@app.post("/import-customers-api")
+def import_customers_api(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    c = get_consultant_full(cid) or {}
+    try:
+        require_active_subscription(c)
+    except PermissionError:
+        return RedirectResponse(billing_redirect_for_cid(cid), status_code=302)
+
+    from db import tx as _tx
+    from db import is_postgres as _isp
+    _PH = "%s" if _isp() else "?"
+    with _tx() as (_conn, _cur):
+        if _isp():
+            _cur.execute(
+                f"""
+                SELECT 1 FROM jobs
+                WHERE consultant_id = {_PH}
+                  AND type = 'IMPORT_CUSTOMERS_API'
+                  AND (
+                    status IN ('queued', 'running')
+                    OR (status IN ('done', 'failed') AND finished_at >= NOW() - INTERVAL '5 minutes')
+                  )
+                LIMIT 1
+                """,
+                (cid,),
+            )
+        else:
+            _cur.execute(
+                f"""
+                SELECT 1 FROM jobs
+                WHERE consultant_id = {_PH}
+                  AND type = 'IMPORT_CUSTOMERS_API'
+                  AND (
+                    status IN ('queued', 'running')
+                    OR (status IN ('done', 'failed') AND finished_at >= datetime('now', '-5 minutes'))
+                  )
+                LIMIT 1
+                """,
+                (cid,),
+            )
+        if _cur.fetchone():
+            return RedirectResponse("/app?notice=import_cooldown", status_code=302)
+
+    insert_job("IMPORT_CUSTOMERS_API", {}, consultant_id=cid)
+    return RedirectResponse("/app", status_code=302)
+
+
+@app.post("/import-order-history")
+def import_order_history_route(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    c = get_consultant_full(cid) or {}
+    try:
+        require_active_subscription(c)
+    except PermissionError:
+        return RedirectResponse(billing_redirect_for_cid(cid), status_code=302)
+
+    insert_job("IMPORT_ORDER_HISTORY", {}, consultant_id=cid)
+    return RedirectResponse("/app", status_code=302)
+
+
 @app.post("/import-inventory-orders")
 def import_inventory_orders_route(request: Request):
     try:
@@ -1709,7 +1810,7 @@ def admin_diagnostics(request: Request):
     cur = conn.cursor()
 
     # 1) Job counts
-    cur.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")
+    cur.execute("SELECT status, COUNT(*) AS n FROM jobs WHERE status != 'failed' OR COALESCE(admin_hidden, false) = false GROUP BY status")
     counts = cur.fetchall()
 
     counts_map = {}
@@ -1755,7 +1856,7 @@ def admin_diagnostics(request: Request):
         FROM jobs
         WHERE status='done'
           AND NOT (
-            type IN ('IMPORT_CUSTOMERS', 'IMPORT_INVENTORY_ORDERS')
+            type IN ('IMPORT_CUSTOMERS', 'IMPORT_INVENTORY_ORDERS', 'FULL_SYNC')
             AND payload_json LIKE '%scheduler%'
           )
         ORDER BY id DESC

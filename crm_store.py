@@ -362,7 +362,8 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
             extra = len(names) - 2
             item_str = f'{shown} <a href="#" data-send="{cmd}" style="white-space:nowrap;">+{extra} more</a>'
 
-        source_label = " · CDS" if (last_order.get("source") or "") == "chat" else ""
+        _src = last_order.get("source") or ""
+        source_label = " · Online | CDS" if _src in ("myshop", "cds") else ""
         lines.append(f"• Last order: {date_str}{source_label} · {item_str}" if item_str else f"• Last order: {date_str}{source_label}")
 
     return "\n".join(lines)
@@ -446,19 +447,32 @@ def get_customer_id_by_name(cur, consultant_id: int, first: str, last: str) -> O
     return int(row[0]) if row else None
 
 
-def create_order_from_confirmed(cur, consultant_id: int, customer_id: int, order_lines: list, source: str = "chat", order_date: str = None) -> int:
+def create_order_from_confirmed(
+    cur,
+    consultant_id: int,
+    customer_id: int,
+    order_lines: list,
+    source: str = "chat",
+    order_date: str = None,
+    discounts: list = None,
+    tax_amount: float = 0.0,
+) -> int:
     """
     Create an order + order_items in CRM tables.
 
     order_lines are your resolved lines with:
       - line["qty"]
       - line["chosen"] dict containing at least: sku, product_name, price
+    discounts: list of {"amount": float, "line_idx": int|None, "label": str}
+    tax_amount: computed tax to store on the order
     Returns order_id.
     """
     is_sqlite = _is_sqlite_cursor(cur)
 
-    # Calculate total (best effort). If a price is missing, treat as 0.
-    total = 0.0
+    discounts = discounts or []
+
+    # Calculate subtotal (pre-discount)
+    subtotal = 0.0
     for line in order_lines:
         qty = int(line.get("qty") or 1)
         chosen = line.get("chosen") or {}
@@ -467,7 +481,15 @@ def create_order_from_confirmed(cur, consultant_id: int, customer_id: int, order
             unit_price = float(price) if price is not None else 0.0
         except Exception:
             unit_price = 0.0
-        total += unit_price * max(1, qty)
+        subtotal += unit_price * max(1, qty)
+
+    total_discount = sum(d.get("amount", 0) for d in discounts)
+    total = max(0.0, subtotal - total_discount)
+
+    try:
+        tax_amount = float(tax_amount or 0)
+    except Exception:
+        tax_amount = 0.0
 
     # Use provided order_date if valid, else fall back to now
     _use_date = None
@@ -484,27 +506,34 @@ def create_order_from_confirmed(cur, consultant_id: int, customer_id: int, order
     # Insert order row
     if is_sqlite:
         cur.execute("""
-            INSERT INTO orders (consultant_id, customer_id, order_date, total, source, created_at)
-            VALUES (?,?,?,?,?, datetime('now'))
-        """, (consultant_id, customer_id, _use_date or now_iso, total, source))
+            INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, created_at)
+            VALUES (?,?,?,?,?,?,?, datetime(‘now’))
+        """, (consultant_id, customer_id, _use_date or now_iso, total, source, total_discount, tax_amount))
         order_id = int(cur.lastrowid)
     else:
         if _use_date:
             cur.execute("""
-                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, created_at)
-                VALUES (%s,%s,%s,%s,%s, NOW())
+                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s, NOW())
                 RETURNING id
-            """, (consultant_id, customer_id, _use_date, total, source))
+            """, (consultant_id, customer_id, _use_date, total, source, total_discount, tax_amount))
         else:
             cur.execute("""
-                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, created_at)
-                VALUES (%s,%s, NOW(), %s, %s, NOW())
+                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, created_at)
+                VALUES (%s,%s, NOW(), %s, %s, %s, %s, NOW())
                 RETURNING id
-            """, (consultant_id, customer_id, total, source))
+            """, (consultant_id, customer_id, total, source, total_discount, tax_amount))
         order_id = int(cur.fetchone()[0])
 
+    # Build per-item discount map by line index
+    per_line_discount: dict[int, float] = {}
+    for d in discounts:
+        idx = d.get("line_idx")
+        if idx is not None:
+            per_line_discount[idx] = per_line_discount.get(idx, 0) + d.get("amount", 0)
+
     # Insert items (one row per line, with quantity stored)
-    for line in order_lines:
+    for i, line in enumerate(order_lines):
         qty = int(line.get("qty") or 1)
         chosen = line.get("chosen") or {}
 
@@ -516,20 +545,22 @@ def create_order_from_confirmed(cur, consultant_id: int, customer_id: int, order
         except Exception:
             unit_price = 0.0
 
+        item_discount = per_line_discount.get(i, 0.0)
+
         # Don’t crash if something is weird—just skip that line.
         if not sku or not name:
             continue
 
         if is_sqlite:
             cur.execute("""
-                INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity, created_at)
-                VALUES (?,?,?,?,?, datetime('now'))
-            """, (order_id, sku, name, unit_price, max(1, qty)))
+                INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity, discount_amount, created_at)
+                VALUES (?,?,?,?,?,?, datetime(‘now’))
+            """, (order_id, sku, name, unit_price, max(1, qty), item_discount))
         else:
             cur.execute("""
-                INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity, created_at)
-                VALUES (%s,%s,%s,%s,%s, NOW())
-            """, (order_id, sku, name, unit_price, max(1, qty)))
+                INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity, discount_amount, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s, NOW())
+            """, (order_id, sku, name, unit_price, max(1, qty), item_discount))
 
     return order_id
 
@@ -585,7 +616,7 @@ def format_recent_orders(customer_name: str, orders: list) -> str:
 
     lines = [f"Recent orders for {customer_name}:"]
 
-    for o in reversed(orders):
+    for o in orders:
         # Format date properly (works for sqlite string or postgres datetime)
         od = o.get("order_date")
 
@@ -607,8 +638,10 @@ def format_recent_orders(customer_name: str, orders: list) -> str:
         total = o.get("total")
         total_str = f"${float(total):,.2f}" if total is not None else "—"
 
-        # Removed order number — cleaner
-        lines.append(f"\n{od_str} • Total: {total_str}")
+        _src = o.get("source") or ""
+        source_label = " · Online | CDS" if _src in ("myshop", "cds") else ""
+
+        lines.append(f"\n{od_str}{source_label} • Total: {total_str}")
 
         items = o.get("items") or []
         for it in items:

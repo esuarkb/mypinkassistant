@@ -217,8 +217,8 @@ def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
         return False
 
     insert_job(
-        "IMPORT_CUSTOMERS",
-        {"silent_initial_sync": True},
+        "INITIAL_SYNC",
+        {},
         consultant_id=consultant_id,
     )
 
@@ -1121,7 +1121,7 @@ UI_ES = {
     "got_it_ordering_for": "Listo — pedido para {name}.",
     "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
     "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
-    "order_adjust_hint": "También puedes decir `add ...` o `remove ...`.",
+    "order_adjust_hint": "También puedes decir `add` o `remove`, o `cancel` para empezar de nuevo.",
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Error al interpretar: {err}",
@@ -1183,6 +1183,113 @@ def parse_add_remove(message: str):
             return ("remove", rest)
 
     return (None, None)
+
+
+def _parse_discount(message: str, order: dict) -> dict | None:
+    """
+    Tries to parse a discount from the user message.
+
+    Supported patterns:
+      "$X off [product]"      — dollar amount off specific item or whole order
+      "X% off [product]"      — percent off specific item or whole order
+      "$X discount"           — dollar amount off whole order
+
+    Returns a dict:
+      {
+        "amount": float,          # dollar value of discount (always positive)
+        "line_idx": int | None,   # index into order["lines"] or None for order-level
+        "label": str,             # display label e.g. "$10.00 off charcoal mask"
+      }
+    or None if no discount is found.
+    """
+    msg = (message or "").strip()
+
+    # ---- extract amount + optional product target ----
+    amount: float | None = None
+    is_percent = False
+    target_text: str = ""
+
+    # "$X off [product]" or "$X.XX off [product]"
+    m = re.match(r'^\$\s*(\d+(?:\.\d+)?)\s+off\s*(.*)', msg, re.IGNORECASE)
+    if m:
+        amount = float(m.group(1))
+        target_text = m.group(2).strip()
+
+    # "X% off [product]"
+    if amount is None:
+        m = re.match(r'^(\d+(?:\.\d+)?)\s*%\s+off\s*(.*)', msg, re.IGNORECASE)
+        if m:
+            is_percent = True
+            amount = float(m.group(1))
+            target_text = m.group(2).strip()
+
+    # "$X discount" or "X discount"
+    if amount is None:
+        m = re.match(r'^\$?\s*(\d+(?:\.\d+)?)\s+discount\b', msg, re.IGNORECASE)
+        if m:
+            amount = float(m.group(1))
+            target_text = ""
+
+    # bare "X off [product]" (no $ sign) — must be a whole number or decimal, not a word
+    if amount is None:
+        m = re.match(r'^(\d+(?:\.\d+)?)\s+off\s+(.*)', msg, re.IGNORECASE)
+        if m:
+            amount = float(m.group(1))
+            target_text = m.group(2).strip()
+
+    if amount is None or amount <= 0:
+        return None
+
+    # ---- resolve to order line (if product mentioned) ----
+    lines = order.get("lines") or []
+    line_idx: int | None = None
+
+    if target_text:
+        # Build names for fuzzy matching
+        names = []
+        for ln in lines:
+            chosen = ln.get("chosen") or {}
+            names.append(chosen.get("product_name") or ln.get("text") or "")
+
+        if names:
+            lower_names = [n.lower() for n in names]
+            lower_target = target_text.lower()
+            results = process.extract(lower_target, lower_names, scorer=fuzz.token_set_ratio, limit=2)
+            if results and results[0][1] >= 80:
+                best_score = results[0][1]
+                best_idx = results[0][2]
+                # Only assign to a specific line if it clearly outscores the next best match
+                if len(results) < 2 or (best_score - results[1][1]) >= 10:
+                    line_idx = best_idx
+                # else: ambiguous (two items too similar) — fall through to order-level
+
+    # ---- compute dollar amount ----
+    if is_percent:
+        if line_idx is not None:
+            chosen = lines[line_idx].get("chosen") or {}
+            unit_price = float(chosen.get("price") or 0) * int(lines[line_idx].get("qty") or 1)
+            dollar_amount = round(unit_price * (amount / 100), 2)
+        else:
+            subtotal = sum(
+                float((ln.get("chosen") or {}).get("price") or 0) * int(ln.get("qty") or 1)
+                for ln in lines
+            )
+            dollar_amount = round(subtotal * (amount / 100), 2)
+    else:
+        dollar_amount = round(amount, 2)
+
+    if dollar_amount <= 0:
+        return None
+
+    # ---- build label ----
+    if line_idx is not None:
+        chosen = lines[line_idx].get("chosen") or {}
+        pname = chosen.get("product_name") or lines[line_idx].get("text") or ""
+        label = f"${dollar_amount:.2f} off {pname}"
+    else:
+        label = f"${dollar_amount:.2f} off order"
+
+    return {"amount": dollar_amount, "line_idx": line_idx, "label": label}
 
 
 def fix_qty_if_number_is_part_of_name(text: str, qty: int) -> int:
@@ -3513,6 +3620,36 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
 
+                # ✅ Discount parsing (before guardrail so it isn't blocked)
+                _discount = _parse_discount(msg, order)
+                if _discount is not None:
+                    # Validate: total discount can't exceed order subtotal
+                    _subtotal = sum(
+                        float((ln.get("chosen") or {}).get("price") or 0) * int(ln.get("qty") or 1)
+                        for ln in order.get("lines") or []
+                    )
+                    _existing_discount = sum(d["amount"] for d in (order.get("discounts") or []))
+                    _new_total_discount = _existing_discount - (
+                        # subtract old discount for same line_idx if being replaced
+                        next((d["amount"] for d in (order.get("discounts") or [])
+                              if d.get("line_idx") == _discount["line_idx"]), 0)
+                    ) + _discount["amount"]
+                    if _new_total_discount >= _subtotal:
+                        return ChatReply(
+                            f"That discount (${_new_total_discount:.2f} total) can't equal or exceed the order subtotal (${_subtotal:.2f}). "
+                            "Please enter a smaller discount.\n\n"
+                            + self._format_order_confirm(order, ui) + "\n\n"
+                            + ui["order_adjust_hint"]
+                        )
+                    # Apply: replace any existing discount for the same line_idx
+                    discounts = [d for d in (order.get("discounts") or [])
+                                 if d.get("line_idx") != _discount["line_idx"]]
+                    discounts.append(_discount)
+                    order["discounts"] = discounts
+                    state["pending"] = {"kind": "order_confirm", "order": order}
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
+
                 # ✅ THEN: guardrail for random commands (but not add/remove)
                 if looks_like_command(msg) and not yes(msg) and not no(msg):
                     return ChatReply(
@@ -3527,56 +3664,84 @@ class MKChatEngine:
                     cust_first = order["customer"]["First Name"]
                     cust_last = order["customer"]["Last Name"]
 
+                    # Compute discount + tax before saving
+                    _order_discounts = order.get("discounts") or []
+                    _total_discount = sum(d.get("amount", 0) for d in _order_discounts)
+                    _tax_amount = 0.0
+                    if _total_discount > 0:
+                        # Look up consultant's tax rate
+                        try:
+                            _tr_conn = db_connect()
+                            _tr_cur = _tr_conn.cursor()
+                            _tr_cur.execute(f"SELECT tax_rate FROM consultants WHERE id={PH}", (consultant_id,))
+                            _tr_row = _tr_cur.fetchone()
+                            _tr_conn.close()
+                            _tax_rate = float((_tr_row[0] if _tr_row else None) or 0)
+                        except Exception:
+                            _tax_rate = 0.0
+                        if _tax_rate > 0:
+                            # Tax on pre-discount subtotal
+                            _pretax_subtotal = sum(
+                                float((ln.get("chosen") or {}).get("price") or 0) * int(ln.get("qty") or 1)
+                                for ln in order.get("lines") or []
+                            )
+                            _tax_amount = round(_pretax_subtotal * (_tax_rate / 100), 2)
+
                     # 1) Save order + items to CRM (permanent, even if Playwright fails)
+                    # CDS orders are skipped here — left pending in InTouch for the
+                    # consultant to finalize. The nightly import brings them back in
+                    # their final form, avoiding stale/duplicate records.
                     from crm_store import get_customer_id_by_name, create_order_from_confirmed, upsert_customer_from_pending
 
-                    with tx() as (conn, cur):
-                        # 1) Prefer the customer_id attached to THIS order flow
-                        customer_id = order.get("customer_id")
-
-                        # 2) If not available, fall back to name matching
-                        if not customer_id:
-                            customer_id = get_customer_id_by_name(cur, consultant_id, cust_first, cust_last)
-
-                        # 3) If still not found, create a minimal customer record
-                        if customer_id is None:
-                            customer_id = upsert_customer_from_pending(
+                    _fulfillment = order.get("fulfillment_method", "inventory")
+                    if _fulfillment != "cds":
+                        with tx() as (conn, cur):
+                            customer_id = order.get("customer_id")
+                            if not customer_id:
+                                customer_id = get_customer_id_by_name(cur, consultant_id, cust_first, cust_last)
+                            if customer_id is None:
+                                customer_id = upsert_customer_from_pending(
+                                    cur,
+                                    consultant_id=consultant_id,
+                                    customer={"First Name": cust_first, "Last Name": cust_last},
+                                )
+                            customer_id = int(customer_id)
+                            create_order_from_confirmed(
                                 cur,
                                 consultant_id=consultant_id,
-                                customer={"First Name": cust_first, "Last Name": cust_last},
+                                customer_id=customer_id,
+                                order_lines=order["lines"],
+                                source="chat",
+                                order_date=(order.get("order_date") or None),
+                                discounts=_order_discounts,
+                                tax_amount=_tax_amount,
                             )
 
-                        customer_id = int(customer_id)
-
-                        create_order_from_confirmed(
-                            cur,
-                            consultant_id=consultant_id,
-                            customer_id=customer_id,
-                            order_lines=order["lines"],
-                            source="chat",
-                            order_date=(order.get("order_date") or None),
-                        )
-
                     # 2) Queue jobs for worker/playwright
-                    _fulfillment = order.get("fulfillment_method", "inventory")
                     _leave_pending = bool(order.get("leave_pending", False))
                     _order_date = (order.get("order_date") or "").strip() or None
+                    _first_job = True
                     for line in order["lines"]:
                         sku = line["chosen"]["sku"]
                         qty = int(line["qty"])
                         for _ in range(max(1, qty)):
+                            payload = {
+                                "First Name": cust_first,
+                                "Last Name": cust_last,
+                                "SKU": sku,
+                                "fulfillment_method": _fulfillment,
+                                "leave_pending": _leave_pending,
+                                "order_date": _order_date,
+                            }
+                            if _first_job and _total_discount > 0:
+                                payload["discount_amount"] = _total_discount
+                                payload["tax_amount"] = _tax_amount
                             insert_job(
                                 "NEW_ORDER_ROW",
-                                {
-                                    "First Name": cust_first,
-                                    "Last Name": cust_last,
-                                    "SKU": sku,
-                                    "fulfillment_method": _fulfillment,
-                                    "leave_pending": _leave_pending,
-                                    "order_date": _order_date,
-                                },
+                                payload,
                                 consultant_id=consultant_id,
                             )
+                            _first_job = False
 
                     # 3) Decrement personal inventory for each ordered item (skip for CDS)
                     if _fulfillment != "cds":
@@ -4188,6 +4353,21 @@ class MKChatEngine:
 
         preview_lines = self._aggregate_lines_for_preview(order)
 
+        # Build a map: original line index -> preview line index for per-item discounts
+        # (preview_lines may aggregate duplicates; we match on name)
+        discounts = order.get("discounts") or []
+        per_item_discounts: dict[str, float] = {}  # product_name -> discount amount
+        order_level_discount = 0.0
+        for d in discounts:
+            if d.get("line_idx") is not None:
+                raw_lines = order.get("lines") or []
+                if d["line_idx"] < len(raw_lines):
+                    chosen = raw_lines[d["line_idx"]].get("chosen") or {}
+                    pname = chosen.get("product_name") or raw_lines[d["line_idx"]].get("text") or ""
+                    per_item_discounts[pname] = per_item_discounts.get(pname, 0) + d["amount"]
+            else:
+                order_level_discount += d["amount"]
+
         for pl in preview_lines:
             qty = int(pl["qty"])
             price = pl.get("price")
@@ -4196,10 +4376,19 @@ class MKChatEngine:
                 any_prices = True
                 total += float(price) * qty
 
-            out.append(f"• {pl['name']} {fmt_price(price)} x{qty}")
+            disc = per_item_discounts.get(pl["name"], 0)
+            disc_str = f"  (-${disc:.2f} off)" if disc > 0 else ""
+            out.append(f"• {pl['name']} {fmt_price(price)} x{qty}{disc_str}")
 
+        total_discount = sum(d["amount"] for d in discounts)
         if any_prices:
-            out.append(ui["estimated_total"].format(total=f"${total:.2f}"))
+            if total_discount > 0:
+                discounted_total = max(0.0, total - total_discount)
+                if order_level_discount > 0:
+                    out.append(f"• ${order_level_discount:.2f} off order")
+                out.append(ui["estimated_total"].format(total=f"${discounted_total:.2f}"))
+            else:
+                out.append(ui["estimated_total"].format(total=f"${total:.2f}"))
 
         if fulfillment == "cds":
             out.append("\nReminder: you will need to finalize this CDS order on InTouch by navigating to Orders and completing the order.")

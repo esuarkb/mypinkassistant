@@ -100,7 +100,7 @@ function scrollChatToBottom() {
 function addMessage(text, who) {
     const div = document.createElement("div");
     div.className = `msg ${who}`;
-    if (who === "bot" && (text.includes("<a ") || text.includes("<div"))) {
+    if (who === "bot" && (text.includes("<a ") || text.includes("<div") || text.includes("<strong"))) {
         // Server-generated HTML (e.g. customer cards, follow-up cards)
         div.innerHTML = text;
     } else {
@@ -365,6 +365,7 @@ function jobLabel(j) {
     if (j.type === "NEW_CUSTOMER") return "New customer";
     if (j.type === "NEW_ORDER_ROW") return "Order";
     if (j.type === "IMPORT_CUSTOMERS") return "Customer import";
+    if (j.type === "INITIAL_SYNC") return "Initial sync";
     return j.type;
 }
 
@@ -395,12 +396,6 @@ async function refreshJobs() {
         let newestNewJob = null;
 
         for (const j of jobs) {
-            // Skip silent background sync jobs
-            if ((j.payload || {}).silent_initial_sync) {
-                trackedJobs.set(j.id, j.status);
-                continue;
-            }
-
             const prevStatus = trackedJobs.get(j.id);
 
             if (prevStatus === undefined) {

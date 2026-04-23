@@ -7,11 +7,11 @@ import time
 import requests
 import traceback
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
 from datetime import datetime, timezone
 from pathlib import Path
-from db import connect, is_postgres, get_system_setting
+from db import connect, is_postgres, get_system_setting, run_migrations
 
 from emailer import send_wrong_credentials_email, send_login_failure_alert_email
 from playwright_automation.customer_export import download_customer_export
@@ -84,9 +84,14 @@ from playwright_automation.new_customer import create_customer_basic
 from playwright_automation.orders import process_order_batch, SkuNotCdsEligible
 from playwright_automation.inventory_import import import_inventory_orders
 from inventory_import_store import ensure_import_table
+from playwright_automation.order_history_import import fetch_order_history
+from order_history_import_store import import_order_history
+from playwright_automation.customer_api_import import fetch_customer_list
+from customer_api_import_store import import_customers_from_api
 for _startup_attempt in range(5):
     try:
         ensure_import_table()
+        run_migrations()
         break
     except Exception as _startup_err:
         print(f"[Worker] DB not ready yet (attempt {_startup_attempt + 1}/5): {_startup_err}")
@@ -498,10 +503,7 @@ def main():
                                 conn.close()
 
                             # Step 4: mark success
-                            mark_job_done(
-                                job_id,
-                                f"Customer import complete! Added {summary['inserted']}, updated {summary['updated']}."
-                            )
+                            mark_job_done(job_id, "Customer import complete!")
 
                         # -------------------------
                         # IMPORT_INVENTORY_ORDERS
@@ -526,6 +528,102 @@ def main():
                                     job_id,
                                     f"Inventory import complete — {n} new order(s), {skus} SKU(s) added."
                                 )
+
+                        # -------------------------
+                        # IMPORT_ORDER_HISTORY
+                        # -------------------------
+                        elif job_type == "IMPORT_ORDER_HISTORY":
+                            raw_orders = fetch_order_history(page)
+                            print(f"[ImportOrderHistory] fetch returned {len(raw_orders)} orders")
+                            if raw_orders:
+                                print(f"[ImportOrderHistory] sample order keys: {list(raw_orders[0].keys())[:6]}")
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                summary = import_order_history(cur, consultant_id=cid, raw_orders=raw_orders)
+                                conn.commit()
+                            finally:
+                                conn.close()
+                            mark_job_done(job_id, "Order history import complete.")
+
+                        # -------------------------
+                        # IMPORT_CUSTOMERS_API
+                        # -------------------------
+                        elif job_type == "IMPORT_CUSTOMERS_API":
+                            raw_customers = fetch_customer_list(page)
+                            print(f"[CustomerApiImport] fetch returned {len(raw_customers)} customers")
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                summary = import_customers_from_api(cur, consultant_id=cid, raw_customers=raw_customers)
+                                conn.commit()
+                            finally:
+                                conn.close()
+                            mark_job_done(job_id, "Customer import complete!")
+
+                        # -------------------------
+                        # INITIAL_SYNC (onboarding: customers + orders, one login)
+                        # -------------------------
+                        elif job_type == "INITIAL_SYNC":
+                            # Customers
+                            raw_customers = fetch_customer_list(page)
+                            print(f"[InitialSync] fetch returned {len(raw_customers)} customers")
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                import_customers_from_api(cur, consultant_id=cid, raw_customers=raw_customers)
+                                conn.commit()
+                            finally:
+                                conn.close()
+                            # Orders
+                            raw_orders = fetch_order_history(page)
+                            print(f"[InitialSync] fetch returned {len(raw_orders)} orders")
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                import_order_history(cur, consultant_id=cid, raw_orders=raw_orders)
+                                conn.commit()
+                            finally:
+                                conn.close()
+                            mark_job_done(job_id, "Customer & order import complete!")
+
+                        # -------------------------
+                        # FULL_SYNC (nightly: customers + orders + inventory, one login)
+                        # -------------------------
+                        elif job_type == "FULL_SYNC":
+                            # Customers
+                            raw_customers = fetch_customer_list(page)
+                            print(f"[FullSync] fetch returned {len(raw_customers)} customers")
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                import_customers_from_api(cur, consultant_id=cid, raw_customers=raw_customers)
+                                conn.commit()
+                            finally:
+                                conn.close()
+                            # Orders
+                            raw_orders = fetch_order_history(page)
+                            print(f"[FullSync] fetch returned {len(raw_orders)} orders")
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                import_order_history(cur, consultant_id=cid, raw_orders=raw_orders)
+                                conn.commit()
+                            finally:
+                                conn.close()
+                            # Inventory (skipped for accounts sharing InTouch creds)
+                            if not payload.get("skip_inventory"):
+                                date_range = payload.get("date_range", "days90")
+                                seed_only = bool(payload.get("seed_only", False))
+                                import_inventory_orders(
+                                    page,
+                                    consultant_id=cid,
+                                    username=username,
+                                    password=password,
+                                    date_range=date_range,
+                                    seed_only=seed_only,
+                                )
+                            mark_job_done(job_id, "Nightly sync complete.")
 
                         # -------------------------
                         # Unknown job type

@@ -194,6 +194,21 @@ def fetchall(sql: str, params: Optional[Sequence[Any]] = None) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def run_migrations() -> None:
+    """Apply any pending schema changes. Safe to call on every startup."""
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute("ALTER TABLE customers ADD COLUMN intouch_account_id TEXT")
+            conn.commit()
+            print("[Migration] Added intouch_account_id to customers")
+        except Exception:
+            conn.rollback()
+    finally:
+        conn.close()
+
+
 def execscript(sql: str) -> None:
     """
     Run a multi-statement script.

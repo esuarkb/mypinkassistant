@@ -126,7 +126,41 @@ def add_sku_to_bag(page: Page, sku: str, fulfillment_method: str = "inventory") 
 #    page.get_by_role("button", name="Yes, Confirm").click()
 #    ensure_orders_ready(page)
 
-def finalize_order(page: Page, leave_pending: bool = False) -> None:
+def _lwc_fill(page: Page, locator, value: str) -> None:
+    """
+    Fill a Lightning Web Component number input in a way that triggers
+    framework event listeners (triple-click to select, then type the value).
+    """
+    locator.wait_for(state="visible", timeout=5000)
+    locator.triple_click()
+    locator.type(value, delay=50)
+    page.wait_for_timeout(200)
+
+
+def fill_discount_fields(page: Page, discount_amount: float = 0.0, tax_amount: float = 0.0) -> None:
+    """
+    Fills the discount and shipping/tax fields on the order entry screen.
+    Only called when discount_amount > 0. Fields only appear after at least one item
+    has been added to the bag.
+    """
+    if discount_amount > 0:
+        try:
+            _lwc_fill(page, page.locator("input[name='discount']").first, f"{discount_amount:.2f}")
+        except Exception as e:
+            print(f"[Orders] Could not fill discount field: {e}")
+
+    if tax_amount > 0:
+        try:
+            _lwc_fill(page, page.locator("input[name='shipping']").first, f"{tax_amount:.2f}")
+        except Exception as e:
+            print(f"[Orders] Could not fill shipping/tax field: {e}")
+
+
+def finalize_order(page: Page, leave_pending: bool = False, discount_amount: float = 0.0, tax_amount: float = 0.0) -> None:
+    # Fill discount/tax fields before saving (only if a discount was applied)
+    if discount_amount > 0:
+        fill_discount_fields(page, discount_amount=discount_amount, tax_amount=tax_amount)
+
     # save and review order
     page.get_by_role("button", name="Save and Review").click()
 
@@ -159,6 +193,8 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
     fulfillment_method = rows[0].get("fulfillment_method", "inventory")
     leave_pending = bool(rows[0].get("leave_pending", False))
     order_date = rows[0].get("order_date") or None
+    discount_amount = float(rows[0].get("discount_amount") or 0)
+    tax_amount = float(rows[0].get("tax_amount") or 0)
 
     open_customer_and_start_order(page, first, last, fulfillment_method, order_date=order_date)
 
@@ -170,7 +206,7 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
         except SkuNotCdsEligible as e:
             skipped_skus.append(str(e))
 
-    finalize_order(page, leave_pending=leave_pending)
+    finalize_order(page, leave_pending=leave_pending, discount_amount=discount_amount, tax_amount=tax_amount)
 
     if skipped_skus:
         raise SkuNotCdsEligible("\n".join(skipped_skus))

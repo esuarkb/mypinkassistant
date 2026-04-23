@@ -234,21 +234,6 @@
 
             <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 
-            <label><strong>Import MyCustomers</strong></label>
-            <div class="hint" style="margin-top:6px">
-                Import your current MyCustomers customer list into MyPinkAssistant.
-                This improves customer search and matching in chat.
-            </div>
-
-            <form method="post" action="/import-customers" id="importCustomersForm" style="margin:0">
-                <div class="actions">
-                    <button class="btn btnGhost" type="submit" style="font-size: inherit">Import MyCustomers</button>
-                </div>
-            </form>
-            {{LAST_CUSTOMER_IMPORT}}
-
-            <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
-
             <label><strong>Inventory Report</strong></label>
             <div class="hint" style="margin-top:6px">
                 Edit, save, or print a PDF of your current inventory.
@@ -266,6 +251,7 @@
             <div class="row" style="margin-top:8px">
                 <a class="btn btnGhost" href="/billing/portal">Manage subscription & billing</a>
             </div>
+
         </div>
     </div>
 
@@ -290,6 +276,7 @@
                 }, 2000);
             });
         })();
+
     </script>
 
     <script src="/web/settings.js"></script>
