@@ -558,7 +558,8 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         '    "State": "",\n'
         '    "Postal Code": "",\n'
         '    "Birthday": "",\n'
-        '    "Tags": ""\n'
+        '    "Tags": "",\n'
+        '    "Referred By": ""\n'
         "  }\n"
         "}\n\n"
         "If ORDER:\n"
@@ -577,6 +578,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         "- State must be full name (e.g., Alabama).\n"
         "- Street is the street number and name only. Put apt/unit/suite/lot/# info in Street2.\n"
         "- Extract comma-separated tags from 'tag:' or 'tags:' keyword into Tags as a plain comma-separated string.\n"
+        "- Extract the referring person's name from phrases like 'referred by', 'referral from', 'ref by', 'sent by' into Referred By. The Referred By value is a person's name only (1-3 words) — it ends at the next field (a phone number, email, 'tag:'/'tags:', or end of message). Leave empty if not mentioned.\n"
         "- Birthday may be provided as MM/DD, Month Day, or YYYY-MM-DD. Output as YYYY-MM-DD. If year missing, use 2000.\n"
         "- Each word or phrase separated by 'and' or a comma is a separate item unless it is clearly a shade/variant of the immediately adjacent product (e.g. 'Normal/Dry', 'Ivory 1', 'Berry Kissable'). When in doubt, treat it as a separate product.\n"
         "- For shades/colors/variants (Normal/Dry, Combination/Oily), include them in item text if present.\n"
@@ -1656,6 +1658,14 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
                 notes.append("Birthday updated")
             continue
 
+        # referred by:
+        if low.startswith("referred by") or low.startswith("referral") or low.startswith("ref by"):
+            ref = re.sub(r"^(referred\s+by|referral\s+from|referral|ref\s+by)\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
+            if ref:
+                c["Referred By"] = ref
+                notes.append("Referred By updated")
+            continue
+
         # tags:
         if low.startswith("tag"):
             raw = re.sub(r"^tags?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
@@ -2262,21 +2272,24 @@ class MKChatEngine:
         msg = _re.sub(r'\b(\d{8})\b', lambda m: _sku_map.get(m.group(1), m.group(1)), msg)
 
         # Product look-up "show more" — client sends "show all <term>" when consultant taps "+N more"
+        _SHOW_ALL_CRM_TERMS = {"customer", "customers", "order", "orders", "inventory", "follow", "followup", "followups"}
         if msg.lower().startswith("show all "):
             _more_term = msg[len("show all "):].strip()
-            def _all_words_in_product_more(query: str, product_name: str) -> bool:
-                words = [w for w in query.lower().split() if len(w) >= 2]
-                name_l = product_name.lower()
-                return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
-            _all_more = [c for c in catalog if _all_words_in_product_more(_more_term, c["product_name"])]
-            if not _all_more:
-                _all_more = best_matches(catalog, _more_term, limit=20, min_score=50)
-            if _all_more:
-                lines = ["<strong>Product Look Up</strong>"]
-                for m in _all_more:
-                    lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
-                return ChatReply("<br>".join(lines))
-            return ChatReply("I couldn't find any products matching that search.")
+            _more_words = set(_more_term.lower().split())
+            if not (_more_words & _SHOW_ALL_CRM_TERMS):
+                def _all_words_in_product_more(query: str, product_name: str) -> bool:
+                    words = [w for w in query.lower().split() if len(w) >= 2]
+                    name_l = product_name.lower()
+                    return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
+                _all_more = [c for c in catalog if _all_words_in_product_more(_more_term, c["product_name"])]
+                if not _all_more:
+                    _all_more = best_matches(catalog, _more_term, limit=20, min_score=50)
+                if _all_more:
+                    lines = ["<strong>Product Look Up</strong>"]
+                    for m in _all_more:
+                        lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                    return ChatReply("<br>".join(lines))
+                return ChatReply("I couldn't find any products matching that search.")
 
         intent_result = parse_intent(msg, state)
         print("[INTENT]", intent_result.intent, intent_result.confidence, intent_result.raw_text)
@@ -4271,6 +4284,8 @@ class MKChatEngine:
         if tags:
             customer["Tags"] = tags  # normalize in-place for storage/payload
         tags_line = f"• Tags: {tags}\n" if tags else ""
+        referred_by = (customer.get("Referred By") or "").strip()
+        referred_by_line = f"• Referred By: {referred_by}\n" if referred_by else ""
 
         # Show one warning at a time (phone → partial address → email).
         # All three also block confirmation in the yes-handler.
@@ -4299,6 +4314,7 @@ class MKChatEngine:
             f"• {ui['address']}: {addr}\n"
             f"• {ui['birthday']}: {birthday_disp or ui['none']}\n"
             f"{tags_line}"
+            f"{referred_by_line}"
             f"{ui['cust_confirm_q']}\n"
             f"{ui['cust_edit_hint']}"
             + _QR_YN

@@ -141,6 +141,11 @@ def create_customer_basic(page: Page, customer: dict) -> None:
     page.get_by_role("textbox", name="Birthday (Optional)").fill(str(customer.get("Birthday") or ""))
     page.wait_for_timeout(100)
 
+    referred_by = str(customer.get("Referred By") or "").strip()
+    if referred_by:
+        page.get_by_role("textbox", name="Referred By (Optional)").fill(referred_by)
+        page.wait_for_timeout(100)
+
     tags = str(customer.get("Tags") or "").strip()
     if tags:
         tags_field = page.locator('[id^="autocomplete-textarea"]')
