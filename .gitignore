@@ -16,6 +16,7 @@ db/
 
 # Environment variables
 .env
+.env.production
 
 # Secrets / credentials
 *.json

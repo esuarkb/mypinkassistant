@@ -154,6 +154,20 @@ def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dic
     """
     catalog = _load_catalog()
 
+    # Remove chat-placed orders before re-importing from MyCustomers (source of truth).
+    # Chat orders have no intouch_order_id, so the duplicate check can't catch them —
+    # they'd accumulate a second record every sync. Deleting them first lets the import
+    # re-insert them with their real intouch_order_id.
+    PH = "?" if _is_sqlite(cur) else "%s"
+    cur.execute(
+        f"DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE consultant_id = {PH} AND source = 'chat')",
+        (consultant_id,),
+    )
+    cur.execute(
+        f"DELETE FROM orders WHERE consultant_id = {PH} AND source = 'chat'",
+        (consultant_id,),
+    )
+
     inserted = 0
     skipped_archived = 0
     skipped_duplicate = 0
