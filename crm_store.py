@@ -507,7 +507,7 @@ def create_order_from_confirmed(
     if is_sqlite:
         cur.execute("""
             INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, created_at)
-            VALUES (?,?,?,?,?,?,?, datetime(‘now’))
+            VALUES (?,?,?,?,?,?,?, datetime('now'))
         """, (consultant_id, customer_id, _use_date or now_iso, total, source, total_discount, tax_amount))
         order_id = int(cur.lastrowid)
     else:
@@ -547,14 +547,14 @@ def create_order_from_confirmed(
 
         item_discount = per_line_discount.get(i, 0.0)
 
-        # Don’t crash if something is weird—just skip that line.
+        # Don't crash if something is weird—just skip that line.
         if not sku or not name:
             continue
 
         if is_sqlite:
             cur.execute("""
                 INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity, discount_amount, created_at)
-                VALUES (?,?,?,?,?,?, datetime(‘now’))
+                VALUES (?,?,?,?,?,?, datetime('now'))
             """, (order_id, sku, name, unit_price, max(1, qty), item_discount))
         else:
             cur.execute("""
@@ -612,7 +612,7 @@ from datetime import datetime
 
 def format_recent_orders(customer_name: str, orders: list) -> str:
     if not orders:
-        return f"I don’t see any saved orders for {customer_name} yet."
+        return f"I don't see any saved orders for {customer_name} yet."
 
     lines = [f"Recent orders for {customer_name}:"]
 
@@ -839,7 +839,7 @@ def get_top_customers(cur, consultant_id: int, limit: int = 5, start_date=None, 
 
 def format_leaderboard(rows: list, title: str) -> str:
     if not rows:
-        return "I don’t see any orders yet for that time period."
+        return "I don't see any orders yet for that time period."
 
     lines = [title]
 

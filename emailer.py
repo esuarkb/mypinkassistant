@@ -189,7 +189,7 @@ New customer Jane Doe, 444 4th St, Anytown, Alabama 55555, jane@gmail.com, 55512
 I’ll organize it and get it ready to send to MyCustomers automatically.
 
 LOOK UP A CUSTOMER
-Just type a name — I’ll find the closest match even if you misspell it.
+Just type a name — I’ll find the closest match even if you misspell it. Your existing customers and order history from MyCustomers are imported automatically when you sign up, so you can look up past orders right away.
 
 Example:
 Jane Doe
@@ -259,7 +259,7 @@ support@mypinkassistant.com
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📇 Look up Customer Information and Orders</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        Instantly find customer details and past orders — just type a name.
+        Instantly find customer details and past orders — just type a name. Your existing customers and order history from MyCustomers are imported automatically when you sign up, so you can look up past orders right away.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>

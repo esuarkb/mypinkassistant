@@ -46,8 +46,11 @@ def fetch_customer_list(page: Page) -> list[dict]:
     page.on("response", _on_response)
 
     page.goto(_CUSTOMER_LIST_URL, wait_until="domcontentloaded")
-    print(f"[CustomerApiImport] on {page.url} — waiting 15s for LWC wire call")
-    page.wait_for_timeout(15000)
+    print(f"[CustomerApiImport] on {page.url} — polling for LWC wire call (max 15s)")
+    for _ in range(30):
+        if captured:
+            break
+        page.wait_for_timeout(500)
 
     if captured:
         print(f"[CustomerApiImport] captured {len(captured)} customers via page-load listener")
@@ -56,7 +59,10 @@ def fetch_customer_list(page: Page) -> list[dict]:
 
     print("[CustomerApiImport] no customers on initial load — reloading to bust LWC cache")
     page.reload(wait_until="domcontentloaded")
-    page.wait_for_timeout(15000)
+    for _ in range(30):
+        if captured:
+            break
+        page.wait_for_timeout(500)
 
     page.remove_listener("response", _on_response)
 
