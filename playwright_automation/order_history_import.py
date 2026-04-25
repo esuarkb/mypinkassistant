@@ -52,8 +52,8 @@ def fetch_order_history(page: Page) -> list[dict]:
     page.on("response", _on_response)
 
     page.goto(_ORDER_LIST_URL, wait_until="domcontentloaded")
-    print(f"[OrderHistoryImport] on {page.url} — waiting 25s for LWC wire call")
-    page.wait_for_timeout(25000)
+    print(f"[OrderHistoryImport] on {page.url} — waiting 15s for LWC wire call")
+    page.wait_for_timeout(15000)
 
     if captured:
         print(f"[OrderHistoryImport] captured {len(captured)} orders via page-load listener")
@@ -62,7 +62,7 @@ def fetch_order_history(page: Page) -> list[dict]:
 
     print("[OrderHistoryImport] no orders on initial load — reloading to bust LWC cache")
     page.reload(wait_until="domcontentloaded")
-    page.wait_for_timeout(25000)
+    page.wait_for_timeout(15000)
 
     page.remove_listener("response", _on_response)
 

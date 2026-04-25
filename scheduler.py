@@ -93,7 +93,7 @@ def run() -> None:
             else:
                 inventory_payload = {"date_range": "lastTwelveMonths", "seed_only": True}
 
-            insert_job("FULL_SYNC", {"source": "scheduler", **inventory_payload}, consultant_id=cid)
+            insert_job("FULL_SYNC", {"source": "scheduler", **inventory_payload}, consultant_id=cid, priority=-1)
             queued += 1
 
         print(
@@ -102,6 +102,17 @@ def run() -> None:
             f"skipped {skipped_failures} (login failures), "
             f"skipped {skipped_pending} (already pending)"
         )
+
+        # TEMP: one-time priority test — queue a NEW_CUSTOMER for akrause at default
+        # priority (0) after all nightly FULL_SYNCs are queued at priority (-1).
+        # Delete "Tess Prioritycheck" from InTouch and remove this block after verifying tomorrow.
+        insert_job("NEW_CUSTOMER", {
+            "First Name": "Tess",
+            "Last Name": "Prioritycheck",
+            "Email": "prioritytest@mypinkassistant.com",
+            "Phone": "",
+        }, consultant_id=2)
+        print("[Scheduler] Queued priority test NEW_CUSTOMER for akrause (consultant_id=2)")
 
     finally:
         conn.close()

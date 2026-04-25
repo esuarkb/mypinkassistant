@@ -24,6 +24,7 @@ SUPPORTED_INTENTS = {
     "new_order",
     "order_add",
     "order_remove",
+    "product_lookup",
     "unknown",
 }
 
@@ -162,6 +163,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- new_order\n"
         "- order_add\n"
         "- order_remove\n"
+        "- product_lookup\n"
         "- unknown\n\n"
         "Return JSON like:\n"
         '{"intent":"customer_info","confidence":0.92}\n\n'
@@ -176,6 +178,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- If the user is creating an order, use new_order.\n"
         "- If the user is adding an item to an existing order, use order_add.\n"
         "- If the user is removing an item from an existing order, use order_remove.\n"
+        "- If the user is asking for the price or cost of a Mary Kay product (with no customer or order context), use product_lookup.\n"
     )
 
     user = f"Message: {msg}\nLast referenced customer: {last_ref_name or '(none)'}"

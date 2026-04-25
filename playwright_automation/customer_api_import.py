@@ -35,9 +35,6 @@ def fetch_customer_list(page: Page) -> list[dict]:
         try:
             body = response.json()
             customers = _parse_customers(body)
-            if customers:
-                print(f"[CustomerApiImport] returnValue[0] ALL keys: {sorted(customers[0].keys())}")
-                print(f"[CustomerApiImport] returnValue[0] sample: { {k: v for k, v in customers[0].items() if 'phone' in k.lower() or 'mobile' in k.lower() or 'contact' in k.lower()} }")
             if _looks_like_customers(customers):
                 print(f"[CustomerApiImport] found {len(customers)} customer records")
                 for c in customers:
@@ -49,8 +46,8 @@ def fetch_customer_list(page: Page) -> list[dict]:
     page.on("response", _on_response)
 
     page.goto(_CUSTOMER_LIST_URL, wait_until="domcontentloaded")
-    print(f"[CustomerApiImport] on {page.url} — waiting 25s for LWC wire call")
-    page.wait_for_timeout(25000)
+    print(f"[CustomerApiImport] on {page.url} — waiting 15s for LWC wire call")
+    page.wait_for_timeout(15000)
 
     if captured:
         print(f"[CustomerApiImport] captured {len(captured)} customers via page-load listener")
@@ -59,7 +56,7 @@ def fetch_customer_list(page: Page) -> list[dict]:
 
     print("[CustomerApiImport] no customers on initial load — reloading to bust LWC cache")
     page.reload(wait_until="domcontentloaded")
-    page.wait_for_timeout(25000)
+    page.wait_for_timeout(15000)
 
     page.remove_listener("response", _on_response)
 

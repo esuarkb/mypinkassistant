@@ -143,25 +143,25 @@ def save_session_state(state: dict, session_id: int = 1) -> None:
         conn.close()
 
 
-def insert_job(job_type: str, payload: dict, consultant_id: int) -> int:
+def insert_job(job_type: str, payload: dict, consultant_id: int, priority: int = 0) -> int:
     conn = db_connect()
     cur = conn.cursor()
     try:
         if is_postgres():
             cur.execute(
                 f"""
-                INSERT INTO jobs (type, payload_json, status, consultant_id)
-                VALUES ({PH}, {PH}, 'queued', {PH})
+                INSERT INTO jobs (type, payload_json, status, consultant_id, priority)
+                VALUES ({PH}, {PH}, 'queued', {PH}, {PH})
                 RETURNING id
                 """,
-                (job_type, json.dumps(payload), int(consultant_id)),
+                (job_type, json.dumps(payload), int(consultant_id), priority),
             )
             row = cur.fetchone()
             job_id = row["id"] if isinstance(row, dict) else row[0]
         else:
             cur.execute(
-                f"INSERT INTO jobs (type, payload_json, status, consultant_id) VALUES ({PH}, {PH}, 'queued', {PH})",
-                (job_type, json.dumps(payload), int(consultant_id)),
+                f"INSERT INTO jobs (type, payload_json, status, consultant_id, priority) VALUES ({PH}, {PH}, 'queued', {PH}, {PH})",
+                (job_type, json.dumps(payload), int(consultant_id), priority),
             )
             job_id = cur.lastrowid
 
@@ -1852,6 +1852,41 @@ def _inventory_help_text() -> str:
         "• print my inventory"
     )
 
+# Common search terms that differ from MK's official product naming
+_PRODUCT_QUERY_SYNONYMS: dict = {
+    "eyeshadow": "eye shadow",
+    "eye liner": "eyeliner",
+    "lip color": "lipstick",
+    "lip colour": "lipstick",
+    "lip colors": "lipstick",
+    "lip colours": "lipstick",
+}
+
+def _looks_like_product_price_query(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    if any(s.startswith(p) for p in ("how much is ", "how much does ", "price of ", "price check ", "what does ", "what's the price", "what is the price")):
+        return True
+    if re.search(r"\bhow much\b.{0,30}\bcost\b", s):
+        return True
+    if re.search(r"\bprice\b.{0,30}\bfor\b", s) and "order" not in s:
+        return True
+    return False
+
+
+def _parse_product_price_query_text(msg: str) -> str:
+    s = (msg or "").strip()
+    for pattern in (
+        r"(?i)^how much (?:is|does)\s+(?:the\s+)?(.+?)(?:\s+cost)?\s*\??$",
+        r"(?i)^price (?:of|check|for)\s+(?:the\s+)?(.+?)\s*\??$",
+        r"(?i)^what(?:'s| is) the price (?:of|for)\s+(?:the\s+)?(.+?)\s*\??$",
+        r"(?i)^what does\s+(?:the\s+)?(.+?)\s+cost\s*\??$",
+    ):
+        m = re.match(pattern, s)
+        if m:
+            return m.group(1).strip()
+    return s
+
+
 def _looks_like_inventory_count(msg: str) -> bool:
     s = (msg or "").strip().lower()
     if "how many" in s and " do i have" in s:
@@ -2226,6 +2261,23 @@ class MKChatEngine:
         _sku_map = {str(item["sku"]).strip(): item["product_name"] for item in catalog if item.get("sku")}
         msg = _re.sub(r'\b(\d{8})\b', lambda m: _sku_map.get(m.group(1), m.group(1)), msg)
 
+        # Product look-up "show more" — client sends "show all <term>" when consultant taps "+N more"
+        if msg.lower().startswith("show all "):
+            _more_term = msg[len("show all "):].strip()
+            def _all_words_in_product_more(query: str, product_name: str) -> bool:
+                words = [w for w in query.lower().split() if len(w) >= 2]
+                name_l = product_name.lower()
+                return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
+            _all_more = [c for c in catalog if _all_words_in_product_more(_more_term, c["product_name"])]
+            if not _all_more:
+                _all_more = best_matches(catalog, _more_term, limit=20, min_score=50)
+            if _all_more:
+                lines = ["<strong>Product Look Up</strong>"]
+                for m in _all_more:
+                    lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                return ChatReply("<br>".join(lines))
+            return ChatReply("I couldn't find any products matching that search.")
+
         intent_result = parse_intent(msg, state)
         print("[INTENT]", intent_result.intent, intent_result.confidence, intent_result.raw_text)
 
@@ -2268,6 +2320,58 @@ class MKChatEngine:
             base_url = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
             link = f"{base_url}/inventory/print" if base_url else "/inventory/print"
             return ChatReply(ui["inventory_report"].format(link=link))
+
+        # -------------------------
+        # Product price lookup (early — "how much is X", "price of X",
+        # or bare product name typed alone with high catalog confidence)
+        # -------------------------
+        def _all_words_in_product(query: str, product_name: str) -> bool:
+            words = [w for w in query.lower().split() if len(w) >= 2]
+            name_l = product_name.lower()
+            return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
+
+        _is_bare_msg = not pending and len(msg.split()) <= 4 and _re.match(r"^[\w\s\-]+$", msg)
+        if _looks_like_product_price_query(msg) or _is_bare_msg:
+            product_text = _parse_product_price_query_text(msg) if _looks_like_product_price_query(msg) else msg
+            if product_text:
+                # Normalize common search terms to MK catalog naming
+                product_text = _PRODUCT_QUERY_SYNONYMS.get(product_text.lower().strip(), product_text)
+                if _is_bare_msg:
+                    # Word match first — more precise for bare product names
+                    word_matches = [c for c in catalog if _all_words_in_product(product_text, c["product_name"])]
+                    if len(word_matches) == 1:
+                        m = word_matches[0]
+                        return ChatReply(f"<strong>Product Look Up</strong><br>{m['product_name']} — ${m['price']:.2f}")
+                    elif len(word_matches) > 1:
+                        lines = ["<strong>Product Look Up</strong>"]
+                        for m in word_matches[:3]:
+                            lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                        if len(word_matches) > 3:
+                            remaining = len(word_matches) - 3
+                            lines.append(f'<a href="#" data-send="show all {product_text}">+{remaining} more</a>')
+                        return ChatReply("<br>".join(lines))
+                    # Word match found nothing — fall back to fuzzy
+                    matches = best_matches(catalog, product_text, limit=3, min_score=70)
+                    if matches:
+                        top = matches[0]
+                        if len(matches) == 1 or float(top.get("score") or 0) >= 80:
+                            return ChatReply(f"<strong>Product Look Up</strong><br>{top['product_name']} — ${top['price']:.2f}")
+                        lines = ["<strong>Product Look Up</strong>"]
+                        for m in matches:
+                            lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                        return ChatReply("<br>".join(lines))
+                else:
+                    # Explicit price query — fuzzy only
+                    matches = best_matches(catalog, product_text, limit=3, min_score=50)
+                    if matches:
+                        top = matches[0]
+                        if len(matches) == 1 or float(top.get("score") or 0) >= 80:
+                            return ChatReply(f"<strong>Product Look Up</strong><br>{top['product_name']} — ${top['price']:.2f}")
+                        lines = ["<strong>Product Look Up</strong>"]
+                        for m in matches:
+                            lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                        return ChatReply("<br>".join(lines))
+                    return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
 
         # -------------------------
         # Inventory: quantity count query (early — before intent routing so
@@ -2637,6 +2741,22 @@ class MKChatEngine:
 
                 return ChatReply(format_leaderboard(rows, title))
         
+        # -------------------------
+        # Product price lookup (intent-based fallback)
+        # -------------------------
+        if not pending and intent_result.intent == "product_lookup":
+            product_text = _parse_product_price_query_text(msg)
+            matches = best_matches(catalog, product_text, limit=3, min_score=50)
+            if not matches:
+                return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
+            top = matches[0]
+            if len(matches) == 1 or int(top.get("score") or 0) >= 80:
+                return ChatReply(f"<strong>Product Look Up</strong><br>{top['product_name']} — ${top['price']:.2f}")
+            lines = ["<strong>Product Look Up</strong>"]
+            for m in matches:
+                lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+            return ChatReply("\n".join(lines))
+
         # -------------------------
         # Follow-up trigger (2+2+2)
         # -------------------------

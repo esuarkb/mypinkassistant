@@ -12,8 +12,8 @@ Source status:
   - archived=True in InTouch  →  source_status='removed'
   - archived=False             →  source_status='active'
 
-Phone is attempted from personMobilePhone → personHomePhone → phone fields.
-COALESCE preserves an existing phone if the API returns none.
+Phone comes from personMobilePhone (omitted from response when empty).
+COALESCE preserves an existing phone if the API returns none for a customer.
 Tags are stored as a JSON array string; existing tags are preserved if the
 API returns no tags for that customer.
 """
@@ -99,7 +99,7 @@ def import_customers_from_api(cur, consultant_id: int, raw_customers: list[dict]
 
         intouch_account_id = (c.get("id") or "").strip() or None
         email = (c.get("personEmail") or "").strip().lower() or None
-        phone = (c.get("personMobilePhone") or c.get("personHomePhone") or c.get("phone") or "").strip() or None
+        phone = (c.get("personMobilePhone") or "").strip() or None
         street = (c.get("personMailingStreet") or "").strip() or None
         street2 = (c.get("personMailingStreet2") or "").strip() or None
         city = (c.get("personMailingCity") or "").strip() or None

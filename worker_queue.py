@@ -466,7 +466,7 @@ def _claim_next_job_for_consultant_filtered(
                 WHERE consultant_id={PH}
                   AND status='queued'
                   AND type={PH}
-                ORDER BY id
+                ORDER BY priority DESC, id ASC
                 LIMIT 1
                 """,
                 (cid, only_type),
@@ -481,20 +481,20 @@ def _claim_next_job_for_consultant_filtered(
                     WHERE consultant_id={PH}
                       AND status='queued'
                       AND type='NEW_CUSTOMER'
-                    ORDER BY id
+                    ORDER BY priority DESC, id ASC
                     LIMIT 1
                     """,
                     (cid,),
                 )
             else:
-                # Normal FIFO: oldest queued job first (customer or order)
+                # Priority first, then FIFO within same priority
                 cur.execute(
                     f"""
                     SELECT id, type, payload_json
                     FROM jobs
                     WHERE consultant_id={PH}
                       AND status='queued'
-                    ORDER BY id
+                    ORDER BY priority DESC, id ASC
                     LIMIT 1
                     """,
                     (cid,),
