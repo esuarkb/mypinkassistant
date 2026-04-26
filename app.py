@@ -1711,6 +1711,7 @@ def jobs(request: Request):
         SELECT id, type, status, error, status_msg, payload_json
         FROM jobs
         WHERE consultant_id = {PH}
+          AND type NOT IN ('FULL_SYNC')
         ORDER BY id DESC
         LIMIT 25
         """,
