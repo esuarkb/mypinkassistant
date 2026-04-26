@@ -298,13 +298,16 @@ def claim_next_consultant() -> Optional[int]:
     try:
         _begin(cur)
 
-        # Find the next consultant who has queued jobs
+        # Find the next consultant who has queued jobs.
+        # MAX(priority) DESC ensures high-priority jobs (interactive orders) jump ahead of
+        # low-priority ones (overnight syncs). MIN(id) ASC breaks ties by arrival order.
         cur.execute(
             """
             SELECT consultant_id
             FROM jobs
             WHERE status='queued' AND consultant_id IS NOT NULL
-            ORDER BY id
+            GROUP BY consultant_id
+            ORDER BY MAX(priority) DESC, MIN(id) ASC
             LIMIT 1
             """
         )
