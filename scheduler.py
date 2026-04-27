@@ -103,17 +103,6 @@ def run() -> None:
             f"skipped {skipped_pending} (already pending)"
         )
 
-        # TEMP: one-time priority test — queue a NEW_CUSTOMER for akrause at default
-        # priority (0) after all nightly FULL_SYNCs are queued at priority (-1).
-        # Delete "Tess Prioritycheck" from InTouch and remove this block after verifying tomorrow.
-        insert_job("NEW_CUSTOMER", {
-            "First Name": "Tess",
-            "Last Name": "Prioritycheck",
-            "Email": "prioritytest@mypinkassistant.com",
-            "Phone": "",
-        }, consultant_id=2)
-        print("[Scheduler] Queued priority test NEW_CUSTOMER for akrause (consultant_id=2)")
-
     finally:
         conn.close()
 
