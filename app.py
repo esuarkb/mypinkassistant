@@ -1365,6 +1365,8 @@ def inventory_print(request: Request):
     .controls label {{ font-size: 13px; cursor: pointer; }}
     .btn-print {{ background: #d63384; color: #fff; border: none; padding: 7px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }}
     .btn-print:hover {{ background: #b02a6f; }}
+    .btn-back {{ display: inline-flex; align-items: center; padding: 7px 18px; border-radius: 8px; border: 1px solid #e6e6e6; background: #fff; color: #111; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; }}
+    .btn-back:hover {{ background: #f7f7f8; }}
     .inv-input {{ width: 60px; padding: 3px 6px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }}
     table {{ width: auto; border-collapse: collapse; white-space: nowrap; }}
     th {{ background: #f5f5f7; text-align: left; padding: 7px 10px; font-size: 12px; border-bottom: 2px solid #ddd; }}
@@ -1403,6 +1405,7 @@ def inventory_print(request: Request):
       <input type="radio" name="view" value="enter" id="view-enter"> Enter Inventory
     </label>
     <button class="btn-print" id="btn-print">Print / Save PDF</button>
+    <a class="btn-back" href="/app">Back to chat</a>
   </div>
   <div class="summary-bar" id="summary-bar">
     Total Retail Value on Shelf: <span class="grand-total" id="grand-total">$0.00</span>
