@@ -636,6 +636,19 @@ def billing_success(request: Request, session_id: str = ""):
                 first_name = (row[1] or "").strip()
                 language = (row[2] or "en").strip().lower()
                 send_welcome_email(to_email=email, first_name=first_name, lang=language)
+                try:
+                    _resend_key = (os.getenv("RESEND_API_KEY") or "").strip()
+                    _audience_id = "f223e3a7-143a-4f86-b5fb-e4084687c2d3"
+                    if _resend_key and row:
+                        import requests as _requests
+                        _requests.post(
+                            f"https://api.resend.com/audiences/{_audience_id}/contacts",
+                            headers={"Authorization": f"Bearer {_resend_key}", "Content-Type": "application/json"},
+                            json={"email": email, "first_name": first_name, "last_name": (row[2] or "").strip(), "unsubscribed": False},
+                            timeout=10,
+                        )
+                except Exception as _ae:
+                    print("[Billing] Resend audience sync failed (non-fatal):", _ae)
 
         except Exception as e:
             print("[WelcomeEmail after billing] failed:", repr(e))
