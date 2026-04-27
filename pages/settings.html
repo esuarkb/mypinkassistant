@@ -213,23 +213,6 @@
                 <div class="actions">
                     <button class="btn btnPrimary" type="submit">Save</button>
                 </div>
-
-                <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
-
-                <label>Referral Program!</label>
-
-                <div class="hint" style="margin-top:6px">
-                    Share your link - give a month, get a month! New subscribers get one month free; after their
-                    first paid month, so do you! (And yes, it stacks!)
-                </div>
-
-                <label style="margin-top:10px">Your referral link:</label>
-                <div class="row" style="margin-top:8px; align-items:stretch">
-                    <input id="refLink" class="inputShort" style="flex:1" readonly value="{{REFERRAL_LINK}}" />
-                    <button type="button" class="btn btnGhost" id="copyRefBtn">Copy</button>
-                </div>
-
-                <div class="hint" id="copyRefMsg" style="margin-top:8px"></div>
             </form>
 
             <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
@@ -241,6 +224,24 @@
             <div class="row" style="margin-top:8px">
                 <a class="btn btnGhost" href="/inventory/print" target="_blank">Manage Inventory</a>
             </div>
+
+            <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
+
+            <label><strong>Referral Program</strong></label>
+
+            <div class="hint" style="margin-top:6px">
+                Share your link — give a month, get a month! New subscribers get one month free; after their
+                first paid month, so do you! (And yes, it stacks!)
+            </div>
+
+            <label style="margin-top:10px">Your referral link:</label>
+            <div class="row" style="margin-top:8px; align-items:stretch">
+                <input id="refLink" class="inputShort" style="flex:1" readonly value="{{REFERRAL_LINK}}" />
+                <button type="button" class="btn btnGhost" id="copyRefBtn">Copy</button>
+            </div>
+            <div class="hint" id="copyRefMsg" style="margin-top:8px"></div>
+
+            {{REFERRAL_LIST}}
 
             <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 

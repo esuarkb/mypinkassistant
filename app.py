@@ -175,6 +175,68 @@ def _find_consultant_by_email(email: str):
 import re
 import secrets
 
+def _build_referral_list(cid: int) -> str:
+    from datetime import date as _date
+    with tx() as (_conn2, _cur):
+        _cur.execute(
+            f"""SELECT first_name, last_name, billing_status, trial_end, referral_rewarded_at
+                FROM consultants
+                WHERE referred_by_consultant_id = {PH}
+                  AND billing_status NOT IN ('canceled', 'incomplete', 'incomplete_expired')
+                ORDER BY id ASC""",
+            (cid,),
+        )
+        rows = _cur.fetchall()
+
+    if not rows:
+        return '<div class="hint" style="margin-top:12px">No referrals yet — share your link to get started!</div>'
+
+    items = [
+        '<div style="margin-top:14px">'
+        '<div style="display:flex;gap:8px;font-size:11px;color:#888;font-weight:600;padding:0 0 6px;border-bottom:1px solid var(--border);">'
+        '<span style="flex:1">Name</span><span style="flex:2">Status</span><span style="flex:2">Free Month</span>'
+        '</div>'
+    ]
+    for row in rows:
+        first = (_row_get(row, "first_name") or "").strip()
+        last = (_row_get(row, "last_name") or "").strip()
+        status = (_row_get(row, "billing_status") or "").strip()
+        trial_end = _row_get(row, "trial_end")
+        rewarded_at = _row_get(row, "referral_rewarded_at")
+
+        name = first + (f" {last[0]}." if last else "")
+
+        if status == "trialing" and trial_end:
+            try:
+                end_dt = trial_end if hasattr(trial_end, "strftime") else _date.fromisoformat(str(trial_end)[:10])
+                status_str = f"Trialing (ends {end_dt.strftime('%b %d')})"
+            except Exception:
+                status_str = "Trialing"
+        elif status == "active":
+            status_str = "Active"
+        else:
+            status_str = status.title()
+
+        if rewarded_at:
+            try:
+                rew_dt = rewarded_at if hasattr(rewarded_at, "strftime") else _date.fromisoformat(str(rewarded_at)[:10])
+                earned_html = f'<span style="color:#2e7d32;font-weight:600">&#10003; Earned {rew_dt.strftime("%b %d, %Y")}</span>'
+            except Exception:
+                earned_html = '<span style="color:#2e7d32;font-weight:600">&#10003; Earned</span>'
+        else:
+            earned_html = '<span style="color:#888">Pending</span>'
+
+        items.append(
+            f'<div style="display:flex;gap:8px;font-size:13px;padding:8px 0;border-bottom:1px solid var(--border);">'
+            f'<span style="flex:1;font-weight:600">{_esc(name)}</span>'
+            f'<span style="flex:2;color:#555">{_esc(status_str)}</span>'
+            f'<span style="flex:2">{earned_html}</span>'
+            f'</div>'
+        )
+    items.append('</div>')
+    return "\n".join(items)
+
+
 def _generate_referral_code() -> str:
     # short + readable (8 chars). You can tweak length later.
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # avoid confusing chars
@@ -1198,6 +1260,9 @@ def settings_get(request: Request):
     except Exception:
         pass
 
+    # ✅ referral tracking list
+    referral_list_html = _build_referral_list(int(cid))
+
     replaces = {
         "{{EMAIL}}": _esc(c.get("email") or ""),
         "{{INTOUCH_USERNAME}}": _esc(c.get("intouch_username") or ""),
@@ -1208,6 +1273,7 @@ def settings_get(request: Request):
         # new:
         "{{REFERRAL_CODE}}": _esc(code),
         "{{REFERRAL_LINK}}": _esc(referral_link),
+        "{{REFERRAL_LIST}}": referral_list_html,
 
         "{{TAX_RATE}}": _esc(tax_rate_val),
     }

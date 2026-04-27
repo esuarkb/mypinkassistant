@@ -408,6 +408,16 @@ def billing_start(request: Request):
         except Exception:
             ref_id_int = 0
 
+        # If no referral on the account yet, check session (covers back-out + referral link scenario)
+        if ref_id_int == 0:
+            session_ref_code = (request.session.get("referral_code") or "").strip()
+            if session_ref_code:
+                from app import apply_referral
+                ok, _ = apply_referral(cid_int, session_ref_code)
+                if ok:
+                    request.session.pop("referral_code", None)
+                    ref_id_int = 1  # triggers 30-day trial below
+
         if not email:
             return HTMLResponse("Missing email for account.", status_code=400)
 
