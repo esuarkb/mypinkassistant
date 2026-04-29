@@ -162,17 +162,15 @@ def scrape_order_detail(page: Page, href: str) -> Dict:
     print(f"[Inventory] detail labels: {labels}")
 
     # Collect line items — each has data-sku and data-quantity attributes.
-    # InTouch renders each item twice across two page sections. Deduplicate by
-    # SKU (first occurrence wins) since a single order cannot contain the same
-    # SKU more than once.
-    seen_skus: set = set()
+    # InTouch renders each item twice: a screen version (visible, inside a
+    # d-print-none wrapper) and a print version (height=0 on screen). We use
+    # is_visible() to include only the screen-rendered items.
     items = []
     for el in page.locator("div.order-product-line-item").all():
         try:
             sku = (el.get_attribute("data-sku") or "").strip()
             qty_str = (el.get_attribute("data-quantity") or "0").strip()
-            if sku and sku not in seen_skus:
-                seen_skus.add(sku)
+            if sku and el.is_visible():
                 items.append({"sku": sku, "qty": max(0, int(qty_str or 0))})
         except Exception:
             continue
@@ -209,7 +207,11 @@ def import_inventory_orders(
     # Deferred imports to avoid circular dependency in module-level imports
     from db import connect, is_postgres
     from inventory_store import upsert_inventory_quantity
-    from inventory_import_store import is_order_imported, mark_order_imported
+    from inventory_import_store import (
+        ensure_order_items_table, save_order_items,
+        is_order_imported, mark_order_imported,
+    )
+    ensure_order_items_table()
 
     login_order_site(page, username, password)
 
@@ -283,6 +285,9 @@ def import_inventory_orders(
                 consumer_order_id=consumer_order_id,
             )
             continue
+
+        # Save raw line items before accumulating into inventory totals
+        save_order_items(consultant_id, order_no, detail["items"])
 
         for item in detail["items"]:
             sku = item["sku"]

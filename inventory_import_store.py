@@ -2,6 +2,8 @@
 #
 # Tracks which InTouch Cosmetic order numbers have already been imported
 # into a consultant's personal inventory, to prevent double-importing.
+# Also stores the raw line items per order in inventory_order_items so the
+# inventory table can be audited or rebuilt without re-running Playwright.
 
 from __future__ import annotations
 
@@ -57,6 +59,73 @@ def ensure_import_table() -> None:
             ]:
                 if col not in existing:
                     cur.execute(f"ALTER TABLE inventory_intouch_imports ADD COLUMN {col} {definition}")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ensure_order_items_table() -> None:
+    """Create the inventory_order_items table if it doesn't exist."""
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        if is_postgres():
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS inventory_order_items (
+                    id SERIAL PRIMARY KEY,
+                    consultant_id INTEGER NOT NULL,
+                    order_no TEXT NOT NULL,
+                    sku TEXT NOT NULL,
+                    qty INTEGER NOT NULL,
+                    imported_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_inv_order_items_consultant
+                ON inventory_order_items (consultant_id, order_no)
+            """)
+        else:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS inventory_order_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    consultant_id INTEGER NOT NULL,
+                    order_no TEXT NOT NULL,
+                    sku TEXT NOT NULL,
+                    qty INTEGER NOT NULL,
+                    imported_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_inv_order_items_consultant
+                ON inventory_order_items (consultant_id, order_no)
+            """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_order_items(consultant_id: int, order_no: str, items: list) -> None:
+    """Store the raw line items for an imported order.
+
+    items: list of {"sku": str, "qty": int}
+    Existing rows for this (consultant_id, order_no) are deleted first so
+    re-imports don't create duplicates.
+    """
+    if not items:
+        return
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"DELETE FROM inventory_order_items "
+            f"WHERE consultant_id = {PH} AND order_no = {PH}",
+            (int(consultant_id), order_no),
+        )
+        cur.executemany(
+            f"INSERT INTO inventory_order_items (consultant_id, order_no, sku, qty) "
+            f"VALUES ({PH}, {PH}, {PH}, {PH})",
+            [(int(consultant_id), order_no, item["sku"], item["qty"]) for item in items],
+        )
         conn.commit()
     finally:
         conn.close()
