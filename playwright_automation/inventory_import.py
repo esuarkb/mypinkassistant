@@ -158,6 +158,7 @@ def scrape_order_detail(page: Page, href: str) -> Dict:
     labels = _read_detail_labels(page)
     order_type = labels.get("Order Type", "").strip()
     order_source = labels.get("Order Source", "").strip()
+    order_date = labels.get("Order Date", "").strip()
 
     print(f"[Inventory] detail labels: {labels}")
 
@@ -175,7 +176,7 @@ def scrape_order_detail(page: Page, href: str) -> Dict:
         except Exception:
             continue
 
-    return {"order_type": order_type, "order_source": order_source, "items": items}
+    return {"order_type": order_type, "order_source": order_source, "order_date": order_date, "items": items}
 
 
 def import_inventory_orders(

@@ -102,6 +102,18 @@ def main(consultant_id: int) -> None:
                 order_source = detail["order_source"].lower()
                 items = detail["items"]
 
+                # Skip orders placed before the consultant signed up
+                from datetime import datetime
+                order_date_str = detail.get("order_date", "")
+                if order_date_str:
+                    try:
+                        order_date = datetime.strptime(order_date_str, "%m/%d/%Y").date()
+                        if order_date < created_at.date():
+                            print(f"  [{order_no}] skipping — order date {order_date} is before signup {created_at.date()}")
+                            continue
+                    except ValueError:
+                        pass
+
                 if order_type != "cosmetic":
                     print(f"  [{order_no}] skipping — type={detail['order_type']!r}")
                     continue
