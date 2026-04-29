@@ -59,34 +59,69 @@ def fetch_cosmetic_order_links(
     page: Page, date_range: str = "days90"
 ) -> List[Dict[str, str]]:
     """
-    Navigate to the Cosmetic-filtered order history and return a list of
-    {"order_no": "06638356", "href": "/orderdetails?..."} for every visible
-    order number link.
+    Navigate to the Cosmetic-filtered order history and return a list of dicts:
+      {
+        "order_no":          "06638356",
+        "href":              "/orderdetails?...",
+        "order_type":        "Cosmetic",          # from list row
+        "consumer_order_id": "",                  # UUID if shipped to customer, else ""
+      }
 
-    Waits for the AJAX order list to render before scraping.
+    order_type and consumer_order_id are read directly from the list row so
+    the caller can skip customer (CDS / online shop) orders without visiting
+    the detail page.
     """
     url = _order_history_url(date_range)
     page.goto(url, wait_until="domcontentloaded")
 
-    # Wait for AJAX to load the order list — look for any 8-digit order link
     try:
         page.wait_for_selector("a", timeout=15000)
         page.wait_for_load_state("networkidle", timeout=15000)
     except PlaywrightTimeoutError:
         pass
 
-    results = []
-    for link in page.locator("a").all():
-        try:
-            text = (link.text_content() or "").strip()
-            href = link.get_attribute("href") or ""
-        except Exception:
-            continue
+    return page.evaluate("""
+        () => {
+            // Build a header-name → column-index map from the visible header row.
+            const headers = [];
+            document.querySelectorAll('.order-list-header .order-list-col').forEach(col => {
+                headers.push(col.textContent.trim().replace(/\\.$/, ''));
+            });
 
-        if re.match(r"^\d{8}$", text) and "orderdetails" in href:
-            results.append({"order_no": text, "href": href})
+            const results = [];
+            document.querySelectorAll('.order-list-item').forEach(row => {
+                // Find the 8-digit order link
+                let orderNo = null, href = null;
+                row.querySelectorAll('a').forEach(a => {
+                    const t = (a.textContent || '').trim();
+                    if (/^\\d{8}$/.test(t) && (a.getAttribute('href') || '').includes('orderdetails')) {
+                        orderNo = t;
+                        href = a.getAttribute('href');
+                    }
+                });
+                if (!orderNo) return;
 
-    return results
+                // Read column values in DOM order
+                const colVals = [];
+                row.querySelectorAll('.order-list-col').forEach(col => {
+                    colVals.push(col.textContent.trim());
+                });
+
+                // Map header label → value
+                const data = {};
+                headers.forEach((h, i) => { if (h) data[h] = (colVals[i] || '').trim(); });
+
+                results.push({
+                    order_no: orderNo,
+                    href: href,
+                    order_type: data['Order Type'] || '',
+                    consumer_order_id: data['Consumer Order'] || '',
+                });
+            });
+
+            return results;
+        }
+    """)
 
 
 def _read_detail_labels(page: Page) -> Dict[str, str]:
@@ -138,13 +173,16 @@ def scrape_order_detail(page: Page, href: str) -> Dict:
 
     print(f"[Inventory] detail labels: {labels}")
 
-    # Collect line items — each has data-sku and data-quantity attributes
+    # Collect line items — each has data-sku and data-quantity attributes.
+    # InTouch renders each item twice: once in the visible product list and once
+    # in a hidden reorder panel. The hidden duplicates have empty inner_text().
+    # We skip them to avoid doubling every quantity.
     items = []
     for el in page.locator("div.order-product-line-item").all():
         try:
             sku = (el.get_attribute("data-sku") or "").strip()
             qty_str = (el.get_attribute("data-quantity") or "0").strip()
-            if sku:
+            if sku and el.inner_text().strip():
                 items.append({"sku": sku, "qty": max(0, int(qty_str or 0))})
         except Exception:
             continue
@@ -198,36 +236,62 @@ def import_inventory_orders(
             if is_order_imported(consultant_id, order_no):
                 print(f"[Inventory][seed] {order_no} already marked — skipping")
                 continue
-            mark_order_imported(consultant_id, order_no)
+            mark_order_imported(
+                consultant_id, order_no,
+                order_type=link.get("order_type", ""),
+                consumer_order_id=link.get("consumer_order_id", ""),
+            )
             print(f"[Inventory][seed] watermark: {order_no}")
         return {"imported": [], "skipped": [], "sku_totals": {}, "seed_only": True}
 
     # ── Normal nightly import ──
     for link in order_links:
         order_no = link["order_no"]
+        list_order_type = link.get("order_type", "")
+        consumer_order_id = link.get("consumer_order_id", "")
 
         if is_order_imported(consultant_id, order_no):
             skipped_orders.append(order_no)
             continue
 
+        # If the list row shows a Consumer Order UUID, this order shipped to a
+        # customer — skip without visiting the detail page.
+        if consumer_order_id:
+            print(f"[Inventory] skipping {order_no} — customer order (consumer_id={consumer_order_id[:8]}...)")
+            skipped_orders.append(order_no)
+            mark_order_imported(
+                consultant_id, order_no,
+                order_type=list_order_type,
+                consumer_order_id=consumer_order_id,
+            )
+            continue
+
         detail = scrape_order_detail(page, link["href"])
 
-        # Only import Cosmetic orders that ship to the consultant (not CDS)
+        # Belt-and-suspenders: verify type and source from the detail page too
         order_type = detail["order_type"].lower()
         order_source = detail["order_source"].lower()
 
-        print(f"[Inventory] order={order_no} type={detail['order_type']!r} source={detail['order_source']!r}")
+        print(f"[Inventory] order={order_no} list_type={list_order_type!r} detail_type={detail['order_type']!r} source={detail['order_source']!r}")
 
         if order_type != "cosmetic":
             print(f"[Inventory] skipping {order_no} — not Cosmetic ({detail['order_type']!r})")
             skipped_orders.append(order_no)
-            mark_order_imported(consultant_id, order_no)  # won't try again
+            mark_order_imported(
+                consultant_id, order_no,
+                order_type=detail["order_type"],
+                consumer_order_id=consumer_order_id,
+            )
             continue
 
         if order_source == "cds":
             print(f"[Inventory] skipping {order_no} — CDS order (ships to customer, not inventory)")
             skipped_orders.append(order_no)
-            mark_order_imported(consultant_id, order_no)  # won't re-process CDS
+            mark_order_imported(
+                consultant_id, order_no,
+                order_type=detail["order_type"],
+                consumer_order_id=consumer_order_id,
+            )
             continue
 
         for item in detail["items"]:
@@ -236,6 +300,11 @@ def import_inventory_orders(
             sku_totals[sku] = sku_totals.get(sku, 0) + qty
 
         imported_orders.append(order_no)
+        mark_order_imported(
+            consultant_id, order_no,
+            order_type=detail["order_type"],
+            consumer_order_id=consumer_order_id,
+        )
 
     # Apply inventory additions for all new orders in one transaction
     if sku_totals:
@@ -252,10 +321,6 @@ def import_inventory_orders(
             conn.commit()
         finally:
             conn.close()
-
-    # Record all newly imported order numbers
-    for order_no in imported_orders:
-        mark_order_imported(consultant_id, order_no)
 
     return {
         "imported": imported_orders,

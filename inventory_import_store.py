@@ -11,7 +11,8 @@ PH = "%s" if is_postgres() else "?"
 
 
 def ensure_import_table() -> None:
-    """Create the inventory_intouch_imports table if it doesn't exist."""
+    """Create the inventory_intouch_imports table if it doesn't exist, and run
+    column migrations for existing tables (order_type, consumer_order_id)."""
     conn = connect()
     try:
         cur = conn.cursor()
@@ -21,20 +22,41 @@ def ensure_import_table() -> None:
                     id SERIAL PRIMARY KEY,
                     consultant_id INTEGER NOT NULL,
                     order_no TEXT NOT NULL,
+                    order_type TEXT NOT NULL DEFAULT '',
+                    consumer_order_id TEXT NOT NULL DEFAULT '',
                     imported_at TIMESTAMPTZ DEFAULT NOW(),
                     UNIQUE (consultant_id, order_no)
                 )
             """)
+            # Migrate existing tables that pre-date these columns
+            for col, definition in [
+                ("order_type", "TEXT NOT NULL DEFAULT ''"),
+                ("consumer_order_id", "TEXT NOT NULL DEFAULT ''"),
+            ]:
+                cur.execute(f"""
+                    ALTER TABLE inventory_intouch_imports
+                    ADD COLUMN IF NOT EXISTS {col} {definition}
+                """)
         else:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS inventory_intouch_imports (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     consultant_id INTEGER NOT NULL,
                     order_no TEXT NOT NULL,
+                    order_type TEXT NOT NULL DEFAULT '',
+                    consumer_order_id TEXT NOT NULL DEFAULT '',
                     imported_at TEXT DEFAULT (datetime('now')),
                     UNIQUE (consultant_id, order_no)
                 )
             """)
+            # SQLite: add columns if missing (ignore error if already present)
+            existing = {row[1] for row in cur.execute("PRAGMA table_info(inventory_intouch_imports)")}
+            for col, definition in [
+                ("order_type", "TEXT NOT NULL DEFAULT ''"),
+                ("consumer_order_id", "TEXT NOT NULL DEFAULT ''"),
+            ]:
+                if col not in existing:
+                    cur.execute(f"ALTER TABLE inventory_intouch_imports ADD COLUMN {col} {definition}")
         conn.commit()
     finally:
         conn.close()
@@ -55,7 +77,12 @@ def is_order_imported(consultant_id: int, order_no: str) -> bool:
         conn.close()
 
 
-def mark_order_imported(consultant_id: int, order_no: str) -> None:
+def mark_order_imported(
+    consultant_id: int,
+    order_no: str,
+    order_type: str = "",
+    consumer_order_id: str = "",
+) -> None:
     """Record an order number as imported so it won't be processed again."""
     conn = connect()
     try:
@@ -63,19 +90,21 @@ def mark_order_imported(consultant_id: int, order_no: str) -> None:
         if is_postgres():
             cur.execute(
                 f"""
-                INSERT INTO inventory_intouch_imports (consultant_id, order_no)
-                VALUES ({PH}, {PH})
+                INSERT INTO inventory_intouch_imports
+                    (consultant_id, order_no, order_type, consumer_order_id)
+                VALUES ({PH}, {PH}, {PH}, {PH})
                 ON CONFLICT (consultant_id, order_no) DO NOTHING
                 """,
-                (int(consultant_id), order_no),
+                (int(consultant_id), order_no, order_type, consumer_order_id),
             )
         else:
             cur.execute(
                 f"""
-                INSERT OR IGNORE INTO inventory_intouch_imports (consultant_id, order_no)
-                VALUES ({PH}, {PH})
+                INSERT OR IGNORE INTO inventory_intouch_imports
+                    (consultant_id, order_no, order_type, consumer_order_id)
+                VALUES ({PH}, {PH}, {PH}, {PH})
                 """,
-                (int(consultant_id), order_no),
+                (int(consultant_id), order_no, order_type, consumer_order_id),
             )
         conn.commit()
     finally:
