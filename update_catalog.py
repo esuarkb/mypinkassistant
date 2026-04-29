@@ -6,15 +6,19 @@ and Spanish, and upserts catalog/en.csv and catalog/es.csv.
 - Existing SKUs have name/price updated if changed
 - Old SKUs are never removed (consultants may still have old stock)
 - ® is stripped from product names
+- Emails a change summary to the owner after each run
 
 Usage:
     python update_catalog.py <consultant_number> <intouch_password>
 """
 import csv
+import os
 import sys
 from datetime import date
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+OWNER_EMAIL = "briankrause@gmail.com"
 
 CATALOG_DIR = Path(__file__).parent / "catalog"
 ORDER_URL   = "https://order.marykayintouch.com/orders?lang=en_US"
@@ -125,12 +129,14 @@ def load_catalog(path: Path) -> dict[str, dict]:
             sku = (row.get("sku") or "").strip()
             if sku:
                 catalog[sku] = {
-                    "sku":          sku,
-                    "product_name": row.get("product_name", ""),
-                    "price":        row.get("price", ""),
-                    "search_terms": row.get("search_terms", ""),
-                    "date_added":   row.get("date_added", ""),
-                    "last_seen":    row.get("last_seen", ""),
+                    "sku":               sku,
+                    "product_name":      row.get("product_name", ""),
+                    "price":             row.get("price", ""),
+                    "search_terms":      row.get("search_terms", ""),
+                    "date_added":        row.get("date_added", ""),
+                    "last_seen":         row.get("last_seen", ""),
+                    "display_name_card": row.get("display_name_card", ""),
+                    "display_name_sms":  row.get("display_name_sms", ""),
                 }
     return catalog
 
@@ -164,7 +170,7 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
     else:
         rows = sorted(catalog.values(), key=lambda r: r["sku"])
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen"])
+        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -174,9 +180,11 @@ def _normalize_name(name: str) -> str:
     return re.sub(r"[®™\u00ae\u2122\u2020]", "", name).strip().lower()
 
 
-def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int, int, list[dict]]:
-    added = updated = old_sku_labeled = 0
-    new_part_items = []
+def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, list, list]:
+    added_items: list[dict] = []
+    updated_items: list[dict] = []
+    labeled_items: list[dict] = []
+    new_part_items: list[dict] = []
     scraped_skus = {item["sku"] for item in scraped}
 
     for item in scraped:
@@ -186,11 +194,11 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int, int
 
         today = date.today().isoformat()
         if sku not in catalog:
-            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today}
-            added += 1
+            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": ""}
+            added_items.append({"sku": sku, "product_name": name, "price": price_str})
         else:
             existing = catalog[sku]
-            changed = False
+            changes = []
             existing_name = existing["product_name"]
             # Don't overwrite if we've manually added a suffix (variant, Old SKU label, etc.)
             name_is_enriched = (
@@ -198,14 +206,14 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int, int
                 or existing_name.lower().startswith(name.lower() + " ")
             )
             if existing_name != name and not name_is_enriched:
+                changes.append({"field": "name", "before": existing_name, "after": name})
                 existing["product_name"] = name
-                changed = True
             if existing["price"] != price_str:
+                changes.append({"field": "price", "before": existing["price"], "after": price_str})
                 existing["price"] = price_str
-                changed = True
             existing["last_seen"] = today
-            if changed:
-                updated += 1
+            if changes:
+                updated_items.append({"sku": sku, "product_name": name, "changes": changes})
 
         if item.get("is_new_part"):
             new_part_items.append({"sku": sku, "product_name": name, "price": price_str})
@@ -223,10 +231,145 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[int, int, int
                 continue  # already labeled
             if _normalize_name(other["product_name"]) == target:
                 other["product_name"] = other["product_name"] + " (Old SKU)"
-                old_sku_labeled += 1
+                labeled_items.append({"sku": other_sku, "product_name": other["product_name"], "replaced_by": item["sku"]})
                 print(f"  Auto-labeled: {other_sku} → {other['product_name']}")
 
-    return added, updated, old_sku_labeled, new_part_items
+    return added_items, updated_items, labeled_items, new_part_items
+
+
+def _send_change_email(lang_reports: list[dict]) -> None:
+    try:
+        from dotenv import dotenv_values
+        import requests as _requests
+        env = dotenv_values(Path(__file__).parent / ".env")
+        api_key  = env.get("RESEND_API_KEY", "").strip()
+        mail_from = env.get("MAIL_FROM", "").strip()
+        if not api_key or not mail_from:
+            print("  (email skipped — RESEND_API_KEY or MAIL_FROM not set)")
+            return
+
+        today_str = date.today().strftime("%B %d, %Y")
+        any_changes = any(
+            r["added"] or r["updated"] or r["labeled"] or r["new_part"]
+            for r in lang_reports
+        )
+
+        rows_html = ""
+        for r in lang_reports:
+            lang_label = r["lang"].upper()
+            if not (r["added"] or r["updated"] or r["labeled"] or r["new_part"]):
+                rows_html += f"<tr><td colspan='3' style='padding:8px 12px;color:#888'>[{lang_label}] No changes.</td></tr>"
+                continue
+
+            rows_html += f"<tr><td colspan='3' style='padding:10px 12px 4px;font-weight:700;background:#f7f7f8'>[{lang_label}]</td></tr>"
+
+            for item in r["added"]:
+                rows_html += (
+                    f"<tr>"
+                    f"<td style='padding:6px 12px;color:#2e7d32'>NEW</td>"
+                    f"<td style='padding:6px 12px'>{item['sku']}</td>"
+                    f"<td style='padding:6px 12px'>{item['product_name']} — ${item['price']}</td>"
+                    f"</tr>"
+                )
+            for item in r["updated"]:
+                for ch in item["changes"]:
+                    if ch["field"] == "price":
+                        desc = f"Price: ${ch['before']} → ${ch['after']}"
+                    else:
+                        desc = f"Name: {ch['before']} → {ch['after']}"
+                    rows_html += (
+                        f"<tr>"
+                        f"<td style='padding:6px 12px;color:#e65100'>CHANGED</td>"
+                        f"<td style='padding:6px 12px'>{item['sku']}</td>"
+                        f"<td style='padding:6px 12px'>{desc}</td>"
+                        f"</tr>"
+                    )
+            for item in r["labeled"]:
+                rows_html += (
+                    f"<tr>"
+                    f"<td style='padding:6px 12px;color:#888'>OLD SKU</td>"
+                    f"<td style='padding:6px 12px'>{item['sku']}</td>"
+                    f"<td style='padding:6px 12px'>{item['product_name']} (replaced by {item['replaced_by']})</td>"
+                    f"</tr>"
+                )
+            seen_np: set[str] = set()
+            for item in r["new_part"]:
+                if item["sku"] not in seen_np:
+                    seen_np.add(item["sku"])
+                    rows_html += (
+                        f"<tr>"
+                        f"<td style='padding:6px 12px;color:#b71c1c'>⚠ NEW PART#</td>"
+                        f"<td style='padding:6px 12px'>{item['sku']}</td>"
+                        f"<td style='padding:6px 12px'>{item['product_name']} — check for unmatched old SKU</td>"
+                        f"</tr>"
+                    )
+
+        subject = f"MK Catalog Update — {today_str}" + ("  ⚠️ Changes detected" if any_changes else " — No changes")
+        html = f"""
+        <div style="font-family:system-ui,sans-serif;max-width:700px;margin:0 auto">
+          <h2 style="margin-bottom:4px">MK Catalog Update</h2>
+          <p style="color:#888;margin-top:0">{today_str}</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px">
+            <thead>
+              <tr style="border-bottom:2px solid #e6e6e6">
+                <th style="padding:8px 12px;text-align:left;width:110px">Type</th>
+                <th style="padding:8px 12px;text-align:left;width:110px">SKU</th>
+                <th style="padding:8px 12px;text-align:left">Detail</th>
+              </tr>
+            </thead>
+            <tbody>{rows_html}</tbody>
+          </table>
+        </div>
+        """
+
+        _requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"from": mail_from, "to": [OWNER_EMAIL], "subject": subject, "html": html},
+            timeout=15,
+        ).raise_for_status()
+        print(f"  Email sent to {OWNER_EMAIL}")
+    except Exception as e:
+        print(f"  (email failed: {e})")
+
+
+def _print_lang_report(lang: str, before: int, scraped: list, catalog: dict,
+                       added: list, updated: list, labeled: list, new_part: list, path: Path) -> None:
+    print(f"\n[{lang.upper()}] Done.")
+    print(f"  Catalog before : {before} SKUs")
+    print(f"  Scraped        : {len(scraped)} products")
+    print(f"  Total now      : {len(catalog)} SKUs")
+    print(f"  Saved to       : {path}")
+
+    if not (added or updated or labeled or new_part):
+        print("  No changes.")
+        return
+
+    if added:
+        print(f"\n  NEW ({len(added)}):")
+        for item in added:
+            print(f"    + {item['sku']}  {item['product_name']}  ${item['price']}")
+
+    if updated:
+        print(f"\n  CHANGED ({len(updated)}):")
+        for item in updated:
+            for ch in item["changes"]:
+                if ch["field"] == "price":
+                    print(f"    ~ {item['sku']}  price: ${ch['before']} → ${ch['after']}")
+                else:
+                    print(f"    ~ {item['sku']}  name: {ch['before']} → {ch['after']}")
+
+    if labeled:
+        print(f"\n  OLD SKU LABELED ({len(labeled)}):")
+        for item in labeled:
+            print(f"    ! {item['sku']}  {item['product_name']}  (replaced by {item['replaced_by']})")
+
+    if new_part:
+        seen: set[str] = set()
+        unique = [i for i in new_part if not (i["sku"] in seen or seen.add(i["sku"]))]
+        print(f"\n  ⚠️  NEW PART NUMBER ({len(unique)}) — verify old SKU was correctly labeled:")
+        for i in unique:
+            print(f"    ⚠  {i['sku']}  {i['product_name']}  ${i['price']}")
 
 
 def main(username: str, password: str) -> None:
@@ -245,6 +388,7 @@ def main(username: str, password: str) -> None:
 
         browser.close()
 
+    lang_reports = []
     for lang_cfg in LANGUAGES:
         lang    = lang_cfg["lang"]
         scraped = results[lang]
@@ -256,25 +400,14 @@ def main(username: str, password: str) -> None:
         path    = CATALOG_DIR / f"{lang}.csv"
         catalog = load_catalog(path)
         before  = len(catalog)
-        added, updated, old_sku_labeled, new_part_items = upsert(catalog, scraped)
+        added, updated, labeled, new_part = upsert(catalog, scraped)
         save_catalog(catalog, path, scraped_order=scraped)
 
-        print(f"\n[{lang.upper()}] Done.")
-        print(f"  Catalog before : {before} SKUs")
-        print(f"  Scraped        : {len(scraped)} products")
-        print(f"  Added          : {added}")
-        print(f"  Updated        : {updated}")
-        print(f"  Old SKU labels : {old_sku_labeled}")
-        print(f"  Total now      : {len(catalog)} SKUs")
-        print(f"  Saved to       : {path}")
+        _print_lang_report(lang, before, scraped, catalog, added, updated, labeled, new_part, path)
+        lang_reports.append({"lang": lang, "added": added, "updated": updated, "labeled": labeled, "new_part": new_part})
 
-        if new_part_items:
-            # Deduplicate by SKU (same item can appear under multiple categories)
-            seen: set[str] = set()
-            unique = [i for i in new_part_items if not (i["sku"] in seen or seen.add(i["sku"]))]
-            print(f"\n  ⚠️  New part number items ({len(unique)}) — check catalog for any unmatched old SKUs:")
-            for i in unique:
-                print(f"    {i['sku']}  {i['product_name']}  ${i['price']}")
+    print("\nSending change summary email...")
+    _send_change_email(lang_reports)
 
 
 if __name__ == "__main__":
