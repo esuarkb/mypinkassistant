@@ -82,12 +82,6 @@ def fetch_cosmetic_order_links(
 
     return page.evaluate("""
         () => {
-            // Build a header-name → column-index map from the visible header row.
-            const headers = [];
-            document.querySelectorAll('.order-list-header .order-list-col').forEach(col => {
-                headers.push(col.textContent.trim().replace(/\\.$/, ''));
-            });
-
             const results = [];
             document.querySelectorAll('.order-list-item').forEach(row => {
                 // Find the 8-digit order link
@@ -101,21 +95,15 @@ def fetch_cosmetic_order_links(
                 });
                 if (!orderNo) return;
 
-                // Read column values in DOM order
-                const colVals = [];
-                row.querySelectorAll('.order-list-col').forEach(col => {
-                    colVals.push(col.textContent.trim());
-                });
-
-                // Map header label → value
-                const data = {};
-                headers.forEach((h, i) => { if (h) data[h] = (colVals[i] || '').trim(); });
+                // Each column has a semantic class — read directly, no positional mapping.
+                const typeEl = row.querySelector('.order-list-type');
+                const consumerEl = row.querySelector('.consumer-order-list-number');
 
                 results.push({
                     order_no: orderNo,
                     href: href,
-                    order_type: data['Order Type'] || '',
-                    consumer_order_id: data['Consumer Order'] || '',
+                    order_type: typeEl ? typeEl.textContent.trim() : '',
+                    consumer_order_id: consumerEl ? consumerEl.textContent.trim() : '',
                 });
             });
 
