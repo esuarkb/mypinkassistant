@@ -162,15 +162,17 @@ def scrape_order_detail(page: Page, href: str) -> Dict:
     print(f"[Inventory] detail labels: {labels}")
 
     # Collect line items — each has data-sku and data-quantity attributes.
-    # InTouch renders each item twice: once in the visible product list and once
-    # in a hidden reorder panel. The hidden duplicates have empty inner_text().
-    # We skip them to avoid doubling every quantity.
+    # InTouch renders each item twice across two page sections. Deduplicate by
+    # SKU (first occurrence wins) since a single order cannot contain the same
+    # SKU more than once.
+    seen_skus: set = set()
     items = []
     for el in page.locator("div.order-product-line-item").all():
         try:
             sku = (el.get_attribute("data-sku") or "").strip()
             qty_str = (el.get_attribute("data-quantity") or "0").strip()
-            if sku and el.inner_text().strip():
+            if sku and sku not in seen_skus:
+                seen_skus.add(sku)
                 items.append({"sku": sku, "qty": max(0, int(qty_str or 0))})
         except Exception:
             continue
