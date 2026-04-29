@@ -1,16 +1,19 @@
 """
-Correction script — populates inventory_order_items from already-imported orders
-and rebuilds inventory.qty_on_hand from that data.
+Correction script — populates inventory_order_items from the last 90 days
+of cosmetic orders using the same logic as the nightly sync, then reports
+what was found so we can compare against on-hand counts.
 
 Run one consultant at a time:
     python fix_inventory_order_items.py <consultant_id>
-    python fix_inventory_order_items.py 1
+    python fix_inventory_order_items.py 9
 """
 import sys
+from datetime import datetime
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from dotenv import dotenv_values
 from cryptography.fernet import Fernet
+
 
 def main(consultant_id: int) -> None:
     env = dotenv_values(Path(__file__).parent / ".env.production")
@@ -32,124 +35,93 @@ def main(consultant_id: int) -> None:
         print(f"Consultant {consultant_id} not found.")
         return
     email, iu_user, iu_pass_enc, created_at = row
+    signup_date = created_at.date()
     iu_pass = fernet.decrypt(iu_pass_enc.encode()).decode()
     print(f"Consultant: {email} (id={consultant_id})")
     print(f"  InTouch user: {iu_user}")
-    print(f"  Signed up: {created_at.date()}")
+    print(f"  Signed up: {signup_date}")
 
-    # Orders to scrape: imported AFTER signup day, not already in order_items
-    cur.execute("""
-        SELECT imp.order_no
-        FROM inventory_intouch_imports imp
-        WHERE imp.consultant_id = %s
-          AND imp.imported_at::date > %s::date
-          AND imp.consumer_order_id = ''
-          AND imp.order_no NOT IN (
-              SELECT DISTINCT order_no FROM inventory_order_items
-              WHERE consultant_id = %s
-          )
-        ORDER BY imp.imported_at
-    """, (consultant_id, created_at, consultant_id))
-    orders_to_scrape = [r[0] for r in cur.fetchall()]
-    print(f"\nOrders to scrape: {len(orders_to_scrape)}")
-    for o in orders_to_scrape:
-        print(f"  {o}")
+    sys.path.insert(0, str(Path(__file__).parent))
+    from playwright_automation.inventory_import import (
+        login_order_site, fetch_cosmetic_order_links, scrape_order_detail
+    )
 
-    if not orders_to_scrape:
-        print("Nothing to scrape.")
-    else:
-        # Scrape each order and store line items
-        sys.path.insert(0, str(Path(__file__).parent / "playwright_automation"))
-        from inventory_import import login_order_site, scrape_order_detail
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        login_order_site(page, iu_user, iu_pass)
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            login_order_site(page, iu_user, iu_pass)
+        order_links = fetch_cosmetic_order_links(page, "days90")
+        print(f"\nOrders on 90-day cosmetic list: {len(order_links)}")
 
-            for order_no in orders_to_scrape:
-                # Find the order link on the 365-day list
-                from playwright_automation.inventory_import import ORDER_SITE_BASE, ORDER_TYPE_COSMETIC
-                search_url = (
-                    f"{ORDER_SITE_BASE}/orders?lang=en_US"
-                    f"&placedFor=yourself&orderDate=days90"
-                    f"&orderType={ORDER_TYPE_COSMETIC}"
-                )
-                page.goto(search_url, wait_until="domcontentloaded")
+        # Clear existing stock items for this consultant before rebuilding
+        cur.execute("DELETE FROM inventory_order_items WHERE consultant_id = %s", (consultant_id,))
+        conn.commit()
+
+        saved = 0
+        skipped = []
+
+        for link in order_links:
+            order_no = link["order_no"]
+            consumer_order_id = link.get("consumer_order_id", "")
+
+            if consumer_order_id:
+                skipped.append(f"  [{order_no}] skipping — customer order")
+                continue
+
+            detail = scrape_order_detail(page, link["href"])
+            order_type = detail["order_type"].lower()
+            order_source = detail["order_source"].lower()
+            order_date_str = detail.get("order_date", "")
+
+            if order_date_str:
                 try:
-                    page.wait_for_load_state("networkidle", timeout=12000)
-                except Exception:
-                    pass
-                page.wait_for_timeout(2000)
-
-                href = None
-                for link in page.locator("a").all():
-                    try:
-                        text = (link.text_content() or "").strip()
-                        h = link.get_attribute("href") or ""
-                        if text == order_no and "orderdetails" in h:
-                            href = h
-                            break
-                    except Exception:
+                    order_date = datetime.strptime(order_date_str, "%m/%d/%Y").date()
+                    if order_date < signup_date:
+                        skipped.append(f"  [{order_no}] skipping — order date {order_date} before signup")
                         continue
+                except ValueError:
+                    pass
 
-                if not href:
-                    print(f"  [{order_no}] not found on order list — skipping")
-                    continue
+            if order_type != "cosmetic":
+                skipped.append(f"  [{order_no}] skipping — type={detail['order_type']!r}")
+                continue
+            if order_source == "cds":
+                skipped.append(f"  [{order_no}] skipping — CDS")
+                continue
+            if not detail["items"]:
+                skipped.append(f"  [{order_no}] skipping — no items found")
+                continue
 
-                detail = scrape_order_detail(page, href)
-                order_type = detail["order_type"].lower()
-                order_source = detail["order_source"].lower()
-                items = detail["items"]
+            cur.executemany(
+                "INSERT INTO inventory_order_items (consultant_id, order_no, sku, qty) VALUES (%s, %s, %s, %s)",
+                [(consultant_id, order_no, item["sku"], item["qty"]) for item in detail["items"]]
+            )
+            conn.commit()
+            total_qty = sum(i["qty"] for i in detail["items"])
+            print(f"  [{order_no}] saved {len(detail['items'])} SKUs, {total_qty} qty  (date={order_date_str})")
+            saved += 1
 
-                # Skip orders placed before the consultant signed up
-                from datetime import datetime
-                order_date_str = detail.get("order_date", "")
-                if order_date_str:
-                    try:
-                        order_date = datetime.strptime(order_date_str, "%m/%d/%Y").date()
-                        if order_date < created_at.date():
-                            print(f"  [{order_no}] skipping — order date {order_date} is before signup {created_at.date()}")
-                            continue
-                    except ValueError:
-                        pass
+        browser.close()
 
-                if order_type != "cosmetic":
-                    print(f"  [{order_no}] skipping — type={detail['order_type']!r}")
-                    continue
-                if order_source == "cds":
-                    print(f"  [{order_no}] skipping — CDS")
-                    continue
-                if not items:
-                    print(f"  [{order_no}] no items found — skipping")
-                    continue
+    for s in skipped:
+        print(s)
 
-                # Save line items
-                cur.execute(
-                    "DELETE FROM inventory_order_items WHERE consultant_id = %s AND order_no = %s",
-                    (consultant_id, order_no)
-                )
-                cur.executemany(
-                    "INSERT INTO inventory_order_items (consultant_id, order_no, sku, qty) VALUES (%s, %s, %s, %s)",
-                    [(consultant_id, order_no, item["sku"], item["qty"]) for item in items]
-                )
-                conn.commit()
-                total_qty = sum(i["qty"] for i in items)
-                print(f"  [{order_no}] saved {len(items)} SKUs, {total_qty} total qty  (type={detail['order_type']!r})")
-
-            browser.close()
-
-    # Show what we now have in inventory_order_items (stock items)
     cur.execute("""
         SELECT COUNT(DISTINCT order_no), COUNT(*), SUM(qty)
         FROM inventory_order_items WHERE consultant_id = %s
     """, (consultant_id,))
     r = cur.fetchone()
     print(f"\nStock items stored: {r[0]} stock orders, {r[1]} SKU rows, {r[2]} total qty")
-    print("\nStep 1 complete. Verify stock items before touching on-hand counts.")
 
+    cur.execute("SELECT COUNT(*), SUM(qty_on_hand) FROM inventory WHERE consultant_id = %s", (consultant_id,))
+    r = cur.fetchone()
+    print(f"Current on-hand:    {r[0]} SKUs, {r[1]} total qty")
+
+    print("\nStep 1 complete. Verify stock items before touching on-hand counts.")
     conn.close()
-    print("\nDone.")
+    print("Done.")
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
