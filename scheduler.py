@@ -17,10 +17,7 @@ PH = "%s" if is_postgres() else "?"
 # Suppress scheduling for consultants with this many consecutive login failures
 LOGIN_FAILURE_LIMIT = 2
 
-# Consultant emails that should never get IMPORT_INVENTORY_ORDERS queued.
-# briankrause is a screenshot/test account that shares InTouch credentials
-# with akrause.marykay@gmail.com — importing for both would double inventory.
-SKIP_INVENTORY_IMPORT = {"briankrause@gmail.com"}
+SKIP_INVENTORY_IMPORT: set = set()
 
 
 def _has_pending_job(cur, consultant_id: int, job_type: str) -> bool:
