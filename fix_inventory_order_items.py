@@ -72,7 +72,7 @@ def main(consultant_id: int) -> None:
                 from playwright_automation.inventory_import import ORDER_SITE_BASE, ORDER_TYPE_COSMETIC
                 search_url = (
                     f"{ORDER_SITE_BASE}/orders?lang=en_US"
-                    f"&placedFor=yourself&orderDate=days365"
+                    f"&placedFor=yourself&orderDate=days90"
                     f"&orderType={ORDER_TYPE_COSMETIC}"
                 )
                 page.goto(search_url, wait_until="domcontentloaded")
