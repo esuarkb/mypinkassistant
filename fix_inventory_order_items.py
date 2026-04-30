@@ -47,7 +47,7 @@ def main(consultant_id: int) -> None:
     )
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         page = browser.new_page()
         login_order_site(page, iu_user, iu_pass)
 

@@ -54,6 +54,15 @@ def login_order_site(page: Page, username: str, password: str) -> None:
         # No login form — already authenticated (cookies shared with MyCustomers session)
         pass
 
+    # Handle Salesforce "click to continue" interstitial if present
+    try:
+        continue_btn = page.get_by_role("button", name="Click to continue")
+        continue_btn.wait_for(state="visible", timeout=3000)
+        continue_btn.click()
+        page.wait_for_timeout(2000)
+    except PlaywrightTimeoutError:
+        pass
+
 
 def fetch_cosmetic_order_links(
     page: Page, date_range: str = "days90"
@@ -79,6 +88,7 @@ def fetch_cosmetic_order_links(
         page.wait_for_load_state("networkidle", timeout=15000)
     except PlaywrightTimeoutError:
         pass
+    page.wait_for_timeout(2000)
 
     return page.evaluate("""
         () => {
