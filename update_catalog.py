@@ -104,12 +104,8 @@ def scrape_products(page, opos_url: str) -> list[dict]:
                 }
                 if (variant) name = name + ' - ' + variant;
 
-                // Detect "new part number" indicator on the row
-                const rowText = row.textContent || '';
-                const isNewPart = rowText.toLowerCase().includes('new part number');
-
                 if (sku && name && price > 0) {
-                    results.push({ sku, product_name: name, price, is_new_part: isNewPart });
+                    results.push({ sku, product_name: name, price });
                 }
             });
             return results;
@@ -180,11 +176,10 @@ def _normalize_name(name: str) -> str:
     return re.sub(r"[®™\u00ae\u2122\u2020]", "", name).strip().lower()
 
 
-def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, list, list]:
+def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, list]:
     added_items: list[dict] = []
     updated_items: list[dict] = []
     labeled_items: list[dict] = []
-    new_part_items: list[dict] = []
     scraped_skus = {item["sku"] for item in scraped}
 
     for item in scraped:
@@ -215,13 +210,11 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
             if changes:
                 updated_items.append({"sku": sku, "product_name": name, "changes": changes})
 
-        if item.get("is_new_part"):
-            new_part_items.append({"sku": sku, "product_name": name, "price": price_str})
-
-    # Exact-match label: for each new part number item, find the catalog entry with the
-    # same product name (normalized) that is no longer in the OPOS and label it (Old SKU)
-    for item in new_part_items:
+    # For every newly added SKU, find any existing catalog entry with the same
+    # normalized name that's no longer in OPOS → label it (Old SKU) and copy display names
+    for item in added_items:
         target = _normalize_name(item["product_name"])
+        new_entry = catalog[item["sku"]]
         for other_sku, other in catalog.items():
             if other_sku == item["sku"]:
                 continue
@@ -230,11 +223,15 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
             if "(Old SKU)" in other["product_name"]:
                 continue  # already labeled
             if _normalize_name(other["product_name"]) == target:
+                if not new_entry.get("display_name_card"):
+                    new_entry["display_name_card"] = other.get("display_name_card", "")
+                if not new_entry.get("display_name_sms"):
+                    new_entry["display_name_sms"] = other.get("display_name_sms", "")
                 other["product_name"] = other["product_name"] + " (Old SKU)"
                 labeled_items.append({"sku": other_sku, "product_name": other["product_name"], "replaced_by": item["sku"]})
                 print(f"  Auto-labeled: {other_sku} → {other['product_name']}")
 
-    return added_items, updated_items, labeled_items, new_part_items
+    return added_items, updated_items, labeled_items
 
 
 def _send_change_email(lang_reports: list[dict]) -> None:
@@ -250,14 +247,14 @@ def _send_change_email(lang_reports: list[dict]) -> None:
 
         today_str = date.today().strftime("%B %d, %Y")
         any_changes = any(
-            r["added"] or r["updated"] or r["labeled"] or r["new_part"]
+            r["added"] or r["updated"] or r["labeled"]
             for r in lang_reports
         )
 
         rows_html = ""
         for r in lang_reports:
             lang_label = r["lang"].upper()
-            if not (r["added"] or r["updated"] or r["labeled"] or r["new_part"]):
+            if not (r["added"] or r["updated"] or r["labeled"]):
                 rows_html += f"<tr><td colspan='3' style='padding:8px 12px;color:#888'>[{lang_label}] No changes.</td></tr>"
                 continue
 
@@ -292,17 +289,6 @@ def _send_change_email(lang_reports: list[dict]) -> None:
                     f"<td style='padding:6px 12px'>{item['product_name']} (replaced by {item['replaced_by']})</td>"
                     f"</tr>"
                 )
-            seen_np: set[str] = set()
-            for item in r["new_part"]:
-                if item["sku"] not in seen_np:
-                    seen_np.add(item["sku"])
-                    rows_html += (
-                        f"<tr>"
-                        f"<td style='padding:6px 12px;color:#b71c1c'>⚠ NEW PART#</td>"
-                        f"<td style='padding:6px 12px'>{item['sku']}</td>"
-                        f"<td style='padding:6px 12px'>{item['product_name']} — check for unmatched old SKU</td>"
-                        f"</tr>"
-                    )
 
         subject = f"MK Catalog Update — {today_str}" + ("  ⚠️ Changes detected" if any_changes else " — No changes")
         html = f"""
@@ -333,15 +319,38 @@ def _send_change_email(lang_reports: list[dict]) -> None:
         print(f"  (email failed: {e})")
 
 
+def _apply_en_replacements(en_labeled: list[dict], es_catalog: dict[str, dict]) -> list[dict]:
+    """Mirror EN-detected SKU replacements onto the ES catalog by SKU number."""
+    applied = []
+    for item in en_labeled:
+        old_sku = item["sku"]
+        new_sku = item["replaced_by"]
+        if old_sku not in es_catalog:
+            continue
+        if "(Old SKU)" in es_catalog[old_sku]["product_name"]:
+            continue  # already handled
+        if new_sku in es_catalog:
+            new_es = es_catalog[new_sku]
+            old_es = es_catalog[old_sku]
+            if not new_es.get("display_name_card"):
+                new_es["display_name_card"] = old_es.get("display_name_card", "")
+            if not new_es.get("display_name_sms"):
+                new_es["display_name_sms"] = old_es.get("display_name_sms", "")
+        es_catalog[old_sku]["product_name"] += " (Old SKU)"
+        applied.append({"sku": old_sku, "product_name": es_catalog[old_sku]["product_name"], "replaced_by": new_sku})
+        print(f"  [ES] Mirrored label: {old_sku} → {es_catalog[old_sku]['product_name']}")
+    return applied
+
+
 def _print_lang_report(lang: str, before: int, scraped: list, catalog: dict,
-                       added: list, updated: list, labeled: list, new_part: list, path: Path) -> None:
+                       added: list, updated: list, labeled: list, path: Path) -> None:
     print(f"\n[{lang.upper()}] Done.")
     print(f"  Catalog before : {before} SKUs")
     print(f"  Scraped        : {len(scraped)} products")
     print(f"  Total now      : {len(catalog)} SKUs")
     print(f"  Saved to       : {path}")
 
-    if not (added or updated or labeled or new_part):
+    if not (added or updated or labeled):
         print("  No changes.")
         return
 
@@ -364,13 +373,6 @@ def _print_lang_report(lang: str, before: int, scraped: list, catalog: dict,
         for item in labeled:
             print(f"    ! {item['sku']}  {item['product_name']}  (replaced by {item['replaced_by']})")
 
-    if new_part:
-        seen: set[str] = set()
-        unique = [i for i in new_part if not (i["sku"] in seen or seen.add(i["sku"]))]
-        print(f"\n  ⚠️  NEW PART NUMBER ({len(unique)}) — verify old SKU was correctly labeled:")
-        for i in unique:
-            print(f"    ⚠  {i['sku']}  {i['product_name']}  ${i['price']}")
-
 
 def main(username: str, password: str) -> None:
     with sync_playwright() as p:
@@ -389,25 +391,39 @@ def main(username: str, password: str) -> None:
         browser.close()
 
     lang_reports = []
-    for lang_cfg in LANGUAGES:
-        lang    = lang_cfg["lang"]
-        scraped = results[lang]
 
-        if not scraped:
-            print(f"\n[{lang.upper()}] No products found — skipping.")
-            continue
+    # ── EN first: detect replacements here ──
+    en_scraped = results.get("en", [])
+    if not en_scraped:
+        print("\n[EN] No products found — skipping.")
+        en_labeled = []
+    else:
+        en_path    = CATALOG_DIR / "en.csv"
+        en_catalog = load_catalog(en_path)
+        en_before  = len(en_catalog)
+        en_added, en_updated, en_labeled = upsert(en_catalog, en_scraped)
+        save_catalog(en_catalog, en_path, scraped_order=en_scraped)
+        _print_lang_report("en", en_before, en_scraped, en_catalog, en_added, en_updated, en_labeled, en_path)
+        lang_reports.append({"lang": "en", "added": en_added, "updated": en_updated, "labeled": en_labeled})
 
-        path    = CATALOG_DIR / f"{lang}.csv"
-        catalog = load_catalog(path)
-        before  = len(catalog)
-        added, updated, labeled, new_part = upsert(catalog, scraped)
-        save_catalog(catalog, path, scraped_order=scraped)
-
-        _print_lang_report(lang, before, scraped, catalog, added, updated, labeled, new_part, path)
-        lang_reports.append({"lang": lang, "added": added, "updated": updated, "labeled": labeled, "new_part": new_part})
+    # ── ES: update prices/names, then mirror EN replacements ──
+    es_scraped = results.get("es", [])
+    if not es_scraped:
+        print("\n[ES] No products found — skipping.")
+    else:
+        es_path    = CATALOG_DIR / "es.csv"
+        es_catalog = load_catalog(es_path)
+        es_before  = len(es_catalog)
+        es_added, es_updated, es_labeled = upsert(es_catalog, es_scraped)
+        if en_labeled:
+            es_mirrored = _apply_en_replacements(en_labeled, es_catalog)
+            es_labeled  = es_labeled + es_mirrored
+        save_catalog(es_catalog, es_path, scraped_order=es_scraped)
+        _print_lang_report("es", es_before, es_scraped, es_catalog, es_added, es_updated, es_labeled, es_path)
+        lang_reports.append({"lang": "es", "added": es_added, "updated": es_updated, "labeled": es_labeled})
 
     any_changes = any(
-        r["added"] or r["updated"] or r["labeled"] or r["new_part"]
+        r["added"] or r["updated"] or r["labeled"]
         for r in lang_reports
     )
     if any_changes:
