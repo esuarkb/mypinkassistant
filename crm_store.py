@@ -264,7 +264,24 @@ def find_customers_by_name(
     return [r for score, r in scored if score >= 75][:limit]
 
 
-def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = None) -> str:
+def get_pcp_enrolled(cur, consultant_id: int, customer_id: int) -> bool:
+    try:
+        from db import is_postgres
+        PH = "%s" if is_postgres() else "?"
+        cur.execute(f"""
+            SELECT 1 FROM pcp_enrollments
+            WHERE customer_id = {PH}
+              AND consultant_id = {PH}
+              AND quarter = (SELECT MAX(quarter) FROM pcp_enrollments WHERE consultant_id = {PH})
+              AND enrolled = 1
+            LIMIT 1
+        """, (customer_id, consultant_id, consultant_id))
+        return cur.fetchone() is not None
+    except Exception:
+        return False
+
+
+def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = None, pcp_enrolled: bool = False) -> str:
     import re
     import calendar
     import html
@@ -315,8 +332,9 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
         else:
             birthday = html.escape(bday_raw)
 
+    pcp_badge = " · <span style='color:#d63384;font-size:0.85em'>PCP</span>" if pcp_enrolled else ""
     lines = [
-        f"<strong>{full_name}</strong>",
+        f"<strong>{full_name}</strong>{pcp_badge}",
         f"• Email: {email_val}",
         f"• Phone: {phone_val}",
         f"• Address: {address_val}",

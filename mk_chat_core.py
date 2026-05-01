@@ -792,7 +792,7 @@ def _append_unit_suffix_if_present(street: str, extra: str) -> tuple:
 
     return street, ""
 
-def parse_address_line(s: str) -> Optional[Dict[str, str]]:
+def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
     """
     Best-effort parse of an address line into:
       Street, City, State, Postal Code
@@ -921,6 +921,23 @@ def parse_address_line(s: str) -> Optional[Dict[str, str]]:
 
     # If it has a zip but didn't match full patterns, don't guess (avoid bad splits)
     return None
+
+
+def parse_address_line(s: str) -> Optional[Dict[str, str]]:
+    result = _parse_address_line_raw(s)
+    if result:
+        if result.get("Street"):
+            result["Street"] = _normalize_street(result["Street"])
+        if result.get("Street2"):
+            result["Street2"] = _normalize_street(result["Street2"])
+    return result
+
+
+def _normalize_street(s: str) -> str:
+    titled = s.title()
+    # Keep ordinal suffixes lowercase: "5Th" → "5th", "3Rd" → "3rd"
+    return re.sub(r'\b(\d+)(St|Nd|Rd|Th)\b', lambda m: m.group(1) + m.group(2).lower(), titled)
+
 
 def normalize_city(city: str) -> str:
     s = (city or "").strip()
@@ -1690,7 +1707,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
                 if "," in addr:
                     chunks = [x.strip().strip(",") for x in addr.split(",") if x.strip()]
                     if len(chunks) >= 2:
-                        c["Street"] = chunks[0]
+                        c["Street"] = _normalize_street(chunks[0])
                         c["City"] = chunks[1]
                         if len(chunks) >= 3:
                             stzip = chunks[2]
@@ -1704,7 +1721,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
                         continue
 
                 # Final fallback: at least save it
-                c["Street"] = addr
+                c["Street"] = _normalize_street(addr)
                 notes.append("Address updated (street)")
             continue
 
@@ -3067,9 +3084,12 @@ class MKChatEngine:
                     with tx() as (conn, cur):
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
                         last_order = None
+                        pcp_enrolled = False
                         if len(matches) == 1:
                             orders = get_recent_orders_for_customer(cur, matches[0]["id"], limit=1)
                             last_order = orders[0] if orders else None
+                            from crm_store import get_pcp_enrolled
+                            pcp_enrolled = get_pcp_enrolled(cur, consultant_id, matches[0]["id"])
 
                     if len(matches) == 0:
                         return ChatReply(ui["no_customer_found_yet"].format(name=guess))
@@ -3080,7 +3100,7 @@ class MKChatEngine:
                         state["last_ref_customer_name"] = None
                         state["last_customer"] = None
                         save_session_state(state, session_id=sid)
-                        return ChatReply(format_customer_card(c, last_order=last_order))
+                        return ChatReply(format_customer_card(c, last_order=last_order, pcp_enrolled=pcp_enrolled))
 
                     # Multiple matches → trigger picker
                     top = matches[:3]
@@ -3132,12 +3152,14 @@ class MKChatEngine:
                 if action == "info":
                     with tx() as (conn, cur):
                         orders = get_recent_orders_for_customer(cur, c["id"], limit=1)
+                        from crm_store import get_pcp_enrolled
+                        pcp_enrolled = get_pcp_enrolled(cur, consultant_id, c["id"])
                     last_order = orders[0] if orders else None
                     state["last_ref_customer_id"] = None
                     state["last_ref_customer_name"] = None
                     state["last_customer"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply(format_customer_card(c, last_order=last_order))
+                    return ChatReply(format_customer_card(c, last_order=last_order, pcp_enrolled=pcp_enrolled))
 
                 if action == "orders":
                     with tx() as (conn, cur):

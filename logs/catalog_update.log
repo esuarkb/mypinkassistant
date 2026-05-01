@@ -1,0 +1,46 @@
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 388 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Clicking Expand All...
+  Warning: could not click Expand All: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Expand All")
+
+  Extracting products...
+  Found 388 products.
+  Auto-labeled: 10208384 → TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30 (Old SKU)
+
+[EN] Done.
+  Catalog before : 485 SKUs
+  Scraped        : 388 products
+  Total now      : 486 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+
+  NEW (1):
+    + 10257266  TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30  $54.00
+
+  OLD SKU LABELED (1):
+    ! 10208384  TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30 (Old SKU)  (replaced by 10257266)
+
+  ⚠️  NEW PART NUMBER (2) — verify old SKU was correctly labeled:
+    ⚠  10254234  TimeWise 4-in-1 Cleanser - Normal/Dry  $26.00
+    ⚠  10257266  TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30  $54.00
+
+[ES] Done.
+  Catalog before : 485 SKUs
+  Scraped        : 388 products
+  Total now      : 486 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  NEW (1):
+    + 10257266  TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30  $54.00
+
+Sending change summary email...
+  Email sent to briankrause@gmail.com

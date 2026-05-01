@@ -157,6 +157,19 @@ CREATE TABLE IF NOT EXISTS inventory_intouch_imports (
   imported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (consultant_id, order_no)
 );
+
+CREATE TABLE IF NOT EXISTS pcp_enrollments (
+  id            BIGSERIAL PRIMARY KEY,
+  consultant_id INTEGER NOT NULL,
+  customer_id   INTEGER,
+  pcp_name      TEXT    NOT NULL,
+  quarter       TEXT    NOT NULL,
+  enrolled      BOOLEAN NOT NULL,
+  scraped_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (consultant_id, pcp_name, quarter)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pcp_enrollments_consultant ON pcp_enrollments(consultant_id, quarter);
 """
 
 

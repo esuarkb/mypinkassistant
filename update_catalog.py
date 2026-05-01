@@ -406,12 +406,27 @@ def main(username: str, password: str) -> None:
         _print_lang_report(lang, before, scraped, catalog, added, updated, labeled, new_part, path)
         lang_reports.append({"lang": lang, "added": added, "updated": updated, "labeled": labeled, "new_part": new_part})
 
-    print("\nSending change summary email...")
-    _send_change_email(lang_reports)
+    any_changes = any(
+        r["added"] or r["updated"] or r["labeled"] or r["new_part"]
+        for r in lang_reports
+    )
+    if any_changes:
+        print("\nSending change summary email...")
+        _send_change_email(lang_reports)
+    else:
+        print("\nNo changes — skipping email.")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python update_catalog.py <consultant_number> <password>")
-        sys.exit(1)
-    main(sys.argv[1], sys.argv[2])
+    if len(sys.argv) == 3:
+        main(sys.argv[1], sys.argv[2])
+    else:
+        from dotenv import dotenv_values
+        _env = dotenv_values(Path(__file__).parent / ".env")
+        _number = _env.get("INTOUCH_USER", "").strip()
+        _password = _env.get("INTOUCH_PASS", "").strip()
+        if not _number or not _password:
+            print("Usage: python update_catalog.py <consultant_number> <password>")
+            print("Or set INTOUCH_USER and INTOUCH_PASS in .env")
+            sys.exit(1)
+        main(_number, _password)

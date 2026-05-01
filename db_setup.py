@@ -164,6 +164,21 @@ CREATE TABLE IF NOT EXISTS customer_birthday_followups (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_birthday_followups_consultant ON customer_birthday_followups(consultant_id, year)")
 
+# ---- pcp enrollments ----
+cur.execute("""
+CREATE TABLE IF NOT EXISTS pcp_enrollments (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL,
+  customer_id   INTEGER,
+  pcp_name      TEXT    NOT NULL,
+  quarter       TEXT    NOT NULL,
+  enrolled      INTEGER NOT NULL,
+  scraped_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (consultant_id, pcp_name, quarter)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_pcp_enrollments_consultant ON pcp_enrollments(consultant_id, quarter)")
+
 conn.commit()
 conn.close()
 
