@@ -107,6 +107,24 @@ IDLE_GRACE_SECONDS = 45
 class _RequeueSilently(Exception):
     """Raised to skip failure handling when a job has been requeued for a silent retry."""
 
+
+def _load_predecessor_map() -> dict[str, str]:
+    """Return {new_sku: old_sku} for SKUs that have a known predecessor in the catalog."""
+    import csv as _csv
+    catalog_path = Path(__file__).parent / "catalog" / "en.csv"
+    result: dict[str, str] = {}
+    if not catalog_path.exists():
+        return result
+    try:
+        with open(catalog_path, newline="", encoding="utf-8") as f:
+            for row in _csv.DictReader(f):
+                pred = (row.get("predecessor_sku") or "").strip()
+                if pred:
+                    result[row["sku"].strip()] = pred
+    except Exception:
+        pass
+    return result
+
 # Order batching controls (tweak via env vars without code changes)
 MAX_ORDER_ROWS_PER_BATCH = int(os.getenv("MAX_ORDER_ROWS_PER_BATCH", "25"))
 ORDER_BATCH_GRACE_MS = int(os.getenv("ORDER_BATCH_GRACE_MS", "800"))  # brief window to catch rapid-fire items
@@ -657,6 +675,45 @@ def main():
                                 for jid in _retry_ids:
                                     requeue_job(jid, "Queued")
                                 continue
+
+                            # After 3 failed attempts, try predecessor SKU fallback for orders
+                            if job_type == "NEW_ORDER_ROW":
+                                _pred_map = _load_predecessor_map()
+                                if _pred_map:
+                                    _sw_jobs: list[tuple[int, str]] = []
+                                    _swapped_any = False
+                                    try:
+                                        _sw_conn = connect()
+                                        _sw_cur = _sw_conn.cursor()
+                                        for _jid in job_ids:
+                                            _sw_cur.execute(f"SELECT payload_json FROM jobs WHERE id={PH_W}", (_jid,))
+                                            _prow = _sw_cur.fetchone()
+                                            _pjson = (_prow[0] if _prow and not hasattr(_prow, "get") else (_prow.get("payload_json") if _prow else "{}")) or "{}"
+                                            _p = json.loads(_pjson)
+                                            if not _p.get("_sku_swapped"):
+                                                _old_sku = _pred_map.get((_p.get("SKU") or "").strip())
+                                                if _old_sku:
+                                                    _p["SKU"] = _old_sku
+                                                    _p["_sku_swapped"] = True
+                                                    _swapped_any = True
+                                                    print(f"[Worker] Predecessor fallback: swapped to {_old_sku} on job {_jid}")
+                                            _sw_jobs.append((_jid, json.dumps(_p)))
+                                        if _swapped_any:
+                                            for _jid, _new_pjson in _sw_jobs:
+                                                if is_postgres():
+                                                    _sw_cur.execute(f"UPDATE jobs SET status='queued', error='', status_msg='Retrying with predecessor SKU…', attempts=0, claimed_by=NULL, claimed_at=NULL, started_at=NULL, payload_json={PH_W} WHERE id={PH_W}", (_new_pjson, _jid))
+                                                else:
+                                                    _sw_cur.execute(f"UPDATE jobs SET status='queued', error='', status_msg='Retrying with predecessor SKU…', attempts=0, claimed_by='', claimed_at='', started_at='', payload_json={PH_W} WHERE id={PH_W}", (_new_pjson, _jid))
+                                            _sw_conn.commit()
+                                            print(f"[Worker] Predecessor fallback — requeued {len(_sw_jobs)} job(s)")
+                                            continue
+                                    except Exception as _sw_err:
+                                        print(f"[Worker] Predecessor swap error: {_sw_err}")
+                                    finally:
+                                        try:
+                                            _sw_conn.close()
+                                        except Exception:
+                                            pass
 
                         # Default user-facing message should be safe and non-technical
                         err_text = "Something went wrong submitting this. Please try again."

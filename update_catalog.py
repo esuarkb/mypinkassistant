@@ -133,6 +133,7 @@ def load_catalog(path: Path) -> dict[str, dict]:
                     "last_seen":         row.get("last_seen", ""),
                     "display_name_card": row.get("display_name_card", ""),
                     "display_name_sms":  row.get("display_name_sms", ""),
+                    "predecessor_sku":   row.get("predecessor_sku", ""),
                 }
     return catalog
 
@@ -166,7 +167,7 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
     else:
         rows = sorted(catalog.values(), key=lambda r: r["sku"])
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms"])
+        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -189,7 +190,7 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
 
         today = date.today().isoformat()
         if sku not in catalog:
-            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": ""}
+            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": ""}
             added_items.append({"sku": sku, "product_name": name, "price": price_str})
         else:
             existing = catalog[sku]
@@ -227,6 +228,7 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
                     new_entry["display_name_card"] = other.get("display_name_card", "")
                 if not new_entry.get("display_name_sms"):
                     new_entry["display_name_sms"] = other.get("display_name_sms", "")
+                new_entry["predecessor_sku"] = other_sku
                 other["product_name"] = other["product_name"] + " (Old SKU)"
                 labeled_items.append({"sku": other_sku, "product_name": other["product_name"], "replaced_by": item["sku"]})
                 print(f"  Auto-labeled: {other_sku} → {other['product_name']}")
