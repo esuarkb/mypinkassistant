@@ -676,10 +676,15 @@ def main():
                                     requeue_job(jid, "Queued")
                                 continue
 
-                            # After 3 failed attempts, try predecessor SKU fallback for orders
+                            # After 3 failed attempts, try predecessor SKU fallback for orders.
+                            # Only swap the specific failing SKU (extracted from the error message)
+                            # so other jobs in the batch retain their swap slot for future rounds.
                             if job_type == "NEW_ORDER_ROW":
                                 _pred_map = _load_predecessor_map()
                                 if _pred_map:
+                                    import re as _re
+                                    _sku_match = _re.search(r'locator\("text=(\d+)"\)', raw_err)
+                                    _failing_sku = _sku_match.group(1) if _sku_match else None
                                     _sw_jobs: list[tuple[int, str]] = []
                                     _swapped_any = False
                                     try:
@@ -690,13 +695,15 @@ def main():
                                             _prow = _sw_cur.fetchone()
                                             _pjson = (_prow[0] if _prow and not hasattr(_prow, "get") else (_prow.get("payload_json") if _prow else "{}")) or "{}"
                                             _p = json.loads(_pjson)
-                                            if not _p.get("_sku_swapped"):
-                                                _old_sku = _pred_map.get((_p.get("SKU") or "").strip())
+                                            _cur_sku = (_p.get("SKU") or "").strip()
+                                            # Only swap the job whose SKU matches the failing SKU
+                                            if _cur_sku == _failing_sku and not _p.get("_sku_swapped"):
+                                                _old_sku = _pred_map.get(_cur_sku)
                                                 if _old_sku:
                                                     _p["SKU"] = _old_sku
                                                     _p["_sku_swapped"] = True
                                                     _swapped_any = True
-                                                    print(f"[Worker] Predecessor fallback: swapped to {_old_sku} on job {_jid}")
+                                                    print(f"[Worker] Predecessor fallback: {_cur_sku} → {_old_sku} on job {_jid}")
                                             _sw_jobs.append((_jid, json.dumps(_p)))
                                         if _swapped_any:
                                             for _jid, _new_pjson in _sw_jobs:
