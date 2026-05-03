@@ -298,7 +298,21 @@ chat.addEventListener("click", function(e) {
     var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     if (isMobile) {
+        // Fire completion before opening SMS so the fetch isn't cancelled by the navigation
+        if (!btn.classList.contains("done")) {
+            btn.classList.add("done");
+            btn.textContent = "✓";
+            var mPayload = cardType === "birthday"
+                ? { card_type: "birthday", customer_id: customerId }
+                : { card_type: "order", order_id: orderId, followup_window: followupWindow };
+            fetch("/followup/complete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(mPayload)
+            }).catch(function() {});
+        }
         window.location.href = card.dataset.sms;
+        return;
     } else {
         var existing = card.querySelector(".followup-desktop-panel");
         if (existing) {
