@@ -855,6 +855,124 @@ def get_top_customers(cur, consultant_id: int, limit: int = 5, start_date=None, 
     return _rows_to_dicts(cur)
 
 
+def _lapsed_base_query(cur, consultant_id: int, days: int, min_orders: int = 1, limit: int = 100) -> list:
+    """
+    Returns lapsed customers with order stats. Shared by VIP and fill queries.
+    min_orders: 2 for VIP pass, 1 for fill pass.
+    """
+    is_sqlite = _is_sqlite_cursor(cur)
+    if is_sqlite:
+        cur.execute("""
+            SELECT c.id, c.first_name, c.last_name, c.phone,
+                   CAST(julianday('now') - julianday(MAX(o.order_date)) AS INTEGER) AS days_since,
+                   COUNT(DISTINCT o.id)   AS order_count,
+                   COALESCE(SUM(o.total), 0) AS total_spent,
+                   MAX(o.id)             AS last_order_id
+            FROM customers c
+            JOIN orders o ON o.customer_id = c.id AND o.consultant_id = c.consultant_id
+            WHERE c.consultant_id = ?
+              AND COALESCE(c.source_status, 'active') = 'active'
+            GROUP BY c.id, c.first_name, c.last_name, c.phone
+            HAVING CAST(julianday('now') - julianday(MAX(o.order_date)) AS INTEGER) >= ?
+               AND COUNT(DISTINCT o.id) >= ?
+            ORDER BY days_since ASC, order_count DESC, total_spent DESC
+            LIMIT ?
+        """, (consultant_id, days, min_orders, limit))
+    else:
+        cur.execute("""
+            SELECT c.id, c.first_name, c.last_name, c.phone,
+                   EXTRACT(DAY FROM NOW() - MAX(o.order_date::date))::INT AS days_since,
+                   COUNT(DISTINCT o.id)      AS order_count,
+                   COALESCE(SUM(o.total), 0) AS total_spent,
+                   MAX(o.id)                 AS last_order_id
+            FROM customers c
+            JOIN orders o ON o.customer_id = c.id AND o.consultant_id = c.consultant_id
+            WHERE c.consultant_id = %s
+              AND COALESCE(c.source_status, 'active') = 'active'
+            GROUP BY c.id, c.first_name, c.last_name, c.phone
+            HAVING EXTRACT(DAY FROM NOW() - MAX(o.order_date::date))::INT >= %s
+               AND COUNT(DISTINCT o.id) >= %s
+            ORDER BY days_since ASC, order_count DESC, total_spent DESC
+            LIMIT %s
+        """, (consultant_id, days, min_orders, limit))
+    return _rows_to_dicts(cur)
+
+
+def _fetch_order_items(cur, order_id: int) -> list:
+    is_sqlite = _is_sqlite_cursor(cur)
+    PH = "?" if is_sqlite else "%s"
+    cur.execute(f"""
+        SELECT sku, product_name, unit_price, quantity
+        FROM order_items WHERE order_id = {PH} ORDER BY id ASC
+    """, (order_id,))
+    return _rows_to_dicts(cur)
+
+
+def get_lapsed_customers(cur, consultant_id: int, days: int, card_limit: int = 5) -> dict:
+    """
+    Returns {'cards': [...], 'rest': [...]} where cards is the top card_limit rows
+    sorted most-recently-lapsed first (just crossed the threshold), with order_count
+    and total_spent as tiebreakers. Each card row includes last_order_items.
+    """
+    all_lapsed = _lapsed_base_query(cur, consultant_id, days, min_orders=1, limit=200)
+
+    cards = all_lapsed[:card_limit]
+    rest  = all_lapsed[card_limit:]
+
+    for r in cards:
+        oid = r.get("last_order_id")
+        r["last_order_items"] = _fetch_order_items(cur, oid) if oid else []
+
+    return {"cards": cards, "rest": rest}
+
+
+def _days_label(d: int) -> str:
+    m = round(d / 30)
+    return f"{m} month{'s' if m != 1 else ''} ago" if m >= 2 else f"{d} days ago"
+
+
+def format_lapsed_customers(result: dict, days: int) -> str:
+    cards = result.get("cards") or []
+    rest  = result.get("rest") or []
+
+    months = days // 30
+    period = f"{months} month{'s' if months != 1 else ''}" if days % 30 == 0 else f"{days} days"
+
+    if not cards and not rest:
+        return f"Every customer with order history has ordered within the last {period}. You're all caught up! ✅"
+
+    lines = [f"Customers who haven't ordered in {period}+:"]
+
+    for r in cards:
+        name = f"{(r.get('first_name') or '').strip()} {(r.get('last_name') or '').strip()}".strip()
+        age  = f"last order {_days_label(int(r.get('days_since') or 0))}"
+
+        items = r.get("last_order_items") or []
+        if items:
+            hero = max(items, key=lambda i: float(i.get("unit_price") or 0))
+            hero_name = hero.get("product_name") or hero.get("sku") or "item"
+            others = [i for i in items if i is not hero]
+            item_line = f"Last order: {hero_name}"
+            if others:
+                overflow = len(others) - 1
+                next_item = others[0].get("product_name") or others[0].get("sku") or ""
+                if overflow > 0:
+                    item_line += f', {next_item} <a href="#" data-send="last order for {name}">+{overflow} more</a>'
+                else:
+                    item_line += f", {next_item}"
+        else:
+            item_line = ""
+
+        lines.append(f"\n<strong>{name}</strong> — {age}")
+        if item_line:
+            lines.append(item_line)
+
+    if rest:
+        lines.append(f'\n<a href="#" data-send="show all lapsed {days} days">+{len(rest)} more</a>')
+
+    return "\n".join(lines)
+
+
 def format_leaderboard(rows: list, title: str) -> str:
     if not rows:
         return "I don't see any orders yet for that time period."

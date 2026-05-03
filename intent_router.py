@@ -20,6 +20,7 @@ SUPPORTED_INTENTS = {
     "recent_orders",
     "customer_spend",
     "leaderboard",
+    "lapsed_customers",
     "new_customer",
     "new_order",
     "order_add",
@@ -67,6 +68,15 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # cancel
     if lowered in ("cancel", "stop", "nevermind", "never mind"):
         return IntentResult(intent="cancel", confidence=1.0, raw_text=msg)
+
+    # lapsed customers
+    _lapsed_triggers = (
+        "haven't ordered", "has not ordered", "hasn't ordered", "have not ordered",
+        "not ordered", "gone quiet", "lapsed", "haven't heard from", "hasn't bought",
+        "haven't bought", "not buying", "not ordering", "who hasn't", "who haven't",
+    )
+    if any(t in lowered for t in _lapsed_triggers):
+        return IntentResult(intent="lapsed_customers", confidence=0.95, raw_text=msg)
 
     # leaderboard
     if (
@@ -159,6 +169,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- recent_orders\n"
         "- customer_spend\n"
         "- leaderboard\n"
+        "- lapsed_customers\n"
         "- new_customer\n"
         "- new_order\n"
         "- order_add\n"
@@ -174,6 +185,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- If the user is asking what someone ordered, use recent_orders.\n"
         "- If the user is asking how much someone spent, use customer_spend.\n"
         "- If the user is asking for top customers / PCP / who spent the most, use leaderboard.\n"
+        "- If the user is asking who hasn't ordered recently or in a given timeframe, use lapsed_customers.\n"
         "- If the user is creating a customer, use new_customer.\n"
         "- If the user is creating an order, use new_order.\n"
         "- If the user is adding an item to an existing order, use order_add.\n"

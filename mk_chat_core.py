@@ -2289,7 +2289,7 @@ class MKChatEngine:
         msg = _re.sub(r'\b(\d{8})\b', lambda m: _sku_map.get(m.group(1), m.group(1)), msg)
 
         # Product look-up "show more" — client sends "show all <term>" when consultant taps "+N more"
-        _SHOW_ALL_CRM_TERMS = {"customer", "customers", "order", "orders", "inventory", "follow", "followup", "followups"}
+        _SHOW_ALL_CRM_TERMS = {"customer", "customers", "order", "orders", "inventory", "follow", "followup", "followups", "lapsed"}
         if msg.lower().startswith("show all "):
             _more_term = msg[len("show all "):].strip()
             _more_words = set(_more_term.lower().split())
@@ -2770,7 +2770,56 @@ class MKChatEngine:
                     )
 
                 return ChatReply(format_leaderboard(rows, title))
-        
+
+        # -------------------------
+        # Lapsed customers (no LLM call)
+        # -------------------------
+        if not pending and (
+            intent_result.intent == "lapsed_customers"
+            or re.match(r"show all lapsed \d+ days", lowered)
+        ):
+            import re as _re_lapsed
+            from crm_store import get_lapsed_customers, format_lapsed_customers
+
+            # "show all lapsed N days" — expand the overflow list
+            _show_all = bool(re.match(r"show all lapsed \d+ days", lowered))
+
+            # Parse months or days from the message ("in 3 months", "in one month", "in 90 days", "lately" → 90 days default)
+            _word_nums = {"one":1,"two":2,"three":3,"four":4,"five":5,"six":6,
+                          "seven":7,"eight":8,"nine":9,"ten":10,"twelve":12}
+            _days = 90
+            _m_months = _re_lapsed.search(r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\s*month", lowered)
+            _m_days   = _re_lapsed.search(r"(\d+)\s*day", lowered)
+            if _m_months:
+                _raw = _m_months.group(1)
+                _days = (_word_nums.get(_raw) or int(_raw)) * 30
+            elif _m_days:
+                _days = int(_m_days.group(1))
+
+            with tx() as (conn, cur):
+                result = get_lapsed_customers(cur, consultant_id=consultant_id, days=_days)
+
+            state["pending"] = None
+            save_session_state(state, session_id=sid)
+
+            if _show_all:
+                # Full plain list of the overflow customers
+                rest = result.get("rest") or []
+                months = _days // 30
+                period = f"{months} month{'s' if months != 1 else ''}" if _days % 30 == 0 else f"{_days} days"
+                if not rest:
+                    return ChatReply(f"No additional lapsed customers beyond the top 5.")
+                lines = [f"All lapsed customers ({period}+):"]
+                for r in rest:
+                    name = f"{(r.get('first_name') or '').strip()} {(r.get('last_name') or '').strip()}".strip()
+                    d = int(r.get("days_since") or 0)
+                    m = round(d / 30)
+                    age = f"{m} month{'s' if m != 1 else ''} ago" if m >= 2 else f"{d} days ago"
+                    lines.append(f"• {name} — {age}")
+                return ChatReply("\n".join(lines))
+
+            return ChatReply(format_lapsed_customers(result, _days))
+
         # -------------------------
         # Product price lookup (intent-based fallback)
         # -------------------------
