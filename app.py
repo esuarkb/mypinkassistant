@@ -1294,15 +1294,12 @@ def settings_post(
 
     pw_to_save = None if (intouch_password or "").strip() == "" else intouch_password
     update_settings(cid, language, intouch_username, pw_to_save)
-
-    # If they saved InTouch creds, reset login failures and try to queue initial import
     if intouch_username.strip() and pw_to_save:
         with tx() as (conn, cur):
             cur.execute(
                 f"""UPDATE consultants
                     SET consecutive_login_failures = 0,
-                        last_login_failure_at = NULL,
-                        initial_customer_import_queued = 0
+                        last_login_failure_at = NULL
                     WHERE id = {PH}""",
                 (cid,),
             )

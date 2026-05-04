@@ -604,6 +604,16 @@ def main():
                             finally:
                                 conn.close()
                             mark_job_done(job_id, "Customer & order import complete!")
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                cur.execute(
+                                    f"UPDATE consultants SET initial_sync_completed = TRUE WHERE id = {PH_W}",
+                                    (cid,),
+                                )
+                                conn.commit()
+                            finally:
+                                conn.close()
 
                         # -------------------------
                         # FULL_SYNC (nightly: customers + orders + inventory, one login)

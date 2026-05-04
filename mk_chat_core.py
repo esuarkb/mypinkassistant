@@ -185,7 +185,7 @@ def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
             billing_status,
             intouch_username,
             intouch_password_enc,
-            initial_customer_import_queued
+            initial_sync_completed
         FROM consultants
         WHERE id = {PH}
         LIMIT 1
@@ -200,35 +200,40 @@ def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
         billing_status = (row.get("billing_status") or "").strip().lower()
         intouch_username = (row.get("intouch_username") or "").strip()
         intouch_password_enc = (row.get("intouch_password_enc") or "").strip()
-        already_queued = int(row.get("initial_customer_import_queued") or 0)
+        sync_completed = bool(row.get("initial_sync_completed"))
     else:
         billing_status = (row[0] or "").strip().lower()
         intouch_username = (row[1] or "").strip()
         intouch_password_enc = (row[2] or "").strip()
-        already_queued = int(row[3] or 0)
+        sync_completed = bool(row[3])
 
     if billing_status not in ("active", "trialing"):
         return False
 
-    if already_queued:
+    if sync_completed:
         return False
 
     if not intouch_username or not intouch_password_enc:
+        return False
+
+    # Check the jobs table directly — don't queue if one is already pending or running
+    cur.execute(
+        f"""
+        SELECT 1 FROM jobs
+        WHERE consultant_id = {PH}
+          AND type = 'INITIAL_SYNC'
+          AND status IN ('queued', 'running')
+        LIMIT 1
+        """,
+        (consultant_id,),
+    )
+    if cur.fetchone():
         return False
 
     insert_job(
         "INITIAL_SYNC",
         {},
         consultant_id=consultant_id,
-    )
-
-    cur.execute(
-        f"""
-        UPDATE consultants
-        SET initial_customer_import_queued = 1
-        WHERE id = {PH}
-        """,
-        (consultant_id,),
     )
 
     return True
