@@ -198,11 +198,12 @@ def _build_referral_list(cid: int) -> str:
         '</div>'
     ]
     for row in rows:
-        first = (_row_get(row, "first_name") or "").strip()
-        last = (_row_get(row, "last_name") or "").strip()
-        status = (_row_get(row, "billing_status") or "").strip()
-        trial_end = _row_get(row, "trial_end")
-        rewarded_at = _row_get(row, "referral_rewarded_at")
+        # Use positional indexing — tx() returns plain tuples on Postgres (no dict_row)
+        first = (str(row[0] or "")).strip()
+        last = (str(row[1] or "")).strip()
+        status = (str(row[2] or "")).strip()
+        trial_end = row[3]
+        rewarded_at = row[4]
 
         name = first + (f" {last[0]}." if last else "")
 
@@ -664,7 +665,26 @@ def onboard_get(
     c = get_consultant_full(int(cid)) if cid else None
 
     if ref:
-        ref_block = "<div class='welcome'>You've been invited! We're glad you're here 🎉</div>"
+        referrer_name = ""
+        try:
+            with tx() as (_conn, _cur):
+                _cur.execute(
+                    f"SELECT first_name FROM consultants WHERE referral_code={PH} LIMIT 1",
+                    (ref.upper(),),
+                )
+                _row = _cur.fetchone()
+                if _row:
+                    referrer_name = (_row_get(_row, "first_name") or "").strip()
+        except Exception:
+            pass
+        if referrer_name:
+            ref_block = (
+                f"<div class='welcome'>Referral from {_esc(referrer_name)} applied! "
+                f"Your 7-day trial has been extended to 30 days and "
+                f"{_esc(referrer_name)} will also earn credit!</div>"
+            )
+        else:
+            ref_block = "<div class='welcome'>Referral applied! Your 7-day trial has been extended to 30 days!</div>"
     else:
         ref_block = ""
         
