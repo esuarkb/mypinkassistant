@@ -674,7 +674,7 @@ def onboard_get(
                 )
                 _row = _cur.fetchone()
                 if _row:
-                    referrer_name = (_row_get(_row, "first_name") or "").strip()
+                    referrer_name = (str(_row[0] or "")).strip()
         except Exception:
             pass
         if referrer_name:
