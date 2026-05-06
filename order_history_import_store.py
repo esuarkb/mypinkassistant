@@ -201,11 +201,28 @@ def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dic
         last = (acct.get("LastName") or "").strip()
         if not first and not last:
             skipped_no_name += 1
+            print(f"[DEBUG skip_no_name] id={order.get('Id')} date={order.get('OrderedDate_f__c') or order.get('OrderedDate')} total={order.get('GrandTotalAmount')} source={order.get('OrderSource_p__c')} fulfillment={order.get('FulfillmentMethod_p__c')} acct={acct} keys={list(order.keys())}")
             continue
         intouch_account_id = (acct.get("Id") or "").strip() or None
         customer_id = _find_customer(cur, consultant_id, first, last, intouch_account_id)
         if customer_id is None:
             skipped_no_match += 1
+            import json as _json, pathlib as _pl
+            _entry = {
+                "name": f"{first} {last}",
+                "intouch_account_id": intouch_account_id,
+                "intouch_order_id": order.get("Id"),
+                "date": order.get("OrderedDate_f__c") or order.get("OrderedDate"),
+                "total": order.get("GrandTotalAmount"),
+                "source": order.get("OrderSource_p__c"),
+                "fulfillment": order.get("FulfillmentMethod_p__c"),
+                "all_keys": list(order.keys()),
+                "raw": order,
+            }
+            _log = _pl.Path("/tmp/mpa_unmatched_orders.jsonl")
+            with open(_log, "a") as _f:
+                _f.write(_json.dumps(_entry) + "\n")
+            print(f"[DEBUG skip_no_match] {first} {last} date={_entry['date']} total={_entry['total']} source={_entry['source']} fulfillment={_entry['fulfillment']} acct_id={intouch_account_id}")
             continue
 
         # Order date — use consultant-entered date (OrderedDate_f__c), fall back to OrderedDate
