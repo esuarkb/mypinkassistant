@@ -179,6 +179,27 @@ CREATE TABLE IF NOT EXISTS pcp_enrollments (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_pcp_enrollments_consultant ON pcp_enrollments(consultant_id, quarter)")
 
+# ---- guest orders (unmatched InTouch orders — not consultant-accessible yet) ----
+cur.execute("""
+CREATE TABLE IF NOT EXISTS guest_orders (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id         INTEGER NOT NULL,
+  intouch_order_id      TEXT    NOT NULL,
+  intouch_account_id    TEXT,
+  first_name            TEXT,
+  last_name             TEXT,
+  order_date            TEXT,
+  total                 REAL,
+  source                TEXT,
+  fulfillment           TEXT,
+  items_json            TEXT,
+  billing_address_json  TEXT,
+  mailing_address_json  TEXT,
+  created_at            TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (consultant_id, intouch_order_id)
+)
+""")
+
 conn.commit()
 conn.close()
 

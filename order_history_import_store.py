@@ -12,8 +12,10 @@ Matching strategy:
   - Quantity: always 1 (API doesn't expose per-item quantity).
   - Deduplication: skips orders where intouch_order_id already exists in DB.
   - Skips archived orders.
+  - Unmatched customers: stored in guest_orders (not consultant-accessible).
 """
 import csv
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -93,6 +95,35 @@ def _find_customer(
     )
     row = cur.fetchone()
     return int(row[0]) if row else None
+
+
+def _guest_order_already_stored(cur, consultant_id: int, intouch_order_id: str) -> bool:
+    PH = "?" if _is_sqlite(cur) else "%s"
+    cur.execute(
+        f"SELECT 1 FROM guest_orders WHERE consultant_id = {PH} AND intouch_order_id = {PH} LIMIT 1",
+        (consultant_id, intouch_order_id),
+    )
+    return cur.fetchone() is not None
+
+
+def _insert_guest_order(cur, consultant_id: int, intouch_order_id: str,
+                        intouch_account_id: str | None, first: str, last: str,
+                        order_date: str, total: float, source: str, fulfillment: str,
+                        items: list, billing_addr: dict | None, mailing_addr: dict | None) -> None:
+    PH = "?" if _is_sqlite(cur) else "%s"
+    is_sq = _is_sqlite(cur)
+    cur.execute(
+        f"""INSERT INTO guest_orders
+            (consultant_id, intouch_order_id, intouch_account_id, first_name, last_name,
+             order_date, total, source, fulfillment,
+             items_json, billing_address_json, mailing_address_json, created_at)
+            VALUES ({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},
+                    {'datetime(\'now\')' if is_sq else 'NOW()'})
+            ON CONFLICT (consultant_id, intouch_order_id) DO NOTHING""",
+        (consultant_id, intouch_order_id, intouch_account_id, first, last,
+         order_date, total, source, fulfillment,
+         json.dumps(items), json.dumps(billing_addr), json.dumps(mailing_addr)),
+    )
 
 
 def _order_already_imported(cur, consultant_id: int, intouch_order_id: str) -> bool:
@@ -201,35 +232,29 @@ def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dic
         last = (acct.get("LastName") or "").strip()
         if not first and not last:
             skipped_no_name += 1
-            print(f"[DEBUG skip_no_name] id={order.get('Id')} date={order.get('OrderedDate_f__c') or order.get('OrderedDate')} total={order.get('GrandTotalAmount')} source={order.get('OrderSource_p__c')} fulfillment={order.get('FulfillmentMethod_p__c')} acct={acct} keys={list(order.keys())}")
             continue
         intouch_account_id = (acct.get("Id") or "").strip() or None
         customer_id = _find_customer(cur, consultant_id, first, last, intouch_account_id)
-        if customer_id is None:
-            skipped_no_match += 1
-            import json as _json, pathlib as _pl
-            _entry = {
-                "name": f"{first} {last}",
-                "intouch_account_id": intouch_account_id,
-                "intouch_order_id": order.get("Id"),
-                "date": order.get("OrderedDate_f__c") or order.get("OrderedDate"),
-                "total": order.get("GrandTotalAmount"),
-                "source": order.get("OrderSource_p__c"),
-                "fulfillment": order.get("FulfillmentMethod_p__c"),
-                "all_keys": list(order.keys()),
-                "raw": order,
-            }
-            _log = _pl.Path("/tmp/mpa_unmatched_orders.jsonl")
-            with open(_log, "a") as _f:
-                _f.write(_json.dumps(_entry) + "\n")
-            print(f"[DEBUG skip_no_match] {first} {last} date={_entry['date']} total={_entry['total']} source={_entry['source']} fulfillment={_entry['fulfillment']} acct_id={intouch_account_id}")
-            continue
 
         # Order date — use consultant-entered date (OrderedDate_f__c), fall back to OrderedDate
         raw_date = order.get("OrderedDate_f__c") or order.get("OrderedDate") or ""
         order_date = raw_date[:10] if raw_date else datetime.now(timezone.utc).date().isoformat()
 
         total = float(order.get("GrandTotalAmount") or 0)
+
+        if customer_id is None:
+            skipped_no_match += 1
+            if not _guest_order_already_stored(cur, consultant_id, intouch_order_id):
+                _insert_guest_order(
+                    cur, consultant_id, intouch_order_id, intouch_account_id,
+                    first, last, order_date, total,
+                    (order.get("OrderSource_p__c") or "").strip(),
+                    (order.get("FulfillmentMethod_p__c") or "").strip(),
+                    order.get("OrderItemSummaries") or [],
+                    acct.get("PersonMailingAddress"),
+                    order.get("BillingAddress"),
+                )
+            continue
 
         fulfillment = (order.get("FulfillmentMethod_p__c") or "").strip()
         order_source = (order.get("OrderSource_p__c") or "").strip()
