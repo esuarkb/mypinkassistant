@@ -474,6 +474,85 @@ support@mypinkassistant.com
         raise RuntimeError(f"Resend error {r.status_code}: {r.text}")
 
 
+def send_sku_not_found_email(
+    to_email: str,
+    consultant_name: str,
+    consultant_email: str,
+    consultant_id: int,
+    sku: str,
+    product_name: str,
+    customer_name: str,
+    requeued_count: int,
+) -> None:
+    api_key = (os.getenv("RESEND_API_KEY") or "").strip()
+    mail_from = (os.getenv("MAIL_FROM") or "").strip()
+    if not api_key or not mail_from:
+        raise RuntimeError("Missing RESEND_API_KEY or MAIL_FROM")
+
+    safe_consultant = escape(consultant_name)
+    safe_consultant_email = escape(consultant_email)
+    safe_sku = escape(sku)
+    safe_product = escape(product_name)
+    safe_customer = escape(customer_name)
+
+    subject = f"MPA — SKU Not Found in MyCustomers: {sku}"
+
+    requeued_note = (
+        f"{requeued_count} other item(s) in the order were requeued and will be submitted automatically."
+        if requeued_count > 0
+        else "There were no other items in the order to requeue."
+    )
+
+    text = (
+        f"SKU Not Found in MyCustomers\n\n"
+        f"Consultant: {consultant_name} ({consultant_email}) ID {consultant_id}\n"
+        f"Customer: {customer_name}\n"
+        f"SKU: {sku}\n"
+        f"Product: {product_name}\n\n"
+        f"{requeued_note}\n\n"
+        f"Please check InTouch to see if this item is discontinued. "
+        f"If so, remove it from catalog/en.csv and catalog/es.csv."
+    )
+
+    html = f"""<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#ffffff;">
+    <div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
+      <h2 style="margin:0 0 12px 0;font-size:18px;">&#128683; SKU Not Found in MyCustomers</h2>
+      <p style="margin:0 0 8px 0;"><strong>Consultant:</strong> {safe_consultant} ({safe_consultant_email}) ID {consultant_id}</p>
+      <p style="margin:0 0 8px 0;"><strong>Customer:</strong> {safe_customer}</p>
+      <p style="margin:0 0 8px 0;"><strong>SKU:</strong> {safe_sku}</p>
+      <p style="margin:0 0 16px 0;"><strong>Product:</strong> {safe_product}</p>
+      <p style="margin:0 0 12px 0;padding:10px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;">
+        {escape(requeued_note)}
+      </p>
+      <p style="margin:0 0 8px 0;font-size:13px;color:#5a5a5a;">
+        Check InTouch to see if this item is discontinued. If so, remove it from
+        <code>catalog/en.csv</code> and <code>catalog/es.csv</code>.
+      </p>
+    </div>
+  </body>
+</html>"""
+
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": mail_from,
+            "to": [to_email],
+            "subject": subject,
+            "text": text,
+            "html": html,
+        },
+        timeout=15,
+    )
+    if r.status_code >= 300:
+        raise RuntimeError(f"Resend error {r.status_code}: {r.text}")
+
+
 def send_login_failure_alert_email(to_email: str, consultant_id: int, consultant_name: str, consultant_email: str, error: str) -> None:
     api_key = (os.getenv("RESEND_API_KEY") or "").strip()
     mail_from = (os.getenv("MAIL_FROM") or "").strip()

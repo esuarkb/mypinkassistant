@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from db import connect, is_postgres, get_system_setting, run_migrations
 
-from emailer import send_wrong_credentials_email, send_login_failure_alert_email
+from emailer import send_wrong_credentials_email, send_login_failure_alert_email, send_sku_not_found_email
 from playwright_automation.customer_export import download_customer_export
 from customer_import_parser import parse_customer_export_xlsx
 from customer_import_store import import_customers_from_rows
@@ -724,6 +724,59 @@ def main():
                                             _sw_conn.commit()
                                             print(f"[Worker] Predecessor fallback — requeued {len(_sw_jobs)} job(s)")
                                             continue
+
+                                        elif _failing_sku:
+                                            # No predecessor. Fail every job with the bad SKU,
+                                            # requeue the rest so the order goes through without it.
+                                            _bad_jids = [_jid for _jid, _pjson in _sw_jobs
+                                                         if (json.loads(_pjson).get("SKU") or "").strip() == _failing_sku]
+                                            _good_jids = [_jid for _jid, _pjson in _sw_jobs
+                                                          if (json.loads(_pjson).get("SKU") or "").strip() != _failing_sku]
+                                            if _bad_jids:
+                                                _bad_user_msg = (
+                                                    f"SKU {_failing_sku} couldn't be found in MyCustomers "
+                                                    f"and may be discontinued."
+                                                )
+                                                for _jid in _bad_jids:
+                                                    mark_job_failed(_jid, raw_err, _bad_user_msg)
+                                                if _good_jids:
+                                                    for _jid in _good_jids:
+                                                        if is_postgres():
+                                                            _sw_cur.execute(f"UPDATE jobs SET status='queued', error='', status_msg='Requeued after removing unavailable SKU', attempts=0, claimed_by=NULL, claimed_at=NULL, started_at=NULL WHERE id={PH_W}", (_jid,))
+                                                        else:
+                                                            _sw_cur.execute(f"UPDATE jobs SET status='queued', error='', status_msg='Requeued after removing unavailable SKU', attempts=0, claimed_by='', claimed_at='', started_at='' WHERE id={PH_W}", (_jid,))
+                                                    _sw_conn.commit()
+                                                    print(f"[Worker] SKU {_failing_sku} not found — failed {len(_bad_jids)} job(s), requeued {len(_good_jids)} job(s)")
+                                                # Look up product name from catalog CSV
+                                                _prod_name = _failing_sku
+                                                try:
+                                                    import csv as _csv
+                                                    _cat_path = Path(__file__).resolve().parent / "catalog" / "en.csv"
+                                                    with open(_cat_path, newline="") as _cf:
+                                                        for _crow in _csv.reader(_cf):
+                                                            if _crow and _crow[0].strip() == _failing_sku:
+                                                                _prod_name = _crow[1].strip() if len(_crow) > 1 else _failing_sku
+                                                                break
+                                                except Exception:
+                                                    pass
+                                                # Email admin
+                                                try:
+                                                    _admin_email = (os.getenv("MK_ADMIN_EMAILS") or "").split(",")[0].strip()
+                                                    if _admin_email:
+                                                        _cust_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
+                                                        send_sku_not_found_email(
+                                                            to_email=_admin_email,
+                                                            consultant_name=_c_name,
+                                                            consultant_email=_c_email,
+                                                            consultant_id=cid,
+                                                            sku=_failing_sku,
+                                                            product_name=_prod_name,
+                                                            customer_name=_cust_name,
+                                                            requeued_count=len(_good_jids),
+                                                        )
+                                                except Exception as _mail_err:
+                                                    print(f"[Worker] SKU not found email failed: {_mail_err}")
+                                                continue
                                     except Exception as _sw_err:
                                         print(f"[Worker] Predecessor swap error: {_sw_err}")
                                     finally:

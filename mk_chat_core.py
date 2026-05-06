@@ -585,10 +585,10 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         "- Extract comma-separated tags from 'tag:' or 'tags:' keyword into Tags as a plain comma-separated string.\n"
         "- Extract the referring person's name from phrases like 'referred by', 'referral from', 'ref by', 'sent by' into Referred By. The Referred By value is a person's name only (1-3 words) — it ends at the next field (a phone number, email, 'tag:'/'tags:', or end of message). Leave empty if not mentioned.\n"
         "- Birthday may be provided as MM/DD, Month Day, or YYYY-MM-DD. Output as YYYY-MM-DD. If year missing, use 2000.\n"
-        "- Each word or phrase separated by 'and' or a comma is a separate item unless it is clearly a shade/variant of the immediately adjacent product (e.g. 'Normal/Dry', 'Ivory 1', 'Berry Kissable'). When in doubt, treat it as a separate product.\n"
+        "- Each word or phrase separated by 'and' or a comma is a separate item unless it is clearly a shade/variant of the immediately adjacent product (e.g. 'Normal/Dry', 'Ivory 1', 'Berry Kissable', 'Pearl & Gold', 'Navy & Nude'). Color or finish pairs joined by 'and' or '&' are a single shade name, not two items. When in doubt, treat it as a separate product.\n"
         "- For shades/colors/variants (Normal/Dry, Combination/Oily), include them in item text if present.\n"
         "- If the user says a variant applies to multiple items (e.g., 'normal/dry both'), append that variant phrase to each affected item.\n"
-        "- Do NOT treat numbers that are part of a product name as quantity (examples: '4-in-1 cleanser', '2-in-1', '3D').\n"
+        "- Do NOT treat numbers OR product descriptor words that are part of a product name as quantity (examples: '4-in-1 cleanser', '2-in-1', '3D', 'Duo Stick', 'Trio Set'). These are product names, not user-specified quantities.\n"
         "- Only set qty > 1 if the user explicitly indicates quantity (two, x2, qty 2, three of them, etc.). Otherwise qty must be 1.\n"
         "- If the user says a quantity change like 'make that 2' or 'change it to 3', do NOT output a new order. That will be handled separately.\n"
         '- Set fulfillment_method to "cds" if the user mentions CDS or customer delivery. Default is "inventory".\n'
@@ -1116,7 +1116,7 @@ UI_EN = {
     "confirming_order": "You're confirming an order. Reply yes or no, or say add or remove to edit the order.",
     "reply_yes_no_adjust": "Reply yes or no — or say add or remove to adjust the order.",
     "trouble": "I'm having a little trouble right now, please try again in a moment.",
-    "customer_not_in_mc": "I'm not finding {name} in MyCustomers. If you are sure they are already in MyCustomers, you can go to Settings and tap Import MyCustomers to sync the latest. Otherwise, we will need to add {name} as a new customer first.",
+    "customer_not_in_mc": "I'm not finding {name} in MyCustomers. We will need to add {name} as a new customer first.",
     "propose_top": "I think you mean: {line}. Is that right? (yes/no)",
     "render_top5_intro": "Got it \u2014 select the best match (reply {range}), or type different search words and I'll search again:",
 }
@@ -1182,7 +1182,7 @@ UI_ES = {
     "confirming_order": "Estás confirmando un pedido. Responde sí o no, o di agregar o eliminar para editarlo.",
     "reply_yes_no_adjust": "Responde sí o no — o di agregar o eliminar para ajustar el pedido.",
     "trouble": "Estoy teniendo un pequeño problema ahora mismo, por favor intenta de nuevo en un momento.",
-    "customer_not_in_mc": "No encuentro a {name} en MyCustomers. Si estás segura de que ya está en MyCustomers, ve a Configuración y toca Importar MyCustomers para sincronizar. De lo contrario, necesitaremos agregar a {name} como nueva cliente primero.",
+    "customer_not_in_mc": "No encuentro a {name} en MyCustomers. Necesitaremos agregar a {name} como nueva cliente primero.",
     "propose_top": "Creo que te refieres a: {line}. ¿Es correcto? (sí/no)",
     "render_top5_intro": "Listo \u2014 elige la mejor opción (responde {range}), o escribe otras palabras de búsqueda:",
 }
@@ -1207,6 +1207,68 @@ def parse_add_remove(message: str):
             return ("remove", rest)
 
     return (None, None)
+
+
+def _parse_order_date_cmd(message: str):
+    """
+    Detects 'date <text>' commands. Returns the date text portion or None if not a date command.
+    """
+    low = (message or "").strip().lower()
+    for kw in ("change the date to ", "change date to ", "change the date ", "change date ",
+                "update date to ", "update date ", "order date ", "date "):
+        if low.startswith(kw):
+            return message[len(kw):].strip()
+    return None
+
+
+def _parse_date_value(text: str):
+    """Parse natural language date text into YYYY-MM-DD. Returns None if unparseable."""
+    import re
+    from datetime import date, timedelta
+    t = (text or "").strip().lower()
+    today = date.today()
+    if t in ("today", "hoy"):
+        return today.isoformat()
+    if t in ("yesterday", "ayer"):
+        return (today - timedelta(days=1)).isoformat()
+    # ISO: 2026-05-04
+    m = re.fullmatch(r'(\d{4})-(\d{1,2})-(\d{1,2})', t)
+    if m:
+        try:
+            return date(int(m[1]), int(m[2]), int(m[3])).isoformat()
+        except ValueError:
+            pass
+    # US: M/D, M/D/YY, M/D/YYYY
+    m = re.fullmatch(r'(\d{1,2})[/\-](\d{1,2})(?:[/\-](\d{2,4}))?', t)
+    if m:
+        month, day = int(m[1]), int(m[2])
+        year = int(m[3]) if m[3] else today.year
+        if year < 100:
+            year += 2000
+        try:
+            return date(year, month, day).isoformat()
+        except ValueError:
+            pass
+    # Written: "May 4", "May 4 2026", "May 4, 2026"
+    _months = {
+        "january":1,"jan":1,"february":2,"feb":2,"march":3,"mar":3,
+        "april":4,"apr":4,"may":5,"june":6,"jun":6,"july":7,"jul":7,
+        "august":8,"aug":8,"september":9,"sep":9,"sept":9,"october":10,"oct":10,
+        "november":11,"nov":11,"december":12,"dec":12,
+        "enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,
+        "julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12,
+    }
+    m = re.fullmatch(r'([a-z]+)\s+(\d{1,2})(?:,?\s+(\d{4}))?', t)
+    if m:
+        month = _months.get(m[1])
+        day = int(m[2])
+        year = int(m[3]) if m[3] else today.year
+        if month:
+            try:
+                return date(year, month, day).isoformat()
+            except ValueError:
+                pass
+    return None
 
 
 def _parse_discount(message: str, order: dict) -> dict | None:
@@ -3828,6 +3890,22 @@ class MKChatEngine:
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
+
+                # ✅ Date change (before guardrail so it isn't blocked)
+                _date_text = _parse_order_date_cmd(msg)
+                if _date_text is not None:
+                    _parsed_date = _parse_date_value(_date_text)
+                    if _parsed_date:
+                        order["order_date"] = _parsed_date
+                        state["pending"] = {"kind": "order_confirm", "order": order}
+                        save_session_state(state, session_id=sid)
+                        return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
+                    else:
+                        return ChatReply(
+                            "I couldn't read that date. Try something like `date 5/4/26` or `date May 4`.\n\n"
+                            + self._format_order_confirm(order, ui) + "\n\n"
+                            + ui["order_adjust_hint"]
+                        )
 
                 # ✅ Discount parsing (before guardrail so it isn't blocked)
                 _discount = _parse_discount(msg, order)
