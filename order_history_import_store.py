@@ -110,15 +110,15 @@ def _insert_guest_order(cur, consultant_id: int, intouch_order_id: str,
                         intouch_account_id: str | None, first: str, last: str,
                         order_date: str, total: float, source: str, fulfillment: str,
                         items: list, billing_addr: dict | None, mailing_addr: dict | None) -> None:
-    PH = "?" if _is_sqlite(cur) else "%s"
     is_sq = _is_sqlite(cur)
+    PH = "?" if is_sq else "%s"
+    now_expr = "datetime('now')" if is_sq else "NOW()"
     cur.execute(
         f"""INSERT INTO guest_orders
             (consultant_id, intouch_order_id, intouch_account_id, first_name, last_name,
              order_date, total, source, fulfillment,
              items_json, billing_address_json, mailing_address_json, created_at)
-            VALUES ({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},
-                    {'datetime(\'now\')' if is_sq else 'NOW()'})
+            VALUES ({PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{PH},{now_expr})
             ON CONFLICT (consultant_id, intouch_order_id) DO NOTHING""",
         (consultant_id, intouch_order_id, intouch_account_id, first, last,
          order_date, total, source, fulfillment,
