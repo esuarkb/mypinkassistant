@@ -171,6 +171,9 @@ CREATE TABLE IF NOT EXISTS pcp_enrollments (
 
 CREATE INDEX IF NOT EXISTS idx_pcp_enrollments_consultant ON pcp_enrollments(consultant_id, quarter);
 
+-- secondary InTouch account IDs for duplicate customer handling
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS intouch_account_ids TEXT DEFAULT '[]';
+
 CREATE TABLE IF NOT EXISTS guest_orders (
   id                    BIGSERIAL PRIMARY KEY,
   consultant_id         INTEGER   NOT NULL,

@@ -73,15 +73,35 @@ def _find_customer(
 ) -> int | None:
     """
     Returns customer_id if found (including removed customers), or None.
-    Tries intouch_account_id match first, falls back to exact name match.
+    Tries intouch_account_id match first (primary column then secondary array),
+    falls back to exact name match.
     MyCustomers is the source of truth — no new records are created here.
     """
     PH = "?" if _is_sqlite(cur) else "%s"
     if intouch_account_id:
+        # Primary column
         cur.execute(
             f"SELECT id FROM customers WHERE consultant_id = {PH} AND intouch_account_id = {PH} LIMIT 1",
             (consultant_id, intouch_account_id),
         )
+        row = cur.fetchone()
+        if row:
+            return int(row[0] if not isinstance(row, dict) else row["id"])
+        # Secondary array — catches duplicate InTouch records merged under one MPA customer
+        if _is_sqlite(cur):
+            cur.execute(
+                f"""SELECT c.id FROM customers c, json_each(c.intouch_account_ids) je
+                    WHERE c.consultant_id = {PH} AND je.value = {PH} LIMIT 1""",
+                (consultant_id, intouch_account_id),
+            )
+        else:
+            cur.execute(
+                f"""SELECT id FROM customers
+                    WHERE consultant_id = {PH}
+                      AND COALESCE(intouch_account_ids, '[]')::jsonb @> jsonb_build_array({PH}::text)
+                    LIMIT 1""",
+                (consultant_id, intouch_account_id),
+            )
         row = cur.fetchone()
         if row:
             return int(row[0] if not isinstance(row, dict) else row["id"])

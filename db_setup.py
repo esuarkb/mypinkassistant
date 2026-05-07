@@ -179,6 +179,12 @@ CREATE TABLE IF NOT EXISTS pcp_enrollments (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_pcp_enrollments_consultant ON pcp_enrollments(consultant_id, quarter)")
 
+# ---- intouch_account_ids — secondary InTouch account IDs for duplicate handling ----
+try:
+    cur.execute("ALTER TABLE customers ADD COLUMN intouch_account_ids TEXT DEFAULT '[]'")
+except Exception:
+    pass  # already exists
+
 # ---- guest orders (unmatched InTouch orders — not consultant-accessible yet) ----
 cur.execute("""
 CREATE TABLE IF NOT EXISTS guest_orders (

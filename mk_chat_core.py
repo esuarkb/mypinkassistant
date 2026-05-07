@@ -2848,7 +2848,20 @@ class MKChatEngine:
         # -------------------------
         # Lapsed customers (no LLM call)
         # -------------------------
-        if not pending and (
+        # Guard: "who are my retinol customers" type messages get misclassified as
+        # lapsed_customers by the LLM. Detect product-search phrasing here so it
+        # falls through to the product-search block below.
+        _lapsed_product_override = False
+        _lapsed_guard_m = re.search(r"\bwho\s+are\s+(?:my\s+)?(.+?)\s+customers\b", lowered)
+        if _lapsed_guard_m:
+            _lapsed_non_product = {"lapsed", "inactive", "active", "top", "best", "new",
+                                   "recent", "who", "are", "my", "show", "all", "following"}
+            _lapsed_product_words = [w for w in _lapsed_guard_m.group(1).strip().lower().split()
+                                     if w not in _lapsed_non_product]
+            if _lapsed_product_words:
+                _lapsed_product_override = True
+
+        if not pending and not _lapsed_product_override and (
             intent_result.intent == "lapsed_customers"
             or re.match(r"show all lapsed \d+ days", lowered)
         ):
@@ -2945,9 +2958,9 @@ class MKChatEngine:
             # Pattern 1: "[product] customers" — e.g. "repair customers", "show my matte foundation customers"
             _m1 = _re2.search(r"(?:show\s+)?(?:my\s+)?(.+?)\s+customers\b", lowered)
             # Pattern 2: "customers who [use/ordered/buy/have] [product]" — e.g. "customers who use repair"
-            _m2 = _re2.search(r"\bcustomers\s+who\s+(?:use|ordered|buy|have|bought|order)\s+(.+)", lowered)
-            # Pattern 3: "who bought/ordered/uses [product]"
-            _m3 = _re2.search(r"\bwho\s+(?:bought|ordered|uses|has|orders|buys|got)\s+(.+)", lowered)
+            _m2 = _re2.search(r"\bcustomers\s+who\s+(?:(?:has|have|had)\s+)?(?:use|ordered|buy|have|bought|order|used|purchased)\s+(.+)", lowered)
+            # Pattern 3: "who bought/ordered/uses [product]" — "has/have" auxiliary handled explicitly
+            _m3 = _re2.search(r"\bwho\s+(?:(?:has|have|had)\s+)?(?:bought|ordered|uses|orders|buys|got|used|purchased|purchase)\s+(.+)", lowered)
 
             _prefix_filler = {"who", "are", "my", "show", "list", "which", "what", "any",
                               "the", "a", "all", "give", "me", "find", "get", "have", "do",
