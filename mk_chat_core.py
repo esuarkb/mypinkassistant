@@ -266,6 +266,9 @@ def load_catalog(path: Path) -> List[dict]:
             if not sku or not name:
                 continue
 
+            if (row.get("discontinued") or "").strip() == "1":
+                continue
+
             name_l = name.lower()
             if "sample" in name_l:
                 continue
@@ -1089,7 +1092,7 @@ UI_EN = {
     "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
     "order_reject": "Okay — paste the corrected order and I'll rebuild the summary.",
 
-    "no_catalog_match": "I couldn't match that product in the catalog. Try rewording it.",
+    "no_catalog_match": "I couldn't find that product in the catalog. Try rewording it (brand, line, or shade helps), or say `cancel` to start over.",
     "no_customer_found": "I couldn't find {name} in your saved customers.",
     "no_customer_found_yet": "I couldn't find {name} in your saved customers yet.",
     "no_customer_id": "I couldn't find a customer with ID {cid}.",
@@ -1155,7 +1158,7 @@ UI_ES = {
     "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",
     "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
 
-    "no_catalog_match": "No pude encontrar ese producto en el catálogo. Intenta describirlo de otra forma.",
+    "no_catalog_match": "No pude encontrar ese producto en el catálogo. Intenta describirlo de otra forma (marca, línea o tono ayuda), o di `cancelar` para empezar de nuevo.",
     "no_customer_found": "No encontré a {name} en tus clientes guardados.",
     "no_customer_found_yet": "Aún no encontré a {name} en tus clientes guardados.",
     "no_customer_id": "No encontré un cliente con ID {cid}.",
@@ -1443,6 +1446,10 @@ def _split_order_for_prefix(message: str) -> tuple[str, str]:
 def propose_top(top: dict, current_qty: int, ui: dict = None) -> str:
     if ui is None:
         ui = UI_EN
+    if not (top.get("sku") or "").strip():
+        return ui.get("no_catalog_match",
+                      "I couldn't find that product in the catalog. "
+                      "Try rewording it (brand, line, or shade helps), or say `cancel` to start over.") + _QR_YN
     q = int(current_qty or 1)
     qtxt = f" x{q}" if q != 1 else ""
 
@@ -3362,13 +3369,7 @@ class MKChatEngine:
                         if pick_idx is not None:
                             top = matches[pick_idx]
 
-                        state["pending"] = {
-                            "kind": "order_line_confirm_top",
-                            "order": order_draft,
-                            "line_index": nxt,
-                            "top": top,
-                            "matches": matches,
-                        }
+                        state["pending"] = self._pending_for_top(order_draft, nxt, top, matches)
                         save_session_state(state, session_id=sid)
                         return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"], ui=ui))
 
@@ -4313,14 +4314,7 @@ class MKChatEngine:
                 if pick_idx is not None:
                     top = matches[pick_idx]
 
-                state["pending"] = {
-                    "kind": "order_line_confirm_top",
-                    "order": order_draft,
-                    "line_index": nxt,
-                    "top": top,
-                    "matches": matches,
-                }
-
+                state["pending"] = self._pending_for_top(order_draft, nxt, top, matches)
                 save_session_state(state, session_id=sid)
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
                 return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft['lines'][nxt]['qty'], ui=ui)}")
@@ -4393,14 +4387,7 @@ class MKChatEngine:
             if pick_idx is not None:
                 top = matches[pick_idx]
 
-            state["pending"] = {
-                "kind": "order_line_confirm_top",
-                "order": order,
-                "line_index": nxt,
-                "top": top,
-                "matches": matches,
-            }
-
+            state["pending"] = self._pending_for_top(order, nxt, top, matches)
             save_session_state(state, session_id=sid)
             return ChatReply(propose_top(top, current_qty=order["lines"][nxt]["qty"], ui=ui))
 
@@ -4692,6 +4679,12 @@ class MKChatEngine:
             if line["chosen"] is None:
                 return i
         return None
+
+    def _pending_for_top(self, order: dict, line_index: int, top: dict, matches: list) -> dict:
+        """Return the right pending state: search mode when no SKU match, confirm mode when matched."""
+        if not (top.get("sku") or "").strip():
+            return {"kind": "order_line_pick_top5_or_search", "order": order, "line_index": line_index, "matches": []}
+        return {"kind": "order_line_confirm_top", "order": order, "line_index": line_index, "top": top, "matches": matches}
 
     def _start_line_resolution(self, catalog: List[dict], order: dict, line_index: int) -> Tuple[dict, List[dict], str]:
         text = order["lines"][line_index]["text"]
