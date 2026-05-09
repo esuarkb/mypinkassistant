@@ -4,6 +4,7 @@
 import os
 import json
 import time
+import signal
 import requests
 import traceback
 from dotenv import load_dotenv
@@ -266,12 +267,22 @@ def _reset_login_failures(cid: int) -> None:
         conn.close()
 
 
+_shutdown = False
+
+def _handle_sigterm(signum, frame):
+    global _shutdown
+    print("[Worker] SIGTERM received — finishing current job then exiting")
+    _shutdown = True
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
+
+
 def main():
     print(f"✅ Worker starting: {WORKER_ID}")
     #send_failure_text("✅ Test alert from MyPinkAssistant worker")
 
     with sync_playwright() as pw:
-        while True:
+        while not _shutdown:
             try:
                 paused = (get_system_setting("queue_paused", "0") or "0").strip() == "1"
             except Exception:
