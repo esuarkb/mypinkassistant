@@ -918,6 +918,12 @@ def main():
 
                 release_consultant(cid)
 
+                try:
+                    from autoscaler import check_and_scale_down
+                    check_and_scale_down()
+                except Exception as _ae:
+                    print(f"[Autoscaler] scale-down hook error: {_ae}")
+
 
 if __name__ == "__main__":
     main()
