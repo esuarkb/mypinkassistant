@@ -110,17 +110,28 @@ def _any_jobs_active() -> bool:
         return cur.fetchone() is not None
 
 
+def _get_worker_max() -> int:
+    """Read WORKER_MAX from system_settings, fallback to module constant."""
+    try:
+        from db import get_system_setting
+        val = get_system_setting("worker_max", str(WORKER_MAX))
+        return max(1, int(val or WORKER_MAX))
+    except Exception:
+        return WORKER_MAX
+
+
 def check_and_scale_up() -> bool:
     """
     Called when a new real-time job is enqueued (from app.py).
     Scales up the moment any consultant is waiting for a free worker.
     """
+    worker_max = _get_worker_max()
     waiting = _waiting_consultant_count()
-    print(f"[Autoscaler] check_and_scale_up: {waiting} consultant(s) waiting for a worker")
+    print(f"[Autoscaler] check_and_scale_up: {waiting} consultant(s) waiting for a worker (max={worker_max})")
     if waiting >= 1:
         current = current_instance_count()
-        if current is not None and current < WORKER_MAX:
-            return _scale(min(WORKER_MAX, current + 1))
+        if current is not None and current < worker_max:
+            return _scale(min(worker_max, current + 1))
     return False
 
 
@@ -134,7 +145,7 @@ def check_and_scale_down() -> bool:
     if not active:
         current = current_instance_count()
         if current is not None and current > WORKER_MIN:
-            return scale_down()
+            return _scale(WORKER_MIN)
     return False
 
 

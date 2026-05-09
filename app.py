@@ -1844,6 +1844,7 @@ def admin_diagnostics(request: Request):
     em_checked = "checked" if ui["enabled"] else ""
     em_msg = ui["message"].replace('"', "&quot;")
     queue_paused = (get_system_setting("queue_paused", "0") or "0").strip() == "1"
+    worker_max = int((get_system_setting("worker_max", "3") or "3").strip())
 
     CT = ZoneInfo("America/Chicago")
 
@@ -2121,6 +2122,13 @@ def admin_diagnostics(request: Request):
     <form method="post" action="/admin/pause-queue">
         <button type="submit" class="adminBtn {'danger' if queue_paused else ''}">{'Unpause Queue ▶️' if queue_paused else 'Pause Queue ⏸'}</button>
     </form>
+
+    <form method="post" action="/admin/set-worker-max" style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:13px;font-weight:600">Max Workers:</label>
+        <input type="number" name="worker_max" value="{worker_max}" min="1" max="10"
+               style="width:60px;padding:6px 8px;border-radius:8px;border:1px solid #ddd;font-size:14px" />
+        <button type="submit" class="adminBtn">Set</button>
+    </form>
     </div>
     
     <h2 style="margin:20px 0 6px;font-size:16px">Emergency UI Banner</h2>
@@ -2304,6 +2312,22 @@ def admin_pause_queue(request: Request):
 
     current = (get_system_setting("queue_paused", "0") or "0").strip()
     set_system_setting("queue_paused", "0" if current == "1" else "1")
+    return RedirectResponse("/admin", status_code=302)
+
+
+@app.post("/admin/set-worker-max")
+async def admin_set_worker_max(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    form = await request.form()
+    try:
+        val = max(1, min(10, int(form.get("worker_max", 3))))
+    except (ValueError, TypeError):
+        val = 3
+    set_system_setting("worker_max", str(val))
     return RedirectResponse("/admin", status_code=302)
 
 
