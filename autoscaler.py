@@ -120,7 +120,7 @@ def check_and_scale_up() -> bool:
     if waiting >= 1:
         current = current_instance_count()
         if current is not None and current < WORKER_MAX:
-            return scale_up()
+            return _scale(min(WORKER_MAX, current + 1))
     return False
 
 
