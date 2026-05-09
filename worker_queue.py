@@ -643,6 +643,12 @@ def mark_job_done(job_id: int, msg: str = "Complete ✅") -> None:
             (msg, int(job_id)),
         )
         conn.commit()
+
+        try:
+            from autoscaler import check_and_scale_down
+            check_and_scale_down()
+        except Exception as _ae:
+            print(f"[Autoscaler] scale-down hook error: {_ae}")
     finally:
         try:
             cur.close()
@@ -668,6 +674,12 @@ def mark_job_failed(job_id: int, error: str, msg: str = "Failed ❌") -> None:
             (str(error)[:2000], msg, int(job_id)),
         )
         conn.commit()
+
+        try:
+            from autoscaler import check_and_scale_down
+            check_and_scale_down()
+        except Exception as _ae:
+            print(f"[Autoscaler] scale-down hook error: {_ae}")
     finally:
         try:
             cur.close()
