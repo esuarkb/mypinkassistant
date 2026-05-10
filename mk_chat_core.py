@@ -2815,6 +2815,27 @@ class MKChatEngine:
 
         ##
         # -------------------------
+        # PCP enrolled list (no LLM call)
+        # -------------------------
+        if not pending:
+            _pcp_show = (
+                "pcp" in lowered and
+                any(t in lowered for t in ("list", "who", "show", "enrolled", "my pcp", "customers", "mailer")) and
+                not any(t in lowered for t in ("should", "candidate", "score", "add", "drop", "remove"))
+            )
+            if _pcp_show:
+                from crm_store import get_pcp_list as _get_pcp
+                with tx() as (conn, cur):
+                    _pcp_customers, _pcp_quarter = _get_pcp(cur, consultant_id)
+                if not _pcp_customers:
+                    return ChatReply("No PCP customers found for the current quarter.")
+                lines = [f"<strong>PCP List — {_pcp_quarter}</strong> ({len(_pcp_customers)} customers)"]
+                for c in _pcp_customers:
+                    lines.append(f"• {c['name']}")
+                return ChatReply("<br>".join(lines))
+
+        ##
+        # -------------------------
         # CRM quick lookup: leaderboard / top customers (no LLM call)
         # -------------------------
         if not pending:
@@ -2823,7 +2844,6 @@ class MKChatEngine:
             leaderboard_triggers = (
                 "leaderboard",
                 "spent the most", "spend the most",
-                "pcp list", "pcp mailer",
                 "top customers", "top customer"
             )
 
@@ -2860,8 +2880,6 @@ class MKChatEngine:
                         period = f"{m.group(1)} {m.group(2)} days"
 
                 title = f"Top {n} customers ({period})"
-                if "pcp" in lowered:
-                    title = f"PCP list starting point — Top {n} customers ({period})"
 
                 with tx() as (conn, cur):
                     rows = get_top_customers(

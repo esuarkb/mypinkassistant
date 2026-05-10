@@ -281,6 +281,37 @@ def get_pcp_enrolled(cur, consultant_id: int, customer_id: int) -> bool:
         return False
 
 
+def get_pcp_list(cur, consultant_id: int) -> tuple[list[dict], str]:
+    """Return (customers, quarter) for the current PCP quarter."""
+    from db import is_postgres
+    PH = "%s" if is_postgres() else "?"
+    cur.execute(f"""
+        SELECT pe.pcp_name, pe.customer_id, pe.quarter,
+               c.first_name, c.last_name, c.phone
+        FROM pcp_enrollments pe
+        LEFT JOIN customers c ON c.id = pe.customer_id
+        WHERE pe.consultant_id = {PH}
+          AND pe.enrolled = TRUE
+          AND pe.quarter = (SELECT MAX(quarter) FROM pcp_enrollments WHERE consultant_id = {PH})
+        ORDER BY pe.pcp_name
+    """, (consultant_id, consultant_id))
+    rows = _rows_to_dicts(cur)
+    if not rows:
+        return [], ""
+    quarter = (rows[0].get("quarter") or "")
+    customers = []
+    for r in rows:
+        first = (r.get("first_name") or "").strip()
+        last  = (r.get("last_name") or "").strip()
+        name  = f"{first} {last}".strip() if (first or last) else (r.get("pcp_name") or "")
+        customers.append({
+            "id":    r.get("customer_id"),
+            "name":  name,
+            "phone": r.get("phone") or "",
+        })
+    return customers, quarter
+
+
 def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = None, pcp_enrolled: bool = False) -> str:
     import re
     import calendar
