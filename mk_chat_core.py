@@ -2858,6 +2858,49 @@ class MKChatEngine:
         # -------------------------
         # Lapsed customers (no LLM call)
         # -------------------------
+        # Birthday period lookup
+        # -------------------------
+        if not pending:
+            _bday_period = None
+            _bday_triggers = ("birthday", "birthdays", "bday", "bdays")
+            _has_bday_word = any(t in lowered for t in _bday_triggers)
+            if _has_bday_word:
+                if "today" in lowered:
+                    _bday_period = "today"
+                elif "tomorrow" in lowered:
+                    _bday_period = "tomorrow"
+                elif any(x in lowered for x in ("this month", "this mo")):
+                    _bday_period = "month"
+                elif "next month" in lowered:
+                    _bday_period = "next_month"
+                elif "next week" in lowered:
+                    _bday_period = "next_week"
+                elif any(x in lowered for x in ("this week", "this wk")):
+                    _bday_period = "week"
+                elif any(x in lowered for x in ("this quarter", "quarter")):
+                    _bday_period = "quarter"
+                elif any(x in lowered for x in ("upcoming", "coming up", "soon", "next 30")):
+                    _bday_period = "upcoming"
+
+            if _bday_period:
+                from crm_store import get_customers_by_birthday_period as _gbp
+                from followup_store import render_birthday_search_cards as _rbsc
+                from auth_core import get_consultant_full as _gcf2
+                from db import tx
+                _consultant_first = ((_gcf2(consultant_id) or {}).get("first_name") or "").strip()
+                with tx() as (conn, cur):
+                    _bday_customers = _gbp(consultant_id, _bday_period, cur)
+                _period_labels = {
+                    "today": "today", "tomorrow": "tomorrow",
+                    "month": "this month", "week": "this week", "next_week": "next week",
+                    "quarter": "this quarter", "upcoming": "the next 30 days", "next_month": "next month",
+                }
+                if not _bday_customers:
+                    return ChatReply(f"No customers with birthdays {_period_labels.get(_bday_period, _bday_period)}.")
+                _header = f"<strong>Birthdays {_period_labels.get(_bday_period, _bday_period).title()}</strong>"
+                return ChatReply(_header + "\n" + _rbsc(_bday_customers, _consultant_first))
+
+        # -------------------------
         # Guard: "who are my retinol customers" type messages get misclassified as
         # lapsed_customers by the LLM. Detect product-search phrasing here so it
         # falls through to the product-search block below.

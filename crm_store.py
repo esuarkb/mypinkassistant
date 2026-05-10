@@ -1126,3 +1126,152 @@ def delete_customer_local(cur, consultant_id: int, customer_id: int, delete_orde
     else:
         cur.execute("DELETE FROM customers WHERE consultant_id = %s AND id = %s", (consultant_id, customer_id))
         return int(cur.rowcount or 0)
+
+
+# ---------------------------------------------------------------------------
+# Birthday period lookup
+# ---------------------------------------------------------------------------
+
+def get_customers_by_birthday_period(consultant_id: int, period: str, cur) -> list[dict]:
+    """
+    Return customers whose birthday (month/day) falls within the requested period.
+
+    period values: "month", "week", "next_week", "quarter", "upcoming" (30 days)
+
+    Birthdays are stored as YYYY-MM-DD (year 2000 when none given). Only month
+    and day are compared — the stored year is ignored.
+
+    Returns list of dicts sorted by days_until ascending:
+      customer_id, first_name, last_name, phone, bday_month, bday_day,
+      bday_month_name, days_until, is_first_contact
+    """
+    import datetime, calendar as _cal
+
+    is_sqlite = "sqlite" in type(cur).__module__.lower()
+    PH = "?" if is_sqlite else "%s"
+
+    cur.execute(
+        f"SELECT id, first_name, last_name, phone, birthday FROM customers "
+        f"WHERE consultant_id = {PH} AND birthday IS NOT NULL AND birthday <> '' "
+        f"AND phone IS NOT NULL AND phone <> '' "
+        f"AND COALESCE(source_status, 'active') = 'active'",
+        (consultant_id,),
+    )
+    rows = cur.fetchall()
+
+    def _g(row, key, idx):
+        try:
+            return row[key] if isinstance(row, dict) else row[idx]
+        except Exception:
+            return None
+
+    today = datetime.date.today()
+
+    # Determine the date window for each period
+    if period == "today":
+        def _in_window(bday_this_year):
+            return bday_this_year == today
+    elif period == "tomorrow":
+        tomorrow = today + datetime.timedelta(days=1)
+        def _in_window(bday_this_year):
+            return bday_this_year == tomorrow
+    elif period == "month":
+        month_start = today.replace(day=1)
+        last_day = _cal.monthrange(today.year, today.month)[1]
+        month_end = today.replace(day=last_day)
+        def _in_window(bday_this_year):
+            return month_start <= bday_this_year <= month_end
+    elif period == "week":
+        window_end = today + datetime.timedelta(days=6)
+        def _in_window(bday_this_year):
+            if window_end.month >= today.month:
+                return today <= bday_this_year <= window_end
+            # wraps into next year — already handled by try_next_year logic below
+            return today <= bday_this_year or bday_this_year <= window_end
+    elif period == "next_week":
+        window_start = today + datetime.timedelta(days=7)
+        window_end = today + datetime.timedelta(days=13)
+        def _in_window(bday_this_year):
+            return window_start <= bday_this_year <= window_end
+    elif period == "next_month":
+        nm = today.month % 12 + 1
+        def _in_window(bday_this_year):
+            return bday_this_year.month == nm
+    elif period == "quarter":
+        q_month = ((today.month - 1) // 3) * 3 + 1
+        q_months = {q_month, q_month + 1, q_month + 2}
+        def _in_window(bday_this_year):
+            return bday_this_year.month in q_months
+    else:  # "upcoming" — next 30 days
+        window_end = today + datetime.timedelta(days=29)
+        def _in_window(bday_this_year):
+            return today <= bday_this_year <= window_end
+
+    results = []
+    for row in rows:
+        raw_bday = _g(row, "birthday", 4) or ""
+        if not raw_bday or len(raw_bday) < 5:
+            continue
+        try:
+            parts = raw_bday.split("-")
+            if len(parts) == 3:      # YYYY-MM-DD
+                bday_month = int(parts[1])
+                bday_day = int(parts[2])
+            elif len(parts) == 2:    # MM-DD (no year stored)
+                bday_month = int(parts[0])
+                bday_day = int(parts[1])
+            else:
+                continue
+        except Exception:
+            continue
+
+        try:
+            bday_this_year = datetime.date(today.year, bday_month, bday_day)
+        except ValueError:
+            continue  # invalid date (e.g. Feb 29 in non-leap year)
+
+        # For week/upcoming periods that span year boundary, also check next year
+        bday_next_year = datetime.date(today.year + 1, bday_month, bday_day)
+
+        if _in_window(bday_this_year):
+            ref_date = bday_this_year
+        elif period in ("week", "next_week", "upcoming", "next_month", "tomorrow") and _in_window(bday_next_year):
+            ref_date = bday_next_year
+        else:
+            continue
+
+        days_until = (ref_date - today).days
+
+        customer_id = _g(row, "id", 0)
+        first_name  = _g(row, "first_name", 1) or ""
+        last_name   = _g(row, "last_name", 2) or ""
+        phone       = _g(row, "phone", 3) or ""
+        bday_month_name = _cal.month_name[bday_month]
+
+        # is_first_contact: no completed order or birthday followup
+        cur.execute(
+            f"SELECT 1 FROM customer_followups WHERE customer_id = {PH} AND consultant_id = {PH} AND completed_at IS NOT NULL LIMIT 1",
+            (customer_id, consultant_id),
+        )
+        is_first = cur.fetchone() is None
+        if is_first:
+            cur.execute(
+                f"SELECT 1 FROM customer_birthday_followups WHERE customer_id = {PH} AND consultant_id = {PH} AND completed_at IS NOT NULL LIMIT 1",
+                (customer_id, consultant_id),
+            )
+            is_first = cur.fetchone() is None
+
+        results.append({
+            "customer_id":     customer_id,
+            "first_name":      first_name,
+            "last_name":       last_name,
+            "phone":           phone,
+            "bday_month":      bday_month,
+            "bday_day":        bday_day,
+            "bday_month_name": bday_month_name,
+            "days_until":      days_until,
+            "is_first_contact": is_first,
+        })
+
+    results.sort(key=lambda r: r["days_until"])
+    return results

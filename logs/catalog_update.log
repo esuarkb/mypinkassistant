@@ -277,3 +277,35 @@ Call log:
   No changes.
 
 No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Warning: could not click Expand All: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Expand All")
+
+  Extracting products...
+  Found 0 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Clicking Expand All...
+  Warning: could not click Expand All: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Expand All")
+
+  Extracting products...
+  Found 403 products.
+
+[EN] No products found — skipping.
+
+[ES] Done.
+  Catalog before : 487 SKUs
+  Scraped        : 403 products
+  Total now      : 487 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
