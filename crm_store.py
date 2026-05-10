@@ -273,7 +273,7 @@ def get_pcp_enrolled(cur, consultant_id: int, customer_id: int) -> bool:
             WHERE customer_id = {PH}
               AND consultant_id = {PH}
               AND quarter = (SELECT MAX(quarter) FROM pcp_enrollments WHERE consultant_id = {PH})
-              AND enrolled = 1
+              AND enrolled = TRUE
             LIMIT 1
         """, (customer_id, consultant_id, consultant_id))
         return cur.fetchone() is not None
