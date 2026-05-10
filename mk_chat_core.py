@@ -298,6 +298,8 @@ def load_catalog(path: Path) -> List[dict]:
                 "price": price_val,
                 "search_terms": search_terms,
                 "search_string": f"{name} {search_terms}".strip(),
+                "fact_sheet_url": (row.get("fact_sheet_url") or "").strip(),
+                "order_of_application_url": (row.get("order_of_application_url") or "").strip(),
             })
 
     return items
@@ -307,6 +309,21 @@ def fmt_price(p: Any) -> str:
     if isinstance(p, (int, float)):
         return f"${p:.2f}"
     return ""
+
+
+def _fmt_product_lookup_single(m: dict) -> str:
+    """Format a single product lookup result with optional PDF links."""
+    price = f"${m['price']:.2f}" if m.get("price") is not None else ""
+    line = f"{m['product_name']} — {price}".strip(" —")
+    parts = ["<strong>Product Look Up</strong>", line]
+    links = []
+    if m.get("fact_sheet_url"):
+        links.append(f'<a href="{m["fact_sheet_url"]}" target="_blank">Product Fact Sheet</a>')
+    if m.get("order_of_application_url"):
+        links.append(f'<a href="{m["order_of_application_url"]}" target="_blank">Order of Application</a>')
+    if links:
+        parts.append(" &bull; ".join(links))
+    return "<br>".join(parts)
 
 
 _SEARCH_STOP_WORDS = {"mary", "kay"}
@@ -392,7 +409,9 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", name_l))
         on_the_go = 1 if "the go set" in name_l else 0
         matches.append(
-            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score, "_hits": word_hits, "_otg": on_the_go}
+            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score,
+             "fact_sheet_url": c.get("fact_sheet_url", ""), "order_of_application_url": c.get("order_of_application_url", ""),
+             "_hits": word_hits, "_otg": on_the_go}
         )
 
     matches.sort(key=lambda m: (m["score"], m["_hits"], -m["_otg"]), reverse=True)
@@ -2455,7 +2474,7 @@ class MKChatEngine:
                     word_matches = [c for c in catalog if _all_words_in_product(product_text, c["product_name"])]
                     if len(word_matches) == 1:
                         m = word_matches[0]
-                        return ChatReply(f"<strong>Product Look Up</strong><br>{m['product_name']} — ${m['price']:.2f}")
+                        return ChatReply(_fmt_product_lookup_single(m))
                     elif len(word_matches) > 1:
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in word_matches[:3]:
@@ -2469,7 +2488,7 @@ class MKChatEngine:
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
-                            return ChatReply(f"<strong>Product Look Up</strong><br>{top['product_name']} — ${top['price']:.2f}")
+                            return ChatReply(_fmt_product_lookup_single(top))
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in matches:
                             lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
@@ -2480,7 +2499,7 @@ class MKChatEngine:
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
-                            return ChatReply(f"<strong>Product Look Up</strong><br>{top['product_name']} — ${top['price']:.2f}")
+                            return ChatReply(_fmt_product_lookup_single(top))
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in matches:
                             lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
@@ -2970,7 +2989,7 @@ class MKChatEngine:
                 return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
             top = matches[0]
             if len(matches) == 1 or int(top.get("score") or 0) >= 80:
-                return ChatReply(f"<strong>Product Look Up</strong><br>{top['product_name']} — ${top['price']:.2f}")
+                return ChatReply(_fmt_product_lookup_single(top))
             lines = ["<strong>Product Look Up</strong>"]
             for m in matches:
                 lines.append(f"• {m['product_name']} — ${m['price']:.2f}")

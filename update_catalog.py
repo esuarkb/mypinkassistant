@@ -125,15 +125,17 @@ def load_catalog(path: Path) -> dict[str, dict]:
             sku = (row.get("sku") or "").strip()
             if sku:
                 catalog[sku] = {
-                    "sku":               sku,
-                    "product_name":      row.get("product_name", ""),
-                    "price":             row.get("price", ""),
-                    "search_terms":      row.get("search_terms", ""),
-                    "date_added":        row.get("date_added", ""),
-                    "last_seen":         row.get("last_seen", ""),
-                    "display_name_card": row.get("display_name_card", ""),
-                    "display_name_sms":  row.get("display_name_sms", ""),
-                    "predecessor_sku":   row.get("predecessor_sku", ""),
+                    "sku":                    sku,
+                    "product_name":           row.get("product_name", ""),
+                    "price":                  row.get("price", ""),
+                    "search_terms":           row.get("search_terms", ""),
+                    "date_added":             row.get("date_added", ""),
+                    "last_seen":              row.get("last_seen", ""),
+                    "display_name_card":      row.get("display_name_card", ""),
+                    "display_name_sms":       row.get("display_name_sms", ""),
+                    "predecessor_sku":        row.get("predecessor_sku", ""),
+                    "fact_sheet_url":         row.get("fact_sheet_url", ""),
+                    "order_of_application_url": row.get("order_of_application_url", ""),
                 }
     return catalog
 
@@ -167,7 +169,7 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
     else:
         rows = sorted(catalog.values(), key=lambda r: r["sku"])
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku"])
+        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku", "fact_sheet_url", "order_of_application_url"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -190,7 +192,7 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
 
         today = date.today().isoformat()
         if sku not in catalog:
-            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": ""}
+            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": "", "fact_sheet_url": "", "order_of_application_url": ""}
             added_items.append({"sku": sku, "product_name": name, "price": price_str})
         else:
             existing = catalog[sku]
@@ -234,6 +236,77 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
                 print(f"  Auto-labeled: {other_sku} → {other['product_name']}")
 
     return added_items, updated_items, labeled_items
+
+
+def scrape_product_links(page, catalog: dict, scraped_skus: set) -> dict[str, dict]:
+    """
+    Click each product popup on the already-loaded/expanded OPOS page to extract PDF links.
+    Only fetches links for SKUs missing both fact_sheet_url and order_of_application_url.
+    Returns {sku: {fact_sheet_url, order_of_application_url}}.
+    """
+    skus_needing = {
+        sku for sku in scraped_skus
+        if not (catalog.get(sku, {}).get("fact_sheet_url") or
+                catalog.get(sku, {}).get("order_of_application_url"))
+    }
+    if not skus_needing:
+        print("  All products already have PDF links — skipping popup scrape.")
+        return {}
+
+    print(f"  Scraping PDF links for {len(skus_needing)} products (first-run may take several minutes)...")
+    links: dict[str, dict] = {}
+    seen: set[str] = set()
+    checked = 0
+
+    rows = page.query_selector_all('.row.single-order-product.product')
+    for row in rows:
+        sku_el = row.query_selector('.product-manufacturersku')
+        if not sku_el:
+            continue
+        sku = sku_el.text_content().strip()
+        if sku not in skus_needing or sku in seen:
+            continue
+        seen.add(sku)
+        checked += 1
+        if checked % 50 == 0:
+            print(f"    ...{checked}/{len(skus_needing)} checked, {len(links)} links found so far")
+
+        name_el = row.query_selector('.line-item-name-text')
+        if not name_el:
+            continue
+        try:
+            name_el.click()
+            page.wait_for_timeout(1500)
+            found = page.evaluate("""
+                () => {
+                    const result = {fact_sheet_url: '', order_of_application_url: ''};
+                    document.querySelectorAll('a[href]').forEach(a => {
+                        const href = a.href || '';
+                        if (!href.toLowerCase().includes('.pdf')) return;
+                        const text = (a.textContent || '').toLowerCase();
+                        if (text.includes('fact sheet')) result.fact_sheet_url = href;
+                        else if (text.includes('order of application')) result.order_of_application_url = href;
+                    });
+                    return result;
+                }
+            """)
+            if found.get('fact_sheet_url') or found.get('order_of_application_url'):
+                links[sku] = {
+                    'fact_sheet_url': found.get('fact_sheet_url', ''),
+                    'order_of_application_url': found.get('order_of_application_url', ''),
+                }
+            page.keyboard.press('Escape')
+            page.wait_for_timeout(300)
+        except Exception as e:
+            print(f"    Warning: SKU {sku}: {e}")
+            try:
+                page.keyboard.press('Escape')
+                page.wait_for_timeout(300)
+            except Exception:
+                pass
+
+    print(f"  Found PDF links for {len(links)} of {len(skus_needing)} products.")
+    return links
 
 
 def _send_change_email(lang_reports: list[dict]) -> None:
@@ -344,6 +417,17 @@ def _apply_en_replacements(en_labeled: list[dict], es_catalog: dict[str, dict]) 
     return applied
 
 
+def _mirror_links_to_es(en_catalog: dict, es_catalog: dict) -> None:
+    """Copy fact_sheet_url / order_of_application_url from EN to ES entries by SKU."""
+    for sku, en_entry in en_catalog.items():
+        if sku not in es_catalog:
+            continue
+        es_entry = es_catalog[sku]
+        for field in ("fact_sheet_url", "order_of_application_url"):
+            if en_entry.get(field) and not es_entry.get(field):
+                es_entry[field] = en_entry[field]
+
+
 def _print_lang_report(lang: str, before: int, scraped: list, catalog: dict,
                        added: list, updated: list, labeled: list, path: Path) -> None:
     print(f"\n[{lang.upper()}] Done.")
@@ -377,39 +461,53 @@ def _print_lang_report(lang: str, before: int, scraped: list, catalog: dict,
 
 
 def main(username: str, password: str) -> None:
+    en_scraped: list[dict] = []
+    es_scraped: list[dict] = []
+    en_links:   dict[str, dict] = {}
+    en_catalog: dict[str, dict] = {}
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
         login(page, username, password)
 
-        results = {}
-        for lang_cfg in LANGUAGES:
-            lang = lang_cfg["lang"]
-            print(f"\n[{lang.upper()}]")
-            scraped = scrape_products(page, lang_cfg["opos_url"])
-            results[lang] = scraped
+        # ── EN: scrape products then PDF links while page is still open ──
+        print("\n[EN]")
+        en_scraped = scrape_products(page, next(c["opos_url"] for c in LANGUAGES if c["lang"] == "en"))
+        if en_scraped:
+            en_path    = CATALOG_DIR / "en.csv"
+            en_catalog = load_catalog(en_path)
+            en_scraped_skus = {item["sku"] for item in en_scraped}
+            en_links = scrape_product_links(page, en_catalog, en_scraped_skus)
+
+        # ── ES: scrape products ──
+        print("\n[ES]")
+        es_scraped = scrape_products(page, next(c["opos_url"] for c in LANGUAGES if c["lang"] == "es"))
 
         browser.close()
 
     lang_reports = []
 
-    # ── EN first: detect replacements here ──
-    en_scraped = results.get("en", [])
+    # ── EN: upsert, apply PDF links, save ──
     if not en_scraped:
         print("\n[EN] No products found — skipping.")
-        en_labeled = []
+        en_labeled: list[dict] = []
     else:
-        en_path    = CATALOG_DIR / "en.csv"
-        en_catalog = load_catalog(en_path)
-        en_before  = len(en_catalog)
+        en_path   = CATALOG_DIR / "en.csv"
+        en_before = len(en_catalog)
         en_added, en_updated, en_labeled = upsert(en_catalog, en_scraped)
+        for sku, link_data in en_links.items():
+            if sku in en_catalog:
+                if link_data.get("fact_sheet_url"):
+                    en_catalog[sku]["fact_sheet_url"] = link_data["fact_sheet_url"]
+                if link_data.get("order_of_application_url"):
+                    en_catalog[sku]["order_of_application_url"] = link_data["order_of_application_url"]
         save_catalog(en_catalog, en_path, scraped_order=en_scraped)
         _print_lang_report("en", en_before, en_scraped, en_catalog, en_added, en_updated, en_labeled, en_path)
         lang_reports.append({"lang": "en", "added": en_added, "updated": en_updated, "labeled": en_labeled})
 
-    # ── ES: update prices/names, then mirror EN replacements ──
-    es_scraped = results.get("es", [])
+    # ── ES: upsert, mirror EN labels + PDF links, save ──
     if not es_scraped:
         print("\n[ES] No products found — skipping.")
     else:
@@ -420,6 +518,8 @@ def main(username: str, password: str) -> None:
         if en_labeled:
             es_mirrored = _apply_en_replacements(en_labeled, es_catalog)
             es_labeled  = es_labeled + es_mirrored
+        if en_catalog:
+            _mirror_links_to_es(en_catalog, es_catalog)
         save_catalog(es_catalog, es_path, scraped_order=es_scraped)
         _print_lang_report("es", es_before, es_scraped, es_catalog, es_added, es_updated, es_labeled, es_path)
         lang_reports.append({"lang": "es", "added": es_added, "updated": es_updated, "labeled": es_labeled})
