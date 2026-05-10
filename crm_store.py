@@ -1165,7 +1165,13 @@ def get_customers_by_birthday_period(consultant_id: int, period: str, cur) -> li
         except Exception:
             return None
 
-    today = datetime.date.today()
+    # Use America/Chicago local date so "today" is correct for US consultants
+    # regardless of what UTC date the Render server reports.
+    try:
+        from zoneinfo import ZoneInfo as _ZI
+        today = datetime.datetime.now(_ZI("America/Chicago")).date()
+    except Exception:
+        today = datetime.date.today()
 
     # Determine the date window for each period
     if period == "today":
