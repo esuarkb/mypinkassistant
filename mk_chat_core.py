@@ -2848,7 +2848,8 @@ class MKChatEngine:
                     return ChatReply("No PCP customers found for the current quarter.")
                 lines = [f"<strong>PCP List</strong> ({len(_pcp_customers)} customers)"]
                 for c in _pcp_customers:
-                    lines.append(f"• {c['name']}")
+                    safe = _html.escape(c['name'], quote=True)
+                    lines.append(f'• <a href="#" data-send="{safe}">{_html.escape(c["name"])}</a>')
                 return ChatReply("<br>".join(lines))
 
         ##

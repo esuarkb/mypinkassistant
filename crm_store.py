@@ -1104,12 +1104,15 @@ def find_customers_by_product(cur, consultant_id: int, terms: list[str]) -> list
 
 
 def format_customers_by_product(customers: list[dict], search_term: str) -> str:
+    import html as _html
     if not customers:
         return f"No customers found who have ordered {search_term}."
     header = f"{len(customers)} customer{'s' if len(customers) != 1 else ''} found:"
     lines = []
     for c in customers:
         name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+        safe = _html.escape(name, quote=True)
+        name_link = f'<a href="#" data-send="{safe}">{_html.escape(name)}</a>'
         product_parts = []
         for p in (c.get("products") or []):
             pname = p.get("name") or ""
@@ -1118,12 +1121,12 @@ def format_customers_by_product(customers: list[dict], search_term: str) -> str:
                 try:
                     from datetime import datetime
                     dt = datetime.strptime(pdate[:10], "%Y-%m-%d")
-                    pdate = f"{dt.month}/{dt.day}/{str(dt.year)[2:]}"
+                    pdate = f"last ordered {dt.month}/{dt.day}/{str(dt.year)[2:]}"
                 except Exception:
                     pass
             product_parts.append(f"{pname} ({pdate})" if pdate else pname)
         product_str = ", ".join(product_parts)
-        lines.append(f"• {name} — {product_str}" if product_str else f"• {name}")
+        lines.append(f"• {name_link} — {product_str}" if product_str else f"• {name_link}")
     return header + "\n" + "\n".join(lines)
 
 
