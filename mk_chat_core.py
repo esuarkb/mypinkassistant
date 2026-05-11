@@ -300,6 +300,7 @@ def load_catalog(path: Path) -> List[dict]:
                 "search_string": f"{name} {search_terms}".strip(),
                 "fact_sheet_url": (row.get("fact_sheet_url") or "").strip(),
                 "order_of_application_url": (row.get("order_of_application_url") or "").strip(),
+                "use_up_rate_months": (row.get("use_up_rate_months") or "").strip(),
             })
 
     return items
@@ -309,6 +310,13 @@ def fmt_price(p: Any) -> str:
     if isinstance(p, (int, float)):
         return f"${p:.2f}"
     return ""
+
+
+def _fmt_product_list_item(m: dict) -> str:
+    name = m['product_name']
+    price = f"${m['price']:.2f}" if m.get('price') is not None else ""
+    safe = _html.escape(name, quote=True)
+    return f'• <a href="#" data-send="{safe}">{_html.escape(name)}</a> — {price}'
 
 
 def _fmt_product_lookup_single(m: dict) -> str:
@@ -411,6 +419,7 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         matches.append(
             {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score,
              "fact_sheet_url": c.get("fact_sheet_url", ""), "order_of_application_url": c.get("order_of_application_url", ""),
+             "use_up_rate_months": c.get("use_up_rate_months", ""),
              "_hits": word_hits, "_otg": on_the_go}
         )
 
@@ -2407,7 +2416,7 @@ class MKChatEngine:
                 if _all_more:
                     lines = ["<strong>Product Look Up</strong>"]
                     for m in _all_more:
-                        lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                        lines.append(_fmt_product_list_item(m))
                     return ChatReply("<br>".join(lines))
                 return ChatReply("I couldn't find any products matching that search.")
 
@@ -2455,6 +2464,14 @@ class MKChatEngine:
             return ChatReply(ui["inventory_report"].format(link=link))
 
         # -------------------------
+        # Exact product name match — handles data-send clicks from multi-result lists
+        # -------------------------
+        if not pending:
+            _exact = next((c for c in catalog if c['product_name'].lower() == lowered.strip()), None)
+            if _exact:
+                return ChatReply(_fmt_product_lookup_single(_exact))
+
+        # -------------------------
         # Product price lookup (early — "how much is X", "price of X",
         # or bare product name typed alone with high catalog confidence)
         # -------------------------
@@ -2478,7 +2495,7 @@ class MKChatEngine:
                     elif len(word_matches) > 1:
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in word_matches[:3]:
-                            lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                            lines.append(_fmt_product_list_item(m))
                         if len(word_matches) > 3:
                             remaining = len(word_matches) - 3
                             lines.append(f'<a href="#" data-send="show all {product_text}">+{remaining} more</a>')
@@ -2491,7 +2508,7 @@ class MKChatEngine:
                             return ChatReply(_fmt_product_lookup_single(top))
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in matches:
-                            lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                            lines.append(_fmt_product_list_item(m))
                         return ChatReply("<br>".join(lines))
                 else:
                     # Explicit price query — fuzzy only
@@ -2502,7 +2519,7 @@ class MKChatEngine:
                             return ChatReply(_fmt_product_lookup_single(top))
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in matches:
-                            lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                            lines.append(_fmt_product_list_item(m))
                         return ChatReply("<br>".join(lines))
                     return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
 
@@ -2829,7 +2846,7 @@ class MKChatEngine:
                     _pcp_customers, _pcp_quarter = _get_pcp(cur, consultant_id)
                 if not _pcp_customers:
                     return ChatReply("No PCP customers found for the current quarter.")
-                lines = [f"<strong>PCP List — {_pcp_quarter}</strong> ({len(_pcp_customers)} customers)"]
+                lines = [f"<strong>PCP List</strong> ({len(_pcp_customers)} customers)"]
                 for c in _pcp_customers:
                     lines.append(f"• {c['name']}")
                 return ChatReply("<br>".join(lines))
@@ -3010,7 +3027,7 @@ class MKChatEngine:
                 return ChatReply(_fmt_product_lookup_single(top))
             lines = ["<strong>Product Look Up</strong>"]
             for m in matches:
-                lines.append(f"• {m['product_name']} — ${m['price']:.2f}")
+                lines.append(_fmt_product_list_item(m))
             return ChatReply("\n".join(lines))
 
         # -------------------------

@@ -134,8 +134,9 @@ def load_catalog(path: Path) -> dict[str, dict]:
                     "display_name_card":      row.get("display_name_card", ""),
                     "display_name_sms":       row.get("display_name_sms", ""),
                     "predecessor_sku":        row.get("predecessor_sku", ""),
-                    "fact_sheet_url":         row.get("fact_sheet_url", ""),
+                    "fact_sheet_url":           row.get("fact_sheet_url", ""),
                     "order_of_application_url": row.get("order_of_application_url", ""),
+                    "use_up_rate_months":        row.get("use_up_rate_months", ""),
                 }
     return catalog
 
@@ -169,7 +170,7 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
     else:
         rows = sorted(catalog.values(), key=lambda r: r["sku"])
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku", "fact_sheet_url", "order_of_application_url"])
+        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku", "fact_sheet_url", "order_of_application_url", "use_up_rate_months"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -192,7 +193,7 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
 
         today = date.today().isoformat()
         if sku not in catalog:
-            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": "", "fact_sheet_url": "", "order_of_application_url": ""}
+            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": "", "fact_sheet_url": "", "order_of_application_url": "", "use_up_rate_months": ""}
             added_items.append({"sku": sku, "product_name": name, "price": price_str})
         else:
             existing = catalog[sku]
@@ -309,6 +310,58 @@ def scrape_product_links(page, catalog: dict, scraped_skus: set) -> dict[str, di
     return links
 
 
+def scrape_use_up_rates(catalog: dict) -> dict[str, str]:
+    """
+    Download each fact sheet PDF and extract the use-up rate in months.
+    Only processes SKUs with a fact_sheet_url and no existing use_up_rate_months value.
+    Returns {sku: "2.5"} for found rates, {sku: "none"} for confirmed absent.
+    Leaves SKUs empty on network/parse errors so they retry next run.
+    """
+    import re
+    import urllib.request
+    import io
+    try:
+        import pdfplumber
+    except ImportError:
+        print("  pdfplumber not installed — skipping use-up rate extraction.")
+        return {}
+
+    skus_needing = {
+        sku for sku, entry in catalog.items()
+        if entry.get("fact_sheet_url") and not entry.get("use_up_rate_months")
+    }
+    if not skus_needing:
+        print("  All products already have use-up rate data — skipping.")
+        return {}
+
+    print(f"  Extracting use-up rates from {len(skus_needing)} fact sheet PDFs...")
+    _rate_re = re.compile(r"use[\-\s]up rate[^\d]*(\d+\.?\d*)\s*months?", re.IGNORECASE)
+    rates: dict[str, str] = {}
+    found = 0
+
+    for i, sku in enumerate(sorted(skus_needing), 1):
+        if i % 25 == 0:
+            print(f"    ...{i}/{len(skus_needing)} checked, {found} rates found so far")
+        url = catalog[sku]["fact_sheet_url"]
+        try:
+            with urllib.request.urlopen(url, timeout=15) as r:
+                data = r.read()
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
+                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            m = _rate_re.search(text)
+            if m:
+                rates[sku] = m.group(1)
+                found += 1
+            else:
+                rates[sku] = "none"
+        except Exception as e:
+            print(f"    Warning: SKU {sku}: {e}")
+
+    confirmed_none = sum(1 for v in rates.values() if v == "none")
+    print(f"  Found use-up rates for {found} products, {confirmed_none} confirmed none, {len(skus_needing) - len(rates)} skipped (will retry).")
+    return rates
+
+
 def _send_change_email(lang_reports: list[dict]) -> None:
     try:
         from dotenv import dotenv_values
@@ -423,7 +476,7 @@ def _mirror_links_to_es(en_catalog: dict, es_catalog: dict) -> None:
         if sku not in es_catalog:
             continue
         es_entry = es_catalog[sku]
-        for field in ("fact_sheet_url", "order_of_application_url"):
+        for field in ("fact_sheet_url", "order_of_application_url", "use_up_rate_months"):
             if en_entry.get(field) and not es_entry.get(field):
                 es_entry[field] = en_entry[field]
 
@@ -503,6 +556,10 @@ def main(username: str, password: str) -> None:
                     en_catalog[sku]["fact_sheet_url"] = link_data["fact_sheet_url"]
                 if link_data.get("order_of_application_url"):
                     en_catalog[sku]["order_of_application_url"] = link_data["order_of_application_url"]
+        en_rates = scrape_use_up_rates(en_catalog)
+        for sku, rate in en_rates.items():
+            if sku in en_catalog:
+                en_catalog[sku]["use_up_rate_months"] = rate
         save_catalog(en_catalog, en_path, scraped_order=en_scraped)
         _print_lang_report("en", en_before, en_scraped, en_catalog, en_added, en_updated, en_labeled, en_path)
         lang_reports.append({"lang": "en", "added": en_added, "updated": en_updated, "labeled": en_labeled})
