@@ -305,9 +305,10 @@ def get_pcp_list(cur, consultant_id: int) -> tuple[list[dict], str]:
         last  = (r.get("last_name") or "").strip()
         name  = f"{first} {last}".strip() if (first or last) else (r.get("pcp_name") or "")
         customers.append({
-            "id":    r.get("customer_id"),
-            "name":  name,
-            "phone": r.get("phone") or "",
+            "id":         r.get("customer_id"),
+            "name":       name,
+            "first_name": first or name.split()[0],
+            "phone":      r.get("phone") or "",
         })
     return customers, quarter
 

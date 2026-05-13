@@ -304,6 +304,8 @@ chat.addEventListener("click", function(e) {
             btn.textContent = "✓";
             var mPayload = cardType === "birthday"
                 ? { card_type: "birthday", customer_id: customerId }
+                : cardType === "pcp"
+                ? { card_type: "pcp", customer_id: customerId, quarter: card.dataset.quarter || "" }
                 : { card_type: "order", order_id: orderId, followup_window: followupWindow };
             fetch("/followup/complete", {
                 method: "POST",
@@ -365,6 +367,8 @@ chat.addEventListener("click", function(e) {
         btn.textContent = "✓";
         var payload = cardType === "birthday"
             ? { card_type: "birthday", customer_id: customerId }
+            : cardType === "pcp"
+            ? { card_type: "pcp", customer_id: customerId, quarter: card.dataset.quarter || "" }
             : { card_type: "order", order_id: orderId, followup_window: followupWindow };
         fetch("/followup/complete", {
             method: "POST",
@@ -472,6 +476,18 @@ document.addEventListener("click", function(e) {
         ? `https://maps.apple.com/?q=${addr}`
         : `https://www.google.com/maps/search/?api=1&query=${addr}`;
     window.open(url, "_blank");
+});
+
+// PCP show-more handler
+document.addEventListener("click", function(e) {
+    var btn = e.target.closest(".pcp-show-more");
+    if (!btn) return;
+    var list = btn.closest(".followup-list");
+    if (!list) return;
+    list.querySelectorAll(".pcp-card").forEach(function(card) {
+        if (card.style.display === "none") card.style.display = "";
+    });
+    btn.remove();
 });
 
 // 3) Load rotating hero messages

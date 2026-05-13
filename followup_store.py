@@ -619,3 +619,99 @@ def render_birthday_search_cards(customers: list[dict], consultant_first: str) -
 
     parts.append('</div>')
     return "\n".join(parts)
+
+
+def complete_pcp_followup(cur, consultant_id: int, customer_id: int, quarter: str) -> bool:
+    from db import is_postgres
+    if is_postgres():
+        cur.execute(
+            """
+            INSERT INTO pcp_lookbook_followups (consultant_id, customer_id, quarter)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (customer_id, consultant_id, quarter) DO UPDATE SET completed_at = NOW()
+            """,
+            (consultant_id, customer_id, quarter),
+        )
+    else:
+        cur.execute(
+            """
+            INSERT INTO pcp_lookbook_followups (consultant_id, customer_id, quarter, completed_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(customer_id, consultant_id, quarter) DO UPDATE SET completed_at = datetime('now')
+            """,
+            (consultant_id, customer_id, quarter),
+        )
+    return True
+
+
+def get_pcp_completed_ids(cur, consultant_id: int, quarter: str) -> set:
+    from db import is_postgres
+    PH = "%s" if is_postgres() else "?"
+    cur.execute(
+        f"SELECT customer_id FROM pcp_lookbook_followups WHERE consultant_id = {PH} AND quarter = {PH}",
+        (consultant_id, quarter),
+    )
+    return {row[0] for row in cur.fetchall()}
+
+
+def _pcp_lookbook_message(first: str) -> str:
+    name = first.strip().title() if first.strip() else "there"
+    return (
+        f"Hey {name}! Just checking in — has your Mary Kay look book arrived in the mail? "
+        f"There's also a men's cologne sample tucked inside. Would love to hear what you think! \U0001f338"
+    )
+
+
+def render_pcp_cards(customers: list[dict], completed_ids: set = None, quarter: str = "") -> str:
+    import html as _html
+    from urllib.parse import quote
+
+    if not customers:
+        return ""
+
+    completed_ids = completed_ids or set()
+    PAGE = 10
+
+    pending   = sorted([c for c in customers if c.get("id") not in completed_ids],
+                       key=lambda c: (c.get("first_name") or c.get("name") or "").lower())
+    done      = sorted([c for c in customers if c.get("id") in completed_ids],
+                       key=lambda c: (c.get("first_name") or c.get("name") or "").lower())
+
+    def _card(c, is_done=False):
+        name        = c.get("name") or ""
+        first       = c.get("first_name") or (name.split()[0] if name else "")
+        phone       = c.get("phone") or ""
+        customer_id = c.get("id") or ""
+        clean_phone = "".join(ch for ch in phone if ch.isdigit() or ch == "+")
+        sms_text    = _pcp_lookbook_message(first)
+        sms_uri     = f"sms:{clean_phone}&body={quote(sms_text)}" if clean_phone else ""
+        msg_attr    = _html.escape(sms_text, quote=True)
+        name_safe   = _html.escape(name, quote=True)
+        circle      = '✓' if is_done else '○'
+        circle_cls  = 'followup-circle done' if is_done else 'followup-circle'
+        return (
+            f'<div class="followup-card" data-card-type="pcp" data-customer-id="{customer_id}" data-quarter="{_html.escape(quarter)}" data-phone="{clean_phone}" data-msg="{msg_attr}" data-sms="{sms_uri}">'
+            f'<button class="{circle_cls}" data-card-type="pcp" data-customer-id="{customer_id}" aria-label="Send look book text">{circle}</button>'
+            f'<div class="followup-info">'
+            f'<span class="followup-name"><a href="#" data-send="{name_safe}">{_html.escape(name)}</a></span>'
+            f'<span class="followup-meta">📖 PCP Look Book</span>'
+            f'</div>'
+            f'</div>'
+        )
+
+    parts = ['<div class="followup-list">']
+
+    ordered = [(c, False) for c in pending] + [(c, True) for c in done]
+    for i, (c, is_done) in enumerate(ordered):
+        hidden = ' style="display:none"' if i >= PAGE else ''
+        parts.append(f'<div class="pcp-card"{hidden}>{_card(c, is_done)}</div>')
+
+    if len(ordered) > PAGE:
+        remaining = len(ordered) - PAGE
+        parts.append(
+            f'<button class="pcp-show-more" style="margin:8px 0 4px 0;background:none;border:none;color:#e91e63;'
+            f'font-size:14px;cursor:pointer;padding:0;">+ Show {remaining} more</button>'
+        )
+
+    parts.append('</div>')
+    return "\n".join(parts)

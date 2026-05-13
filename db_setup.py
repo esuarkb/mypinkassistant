@@ -179,6 +179,19 @@ CREATE TABLE IF NOT EXISTS pcp_enrollments (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_pcp_enrollments_consultant ON pcp_enrollments(consultant_id, quarter)")
 
+# ---- pcp lookbook followups ----
+cur.execute("""
+CREATE TABLE IF NOT EXISTS pcp_lookbook_followups (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL,
+  customer_id   INTEGER NOT NULL,
+  quarter       TEXT    NOT NULL,
+  completed_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(customer_id, consultant_id, quarter)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_pcp_lookbook_followups_consultant ON pcp_lookbook_followups(consultant_id, quarter)")
+
 # ---- intouch_account_ids — secondary InTouch account IDs for duplicate handling ----
 try:
     cur.execute("ALTER TABLE customers ADD COLUMN intouch_account_ids TEXT DEFAULT '[]'")

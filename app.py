@@ -1739,6 +1739,14 @@ async def followup_complete(request: Request):
         from followup_store import complete_birthday_followup
         with tx() as (conn, cur):
             ok = complete_birthday_followup(cur, consultant_id=int(cid), customer_id=int(customer_id))
+    elif card_type == "pcp":
+        customer_id = data.get("customer_id")
+        quarter     = data.get("quarter", "")
+        if not customer_id or not quarter:
+            return JSONResponse({"ok": False}, status_code=400)
+        from followup_store import complete_pcp_followup
+        with tx() as (conn, cur):
+            ok = complete_pcp_followup(cur, consultant_id=int(cid), customer_id=int(customer_id), quarter=quarter)
     else:
         order_id = data.get("order_id")
         followup_window = data.get("followup_window")

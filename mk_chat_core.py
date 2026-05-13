@@ -2842,15 +2842,15 @@ class MKChatEngine:
             )
             if _pcp_show:
                 from crm_store import get_pcp_list as _get_pcp
+                from followup_store import render_pcp_cards as _render_pcp, get_pcp_completed_ids as _get_pcp_done
                 with tx() as (conn, cur):
                     _pcp_customers, _pcp_quarter = _get_pcp(cur, consultant_id)
+                    _pcp_done_ids = _get_pcp_done(cur, consultant_id, _pcp_quarter) if _pcp_quarter else set()
                 if not _pcp_customers:
                     return ChatReply("No PCP customers found for the current quarter.")
-                lines = [f"<strong>PCP List</strong> ({len(_pcp_customers)} customers)"]
-                for c in _pcp_customers:
-                    safe = _html.escape(c['name'], quote=True)
-                    lines.append(f'• <a href="#" data-send="{safe}">{_html.escape(c["name"])}</a>')
-                return ChatReply("<br>".join(lines))
+                _pcp_pending = len([c for c in _pcp_customers if c.get("id") not in _pcp_done_ids])
+                _pcp_header = f"<strong>PCP List</strong> ({_pcp_pending} remaining · {len(_pcp_customers)} total)"
+                return ChatReply(_pcp_header + "\n" + _render_pcp(_pcp_customers, _pcp_done_ids, _pcp_quarter))
 
         ##
         # -------------------------
