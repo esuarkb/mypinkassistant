@@ -1,14 +1,24 @@
-"""One-time script to send a test feature update email via Resend."""
-import os, requests
+"""
+Feature update email — send via Resend Broadcasts.
+
+Usage:
+    python send_test_email.py          # test send to briankrause@gmail.com
+    python send_test_email.py send     # broadcast to full audience
+"""
+import os, sys, requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY  = os.getenv("RESEND_API_KEY", "").strip()
-MAIL_FROM = os.getenv("MAIL_FROM", "support@mypinkassistant.com").strip()
-TO = "briankrause@gmail.com"
+API_KEY      = os.getenv("RESEND_API_KEY_FULL", "").strip()
+MAIL_FROM    = os.getenv("MAIL_FROM", "support@mypinkassistant.com").strip()
+AUDIENCE_ID  = os.getenv("RESEND_AUDIENCE_ID", "").strip()
+TEST_TO      = "briankrause@gmail.com"
+BROADCAST    = len(sys.argv) > 1 and sys.argv[1] == "send"
 
 SUBJECT = "What's new in MyPinkAssistant 💕"
+
+UNSUBSCRIBE_EMAIL = "support@mypinkassistant.com"
 
 TEXT = """\
 Hi there!
@@ -46,25 +56,31 @@ Get the current price and a direct link to the official Product Fact Sheet — r
 ---
 📅 A SIMPLE WEEKLY HABIT
 
-If you're just getting started, here's a routine that fits in 15 minutes and sets you up for real income:
+If you're just getting started, here's a routine that fits in 15 minutes and sets you up for some real income producing activities:
 
 • Monday morning: Ask who has birthdays this week → send a quick text from the list
 • After every party or selling event: Enter new profile cards and sales slips in chat
 • Once a week: Ask "who needs a follow-up?" → reach out to a few
 • Once a week: Ask "who hasn't ordered in 90 days?" → check in with customers you haven't heard from
 
-Consistency here is what builds a customer base that reorders without prompting.
-
 ---
-💌 KNOW A CONSULTANT WHO'D LOVE THIS?
+KNOW A CONSULTANT WHO'D LOVE THIS?
 
 Your personal referral link is in Settings at https://mypinkassistant.com — when a consultant signs up with your link, you both get a free month. It's the easiest thank-you you can give someone who's been thinking about getting organized.
+
+---
+We are always listening to your suggestions and feedback to ensure we are the best we can be to help you succeed in your business. Make sure to follow us on our socials for tips, tricks and new feature launches!
+
+Facebook: https://www.facebook.com/mypinkassistant1
+TikTok: https://www.tiktok.com/@mypinkassistant
 
 ---
 Questions? We're always here at support@mypinkassistant.com.
 
 — The MyPinkAssistant Team
 https://mypinkassistant.com
+
+To unsubscribe from these emails, reply with "unsubscribe" or email support@mypinkassistant.com
 """
 
 HTML = """\
@@ -74,7 +90,7 @@ HTML = """\
     <div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
 
       <h2 style="margin:0 0 14px 0;font-size:22px;line-height:1.25;">
-        What's new in <strong>MyPinkAssistant</strong> 💕
+        What's new in <strong>MyPinkAssistant</strong>
       </h2>
 
       <p style="margin:0 0 20px 0;">
@@ -148,54 +164,60 @@ HTML = """\
       <!-- WEEKLY ROUTINE -->
       <h3 style="margin:0 0 10px 0;font-size:17px;">📅 A Simple Weekly Habit</h3>
       <p style="margin:0 0 10px 0;">
-        If you're still getting into a routine, here's one that fits in 15 minutes and sets you up for real income:
+        If you're still getting into a routine, here's one that fits in 15 minutes and sets you up for some real income producing activities:
       </p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:18px;">
+      <table style="width:100%;border-collapse:separate;border-spacing:0 8px;margin-bottom:10px;">
         <tr>
-          <td style="padding:10px 12px;background:#fdf0f5;border-radius:10px;vertical-align:top;margin-bottom:8px;display:block;">
+          <td style="padding:10px 12px;background:#fdf0f5;border-radius:10px;vertical-align:top;">
             <strong>Monday morning</strong><br>
-            Ask who has birthdays this week → send a quick text from the list
+            Ask who has birthdays this week &rarr; send a quick text from the list
           </td>
         </tr>
-        <tr><td style="height:8px;"></td></tr>
         <tr>
-          <td style="padding:10px 12px;background:#fdf0f5;border-radius:10px;vertical-align:top;display:block;">
+          <td style="padding:10px 12px;background:#fdf0f5;border-radius:10px;vertical-align:top;">
             <strong>After every party or selling event</strong><br>
             Enter new profile cards and sales slips in chat — takes 30 seconds per customer
           </td>
         </tr>
-        <tr><td style="height:8px;"></td></tr>
         <tr>
-          <td style="padding:10px 12px;background:#fdf0f5;border-radius:10px;vertical-align:top;display:block;">
+          <td style="padding:10px 12px;background:#fdf0f5;border-radius:10px;vertical-align:top;">
             <strong>Once a week</strong><br>
-            Ask "who needs a follow-up?" → pick a few customers and check in
+            Ask "who needs a follow-up?" &rarr; pick a few customers and check in
           </td>
         </tr>
-        <tr><td style="height:8px;"></td></tr>
         <tr>
-          <td style="padding:10px 12px;background:#fdf0f5;border-radius:10px;vertical-align:top;display:block;">
+          <td style="padding:10px 12px;background:#fdf0f5;border-radius:10px;vertical-align:top;">
             <strong>Once a week</strong><br>
-            Ask "who hasn't ordered in 90 days?" → reach out to customers you haven't heard from
+            Ask "who hasn't ordered in 90 days?" &rarr; reach out to customers you haven't heard from
           </td>
         </tr>
       </table>
-      <p style="margin:0 0 18px 0;font-size:14px;color:#555;">
-        Consistency here is what builds a customer base that reorders without you having to chase them.
-      </p>
 
-      <div style="border-top:1px solid #e6e6e6;padding-top:16px;margin-bottom:6px;"></div>
+      <div style="border-top:1px solid #e6e6e6;padding-top:16px;margin-top:8px;margin-bottom:6px;"></div>
 
       <!-- REFERRAL -->
-      <h3 style="margin:0 0 8px 0;font-size:17px;">💌 Know a Consultant Who'd Love This?</h3>
-      <p style="margin:0 0 10px 0;">
+      <h3 style="margin:0 0 8px 0;font-size:17px;">Know a Consultant Who'd Love This?</h3>
+      <p style="margin:0 0 14px 0;">
         Your personal referral link is waiting in <strong>Settings</strong> — when a consultant signs up with your link, you both get a free month. It's the easiest thank-you you can give someone who's been thinking about getting organized.
       </p>
-      <p style="margin:0 0 24px 0;">
+      <p style="margin:0 0 22px 0;">
         <a href="https://mypinkassistant.com/settings"
            style="display:inline-block;background:#e91e63;color:#ffffff;text-decoration:none;
                   padding:10px 18px;border-radius:10px;font-weight:bold;font-size:14px;">
           Grab Your Referral Link
         </a>
+      </p>
+
+      <!-- FEEDBACK + SOCIALS -->
+      <p style="margin:0 0 10px 0;font-size:14px;color:#111;">
+        We are always listening to your suggestions and feedback to ensure we are the best we can be to help you succeed in your business. Make sure to follow us on our socials for tips, tricks and new feature launches!
+      </p>
+      <p style="margin:0 0 24px 0;font-size:14px;">
+        <a href="https://www.facebook.com/mypinkassistant1"
+           style="color:#e91e63;text-decoration:none;font-weight:bold;">Facebook</a>
+        &nbsp;&bull;&nbsp;
+        <a href="https://www.tiktok.com/@mypinkassistant"
+           style="color:#e91e63;text-decoration:none;font-weight:bold;">TikTok</a>
       </p>
 
       <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:4px;"></div>
@@ -206,6 +228,9 @@ HTML = """\
       </p>
       <p style="margin:6px 0 0 0;font-size:12px;color:#5a5a5a;">
         <a href="https://mypinkassistant.com" style="color:#e91e63;text-decoration:none;">mypinkassistant.com</a>
+        &nbsp;&bull;&nbsp;
+        <a href="mailto:support@mypinkassistant.com?subject=Unsubscribe"
+           style="color:#aaaaaa;text-decoration:none;font-size:11px;">Unsubscribe</a>
       </p>
 
     </div>
@@ -214,16 +239,64 @@ HTML = """\
 """
 
 if not API_KEY:
-    raise SystemExit("No RESEND_API_KEY found in .env")
+    raise SystemExit("No RESEND_API_KEY_FULL found in .env")
 
-r = requests.post(
-    "https://api.resend.com/emails",
-    headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
-    json={"from": MAIL_FROM, "to": [TO], "subject": SUBJECT, "html": HTML, "text": TEXT},
-    timeout=15,
-)
-if r.status_code >= 300:
-    raise SystemExit(f"Resend error {r.status_code}: {r.text}")
+HEADERS = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
-print(f"Test email sent to {TO} — status {r.status_code}")
-print(r.json())
+if BROADCAST:
+    if not AUDIENCE_ID:
+        raise SystemExit("No RESEND_AUDIENCE_ID found in .env")
+
+    # Create broadcast
+    r = requests.post(
+        "https://api.resend.com/broadcasts",
+        headers=HEADERS,
+        json={
+            "audience_id": AUDIENCE_ID,
+            "from": MAIL_FROM,
+            "subject": SUBJECT,
+            "html": HTML,
+            "text": TEXT,
+            "name": "Feature update — May 2026",
+        },
+        timeout=15,
+    )
+    if r.status_code >= 300:
+        raise SystemExit(f"Resend error creating broadcast: {r.status_code}: {r.text}")
+
+    broadcast_id = r.json()["id"]
+    print(f"Broadcast created: {broadcast_id}")
+
+    # Send it
+    r2 = requests.post(
+        f"https://api.resend.com/broadcasts/{broadcast_id}/send",
+        headers=HEADERS,
+        timeout=15,
+    )
+    if r2.status_code >= 300:
+        raise SystemExit(f"Resend error sending broadcast: {r2.status_code}: {r2.text}")
+
+    print(f"Broadcast sent to audience — {r2.json()}")
+
+else:
+    # Test send to single address
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers=HEADERS,
+        json={
+            "from": MAIL_FROM,
+            "to": [TEST_TO],
+            "subject": SUBJECT,
+            "html": HTML,
+            "text": TEXT,
+            "headers": {
+                "List-Unsubscribe": f"<mailto:{UNSUBSCRIBE_EMAIL}?subject=Unsubscribe>",
+            },
+        },
+        timeout=15,
+    )
+    if r.status_code >= 300:
+        raise SystemExit(f"Resend error {r.status_code}: {r.text}")
+
+    print(f"Test email sent to {TEST_TO} — status {r.status_code}")
+    print(r.json())

@@ -4,9 +4,9 @@ Adds/updates active consultants and removes cancelled ones.
 Safe to run anytime.
 
 Usage:
-    python sync_resend_audience.py <resend_audience_id>
+    python sync_resend_audience.py
 
-Find your audience ID in the Resend dashboard under Audiences.
+Reads RESEND_AUDIENCE_ID and RESEND_API_KEY_FULL from .env.
 """
 import sys
 import os
@@ -16,12 +16,12 @@ load_dotenv()
 
 from db import connect, is_postgres
 
-if len(sys.argv) < 2:
-    print("Usage: python sync_resend_audience.py <resend_audience_id>")
-    sys.exit(1)
-
-AUDIENCE_ID = sys.argv[1]
+AUDIENCE_ID = (os.getenv("RESEND_AUDIENCE_ID") or "").strip()
 API_KEY = (os.getenv("RESEND_API_KEY_FULL") or "").strip()
+
+if not AUDIENCE_ID:
+    print("Missing RESEND_AUDIENCE_ID in .env")
+    sys.exit(1)
 
 if not API_KEY:
     print("Missing RESEND_API_KEY_FULL in environment")
