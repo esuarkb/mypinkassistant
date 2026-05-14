@@ -483,7 +483,7 @@ document.addEventListener("click", function(e) {
     var link = e.target.closest(".inapp-overlay-link");
     if (!link) return;
     e.preventDefault();
-    window.open(link.href + "?inapp=1", "_blank");
+    window.open(link.href, "_blank");
 });
 
 // Copy link button handler

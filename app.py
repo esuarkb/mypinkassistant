@@ -894,32 +894,9 @@ def forgot_post(request: Request, email: str = Form(...)):
 # Legal
 # -------------------------
 @app.get("/lookbook")
-def lookbook_get(inapp: str = ""):
-    from fastapi.responses import FileResponse, HTMLResponse
+def lookbook_get():
+    from fastapi.responses import FileResponse
     pdf_path = WEB_DIR / "lookbook.pdf"
-    if inapp == "1":
-        html = """<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{display:flex;flex-direction:column;height:100dvh;font-family:sans-serif}
-.lb-header{display:flex;align-items:center;justify-content:flex-end;
-  padding:10px 14px;background:#d63384;flex-shrink:0}
-.lb-close{background:none;border:none;color:#fff;font-size:22px;
-  cursor:pointer;line-height:1;padding:4px 8px}
-iframe{flex:1;width:100%;border:none}
-</style>
-</head>
-<body>
-<div class="lb-header">
-  <button class="lb-close" onclick="window.close()">&#x2715;</button>
-</div>
-<iframe src="/lookbook"></iframe>
-</body>
-</html>"""
-        return HTMLResponse(html)
     return FileResponse(pdf_path, media_type="application/pdf", headers={
         "Content-Disposition": "inline; filename=lookbook.pdf"
     })
