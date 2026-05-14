@@ -483,36 +483,39 @@ document.addEventListener("click", function(e) {
     var link = e.target.closest(".inapp-overlay-link");
     if (!link) return;
     e.preventDefault();
-    window.open(link.href, "_blank");
+    window.open(link.href + "?inapp=1", "_blank");
 });
 
 // Copy link button handler
-document.addEventListener("click", async function(e) {
+document.addEventListener("click", function(e) {
     var btn = e.target.closest(".copy-link-btn");
     if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
-    var inp = btn.previousElementSibling;
-    if (!inp || !inp.classList.contains("copy-link-input")) return;
-    var url = inp.value;
+    var url = btn.dataset.copy;
     var orig = btn.textContent;
-    function selectInp() {
-        try { inp.focus({ preventScroll: true }); inp.select(); inp.setSelectionRange(0, inp.value.length); } catch(e) {}
-    }
     function markCopied() {
         btn.textContent = "Copied!";
         setTimeout(function() { btn.textContent = orig; }, 1500);
     }
-    selectInp();
-    try {
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(url);
-            markCopied();
-            return;
-        }
-    } catch(err) {}
-    if (document.execCommand("copy")) { markCopied(); return; }
-    window.prompt("Copy your look book link:", url);
+    function fallbackCopy() {
+        var ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, 99999);
+        var ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (ok) { markCopied(); } else { window.prompt("Copy your look book link:", url); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(markCopied).catch(fallbackCopy);
+    } else {
+        fallbackCopy();
+    }
 });
 
 // PCP show-more handler

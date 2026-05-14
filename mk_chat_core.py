@@ -2838,8 +2838,7 @@ class MKChatEngine:
             if "look book" in lowered or "lookbook" in lowered:
                 return ChatReply(
                     'Here\'s the <a href="https://mypinkassistant.com/lookbook" class="inapp-overlay-link">current Look Book</a>&nbsp; '
-                    '<input class="copy-link-input" readonly value="https://mypinkassistant.com/lookbook" style="display:none">'
-                    '<button class="fdp-copy copy-link-btn">Copy Link</button>'
+                    '<button class="fdp-copy copy-link-btn" data-copy="https://mypinkassistant.com/lookbook">Copy Link</button>'
                 )
 
         # PCP enrolled list (no LLM call)
