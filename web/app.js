@@ -478,24 +478,12 @@ document.addEventListener("click", function(e) {
     window.open(url, "_blank");
 });
 
-// In-app overlay for look book (shows PDF with X close button)
+// Look book link — open via window.open() so iOS PWA shows in-app browser with Done button
 document.addEventListener("click", function(e) {
     var link = e.target.closest(".inapp-overlay-link");
     if (!link) return;
     e.preventDefault();
-    var url = link.href;
-    var overlay = document.createElement("div");
-    overlay.className = "inapp-overlay";
-    var closeBtn = document.createElement("button");
-    closeBtn.className = "inapp-overlay-close";
-    closeBtn.textContent = "✕";
-    closeBtn.addEventListener("click", function() { overlay.remove(); });
-    var iframe = document.createElement("iframe");
-    iframe.src = url;
-    iframe.className = "inapp-overlay-frame";
-    overlay.appendChild(closeBtn);
-    overlay.appendChild(iframe);
-    document.body.appendChild(overlay);
+    window.open(link.href, "_blank");
 });
 
 // Copy link button handler
