@@ -478,6 +478,55 @@ document.addEventListener("click", function(e) {
     window.open(url, "_blank");
 });
 
+// In-app overlay for look book (shows PDF with X close button)
+document.addEventListener("click", function(e) {
+    var link = e.target.closest(".inapp-overlay-link");
+    if (!link) return;
+    e.preventDefault();
+    var url = link.href;
+    var overlay = document.createElement("div");
+    overlay.className = "inapp-overlay";
+    var closeBtn = document.createElement("button");
+    closeBtn.className = "inapp-overlay-close";
+    closeBtn.textContent = "✕";
+    closeBtn.addEventListener("click", function() { overlay.remove(); });
+    var iframe = document.createElement("iframe");
+    iframe.src = url;
+    iframe.className = "inapp-overlay-frame";
+    overlay.appendChild(closeBtn);
+    overlay.appendChild(iframe);
+    document.body.appendChild(overlay);
+});
+
+// Copy link button handler
+document.addEventListener("click", async function(e) {
+    var btn = e.target.closest(".copy-link-btn");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var inp = btn.previousElementSibling;
+    if (!inp || !inp.classList.contains("copy-link-input")) return;
+    var url = inp.value;
+    var orig = btn.textContent;
+    function selectInp() {
+        try { inp.focus({ preventScroll: true }); inp.select(); inp.setSelectionRange(0, inp.value.length); } catch(e) {}
+    }
+    function markCopied() {
+        btn.textContent = "Copied!";
+        setTimeout(function() { btn.textContent = orig; }, 1500);
+    }
+    selectInp();
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(url);
+            markCopied();
+            return;
+        }
+    } catch(err) {}
+    if (document.execCommand("copy")) { markCopied(); return; }
+    window.prompt("Copy your look book link:", url);
+});
+
 // PCP show-more handler
 document.addEventListener("click", function(e) {
     var btn = e.target.closest(".pcp-show-more");

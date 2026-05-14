@@ -2837,8 +2837,9 @@ class MKChatEngine:
         if not pending:
             if "look book" in lowered or "lookbook" in lowered:
                 return ChatReply(
-                    'Here\'s the current Mary Kay look book: '
-                    '<a href="https://mypinkassistant.com/lookbook" target="_blank">Open Look Book</a>'
+                    'Here\'s the <a href="https://mypinkassistant.com/lookbook" class="inapp-overlay-link">current Look Book</a>&nbsp; '
+                    '<input class="copy-link-input" readonly value="https://mypinkassistant.com/lookbook" style="display:none">'
+                    '<button class="fdp-copy copy-link-btn">Copy Link</button>'
                 )
 
         # PCP enrolled list (no LLM call)
