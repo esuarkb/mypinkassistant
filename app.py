@@ -893,6 +893,15 @@ def forgot_post(request: Request, email: str = Form(...)):
 # -------------------------
 # Legal
 # -------------------------
+@app.get("/lookbook")
+def lookbook_get():
+    from fastapi.responses import FileResponse
+    pdf_path = WEB_DIR / "lookbook.pdf"
+    return FileResponse(pdf_path, media_type="application/pdf", headers={
+        "Content-Disposition": "inline; filename=lookbook.pdf"
+    })
+
+
 @app.get("/legal", response_class=HTMLResponse)
 def legal_get(request: Request):
     return render_page("legal.html")

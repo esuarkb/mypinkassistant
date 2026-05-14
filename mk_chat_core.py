@@ -2832,6 +2832,15 @@ class MKChatEngine:
 
         ##
         # -------------------------
+        # Look book (no LLM call)
+        # -------------------------
+        if not pending:
+            if "look book" in lowered or "lookbook" in lowered:
+                return ChatReply(
+                    'Here\'s the current Mary Kay look book: '
+                    '<a href="https://mypinkassistant.com/lookbook" target="_blank">Open Look Book</a>'
+                )
+
         # PCP enrolled list (no LLM call)
         # -------------------------
         if not pending:
