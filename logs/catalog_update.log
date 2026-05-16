@@ -499,3 +499,516 @@ Call log:
   No changes.
 
 No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 543 products.
+  Scraping PDF links for 118 products (first-run may take several minutes)...
+    ...50/118 checked, 47 links found so far
+    ...100/118 checked, 75 links found so far
+  Found PDF links for 75 of 118 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Clicking Expand All...
+  Warning: could not click Expand All: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Expand All")
+
+  Extracting products...
+  Found 543 products.
+  Extracting use-up rates from 76 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+    ...25/76 checked, 23 rates found so far
+    ...50/76 checked, 48 rates found so far
+    ...75/76 checked, 72 rates found so far
+  Found use-up rates for 72 products, 3 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 488 SKUs
+  Scraped        : 543 products
+  Total now      : 488 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+
+  CHANGED (74):
+    ~ 10210785  name: TimeWise Luminous 3D Foundation - Light 1 → TimeWise Luminous 3D Foundation - Light 1​
+    ~ 10210786  name: TimeWise Luminous 3D Foundation - Light 2 → TimeWise Luminous 3D Foundation - Light 2​
+    ~ 10210787  name: TimeWise Luminous 3D Foundation - Light 3 → TimeWise Luminous 3D Foundation - Light 3​
+    ~ 10210788  name: TimeWise Luminous 3D Foundation - Light 4 → TimeWise Luminous 3D Foundation - Light 4​
+    ~ 10210789  name: TimeWise Luminous 3D Foundation - Light 5 → TimeWise Luminous 3D Foundation - Light 5​
+    ~ 10210790  name: TimeWise Luminous 3D Foundation - Light 6 → TimeWise Luminous 3D Foundation - Light 6​
+    ~ 10210791  name: TimeWise Luminous 3D Foundation - Light 7 → TimeWise Luminous 3D Foundation - Light 7​
+    ~ 10210793  name: TimeWise Luminous 3D Foundation - Medium 1 → TimeWise Luminous 3D Foundation - Medium 1​
+    ~ 10210794  name: TimeWise Luminous 3D Foundation - Medium 2 → TimeWise Luminous 3D Foundation - Medium 2​
+    ~ 10210795  name: TimeWise Luminous 3D Foundation - Medium 3 → TimeWise Luminous 3D Foundation - Medium 3​
+    ~ 10210796  name: TimeWise Luminous 3D Foundation - Medium 4 → TimeWise Luminous 3D Foundation - Medium 4​
+    ~ 10210797  name: TimeWise Luminous 3D Foundation - Medium 5 → TimeWise Luminous 3D Foundation - Medium 5​
+    ~ 10210798  name: TimeWise Luminous 3D Foundation - Medium 6 → TimeWise Luminous 3D Foundation - Medium 6​
+    ~ 10210799  name: TimeWise Luminous 3D Foundation - Medium 7 → TimeWise Luminous 3D Foundation - Medium 7​
+    ~ 10210801  name: TimeWise Luminous 3D Foundation - Medium 8 → TimeWise Luminous 3D Foundation - Medium 8​
+    ~ 10210802  name: TimeWise Luminous 3D Foundation - Medium 9 → TimeWise Luminous 3D Foundation - Medium 9​
+    ~ 10210803  name: TimeWise Luminous 3D Foundation - Medium 10 → TimeWise Luminous 3D Foundation - Medium 10​
+    ~ 10210804  name: TimeWise Luminous 3D Foundation - Medium 11 → TimeWise Luminous 3D Foundation - Medium 11​
+    ~ 10210805  name: TimeWise Luminous 3D Foundation - Medium 12 → TimeWise Luminous 3D Foundation - Medium 12​
+    ~ 10210806  name: TimeWise Luminous 3D Foundation - Medium 13 → TimeWise Luminous 3D Foundation - Medium 13​
+    ~ 10210792  name: TimeWise Luminous 3D Foundation - Medium 14 → TimeWise Luminous 3D Foundation - Medium 14​
+    ~ 10210807  name: TimeWise Luminous 3D Foundation - Deep 1 → TimeWise Luminous 3D Foundation - Deep 1​
+    ~ 10210808  name: TimeWise Luminous 3D Foundation - Deep 2 → TimeWise Luminous 3D Foundation - Deep 2​
+    ~ 10210809  name: TimeWise Luminous 3D Foundation - Deep 3 → TimeWise Luminous 3D Foundation - Deep 3​
+    ~ 10210810  name: TimeWise Luminous 3D Foundation - Deep 4 → TimeWise Luminous 3D Foundation - Deep 4​
+    ~ 10219478  name: TimeWise Luminous 3D Foundation - Deep 5 → TimeWise Luminous 3D Foundation - Deep 5​
+    ~ 10219479  name: TimeWise Luminous 3D Foundation - Deep 6 → TimeWise Luminous 3D Foundation - Deep 6​
+    ~ 10219480  name: TimeWise Luminous 3D Foundation - Deep 7 → TimeWise Luminous 3D Foundation - Deep 7​
+    ~ 10219481  name: TimeWise Luminous 3D Foundation - Deep 8 → TimeWise Luminous 3D Foundation - Deep 8​
+    ~ 10219482  name: TimeWise Luminous 3D Foundation - Deep 9 → TimeWise Luminous 3D Foundation - Deep 9​
+    ~ 10219483  name: TimeWise Luminous 3D Foundation - Deep 10 → TimeWise Luminous 3D Foundation - Deep 10​
+    ~ 10219484  name: TimeWise Luminous 3D Foundation - Deep 11 → TimeWise Luminous 3D Foundation - Deep 11​
+    ~ 10235274  name: TimeWise Luminous 3D Foundation - Deep 12 → TimeWise Luminous 3D Foundation - Deep 12​
+    ~ 10235275  name: TimeWise Luminous 3D Foundation - Deep 13 → TimeWise Luminous 3D Foundation - Deep 13​
+    ~ 10235276  name: TimeWise Luminous 3D Foundation - Deep 14 → TimeWise Luminous 3D Foundation - Deep 14​
+    ~ 10235277  name: TimeWise Luminous 3D Foundation - Deep 15 → TimeWise Luminous 3D Foundation - Deep 15​
+    ~ 10210733  name: TimeWise Matte 3D Foundation - Light 1 → TimeWise Matte 3D Foundation - Light 1​
+    ~ 10210734  name: TimeWise Matte 3D Foundation - Light 2 → TimeWise Matte 3D Foundation - Light 2​
+    ~ 10210735  name: TimeWise Matte 3D Foundation - Light 3 → TimeWise Matte 3D Foundation - Light 3​
+    ~ 10210736  name: TimeWise Matte 3D Foundation - Light 4 → TimeWise Matte 3D Foundation - Light 4​
+    ~ 10210737  name: TimeWise Matte 3D Foundation - Light 5 → TimeWise Matte 3D Foundation - Light 5​
+    ~ 10210738  name: TimeWise Matte 3D Foundation - Light 6 → TimeWise Matte 3D Foundation - Light 6​
+    ~ 10210739  name: TimeWise Matte 3D Foundation - Light 7 → TimeWise Matte 3D Foundation - Light 7​
+    ~ 10210741  name: TimeWise Matte 3D Foundation - Medium 1 → TimeWise Matte 3D Foundation - Medium 1​
+    ~ 10210742  name: TimeWise Matte 3D Foundation - Medium 2 → TimeWise Matte 3D Foundation - Medium 2​
+    ~ 10210743  name: TimeWise Matte 3D Foundation - Medium 3 → TimeWise Matte 3D Foundation - Medium 3​
+    ~ 10210744  name: TimeWise Matte 3D Foundation - Medium 4 → TimeWise Matte 3D Foundation - Medium 4​
+    ~ 10210745  name: TimeWise Matte 3D Foundation - Medium 5 → TimeWise Matte 3D Foundation - Medium 5​
+    ~ 10210746  name: TimeWise Matte 3D Foundation - Medium 6 → TimeWise Matte 3D Foundation - Medium 6​
+    ~ 10210747  name: TimeWise Matte 3D Foundation - Medium 7 → TimeWise Matte 3D Foundation - Medium 7​
+    ~ 10210748  name: TimeWise Matte 3D Foundation - Medium 8 → TimeWise Matte 3D Foundation - Medium 8​
+    ~ 10210749  name: TimeWise Matte 3D Foundation - Medium 9 → TimeWise Matte 3D Foundation - Medium 9​
+    ~ 10210750  name: TimeWise Matte 3D Foundation - Medium 10 → TimeWise Matte 3D Foundation - Medium 10​
+    ~ 10210751  name: TimeWise Matte 3D Foundation - Medium 11 → TimeWise Matte 3D Foundation - Medium 11​
+    ~ 10210752  name: TimeWise Matte 3D Foundation - Medium 12 → TimeWise Matte 3D Foundation - Medium 12​
+    ~ 10210753  name: TimeWise Matte 3D Foundation - Medium 13 → TimeWise Matte 3D Foundation - Medium 13​
+    ~ 10210740  name: TimeWise Matte 3D Foundation - Medium 14 → TimeWise Matte 3D Foundation - Medium 14​
+    ~ 10210754  name: TimeWise Matte 3D Foundation - Deep 1 → TimeWise Matte 3D Foundation - Deep 1​
+    ~ 10210755  name: TimeWise Matte 3D Foundation - Deep 2 → TimeWise Matte 3D Foundation - Deep 2​
+    ~ 10210756  name: TimeWise Matte 3D Foundation - Deep 3 → TimeWise Matte 3D Foundation - Deep 3​
+    ~ 10210757  name: TimeWise Matte 3D Foundation - Deep 4 → TimeWise Matte 3D Foundation - Deep 4​
+    ~ 10210758  name: TimeWise Matte 3D Foundation - Deep 5 → TimeWise Matte 3D Foundation - Deep 5​
+    ~ 10219466  name: TimeWise Matte 3D Foundation - Deep 6 → TimeWise Matte 3D Foundation - Deep 6​
+    ~ 10219467  name: TimeWise Matte 3D Foundation - Deep 7 → TimeWise Matte 3D Foundation - Deep 7​
+    ~ 10219468  name: TimeWise Matte 3D Foundation - Deep 8 → TimeWise Matte 3D Foundation - Deep 8​
+    ~ 10219469  name: TimeWise Matte 3D Foundation - Deep 9 → TimeWise Matte 3D Foundation - Deep 9​
+    ~ 10219470  name: TimeWise Matte 3D Foundation - Deep 10 → TimeWise Matte 3D Foundation - Deep 10​
+    ~ 10219471  name: TimeWise Matte 3D Foundation - Deep 11 → TimeWise Matte 3D Foundation - Deep 11​
+    ~ 10235231  name: TimeWise Matte 3D Foundation - Deep 12 → TimeWise Matte 3D Foundation - Deep 12​
+    ~ 10235232  name: TimeWise Matte 3D Foundation - Deep 13 → TimeWise Matte 3D Foundation - Deep 13​
+    ~ 10235233  name: TimeWise Matte 3D Foundation - Deep 14 → TimeWise Matte 3D Foundation - Deep 14​
+    ~ 10235234  name: TimeWise Matte 3D Foundation - Deep 15 → TimeWise Matte 3D Foundation - Deep 15​
+    ~ 10236898  name: Mary Kay Gel Cream Blush - Pink Stars → Limited-Edition Mary Kay Gel Cream Blush - Pink Stars
+    ~ 10236901  name: Mary Kay Gel Cream Blush - Coral Kiss → Limited-Edition Mary Kay Gel Cream Blush - Coral Kiss
+
+[ES] Done.
+  Catalog before : 488 SKUs
+  Scraped        : 543 products
+  Total now      : 488 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  CHANGED (74):
+    ~ 10210785  name: TimeWise Luminous 3D Foundation - Light 1 → TimeWise Luminous 3D Foundation - Light 1​
+    ~ 10210786  name: TimeWise Luminous 3D Foundation - Light 2 → TimeWise Luminous 3D Foundation - Light 2​
+    ~ 10210787  name: TimeWise Luminous 3D Foundation - Light 3 → TimeWise Luminous 3D Foundation - Light 3​
+    ~ 10210788  name: TimeWise Luminous 3D Foundation - Light 4 → TimeWise Luminous 3D Foundation - Light 4​
+    ~ 10210789  name: TimeWise Luminous 3D Foundation - Light 5 → TimeWise Luminous 3D Foundation - Light 5​
+    ~ 10210790  name: TimeWise Luminous 3D Foundation - Light 6 → TimeWise Luminous 3D Foundation - Light 6​
+    ~ 10210791  name: TimeWise Luminous 3D Foundation - Light 7 → TimeWise Luminous 3D Foundation - Light 7​
+    ~ 10210793  name: TimeWise Luminous 3D Foundation - Medium 1 → TimeWise Luminous 3D Foundation - Medium 1​
+    ~ 10210794  name: TimeWise Luminous 3D Foundation - Medium 2 → TimeWise Luminous 3D Foundation - Medium 2​
+    ~ 10210795  name: TimeWise Luminous 3D Foundation - Medium 3 → TimeWise Luminous 3D Foundation - Medium 3​
+    ~ 10210796  name: TimeWise Luminous 3D Foundation - Medium 4 → TimeWise Luminous 3D Foundation - Medium 4​
+    ~ 10210797  name: TimeWise Luminous 3D Foundation - Medium 5 → TimeWise Luminous 3D Foundation - Medium 5​
+    ~ 10210798  name: TimeWise Luminous 3D Foundation - Medium 6 → TimeWise Luminous 3D Foundation - Medium 6​
+    ~ 10210799  name: TimeWise Luminous 3D Foundation - Medium 7 → TimeWise Luminous 3D Foundation - Medium 7​
+    ~ 10210801  name: TimeWise Luminous 3D Foundation - Medium 8 → TimeWise Luminous 3D Foundation - Medium 8​
+    ~ 10210802  name: TimeWise Luminous 3D Foundation - Medium 9 → TimeWise Luminous 3D Foundation - Medium 9​
+    ~ 10210803  name: TimeWise Luminous 3D Foundation - Medium 10 → TimeWise Luminous 3D Foundation - Medium 10​
+    ~ 10210804  name: TimeWise Luminous 3D Foundation - Medium 11 → TimeWise Luminous 3D Foundation - Medium 11​
+    ~ 10210805  name: TimeWise Luminous 3D Foundation - Medium 12 → TimeWise Luminous 3D Foundation - Medium 12​
+    ~ 10210806  name: TimeWise Luminous 3D Foundation - Medium 13 → TimeWise Luminous 3D Foundation - Medium 13​
+    ~ 10210792  name: TimeWise Luminous 3D Foundation - Medium 14 → TimeWise Luminous 3D Foundation - Medium 14​
+    ~ 10210807  name: TimeWise Luminous 3D Foundation - Deep 1 → TimeWise Luminous 3D Foundation - Deep 1​
+    ~ 10210808  name: TimeWise Luminous 3D Foundation - Deep 2 → TimeWise Luminous 3D Foundation - Deep 2​
+    ~ 10210809  name: TimeWise Luminous 3D Foundation - Deep 3 → TimeWise Luminous 3D Foundation - Deep 3​
+    ~ 10210810  name: TimeWise Luminous 3D Foundation - Deep 4 → TimeWise Luminous 3D Foundation - Deep 4​
+    ~ 10219478  name: TimeWise Luminous 3D Foundation - Deep 5 → TimeWise Luminous 3D Foundation - Deep 5​
+    ~ 10219479  name: TimeWise Luminous 3D Foundation - Deep 6 → TimeWise Luminous 3D Foundation - Deep 6​
+    ~ 10219480  name: TimeWise Luminous 3D Foundation - Deep 7 → TimeWise Luminous 3D Foundation - Deep 7​
+    ~ 10219481  name: TimeWise Luminous 3D Foundation - Deep 8 → TimeWise Luminous 3D Foundation - Deep 8​
+    ~ 10219482  name: TimeWise Luminous 3D Foundation - Deep 9 → TimeWise Luminous 3D Foundation - Deep 9​
+    ~ 10219483  name: TimeWise Luminous 3D Foundation - Deep 10 → TimeWise Luminous 3D Foundation - Deep 10​
+    ~ 10219484  name: TimeWise Luminous 3D Foundation - Deep 11 → TimeWise Luminous 3D Foundation - Deep 11​
+    ~ 10235274  name: TimeWise Luminous 3D Foundation - Deep 12 → TimeWise Luminous 3D Foundation - Deep 12​
+    ~ 10235275  name: TimeWise Luminous 3D Foundation - Deep 13 → TimeWise Luminous 3D Foundation - Deep 13​
+    ~ 10235276  name: TimeWise Luminous 3D Foundation - Deep 14 → TimeWise Luminous 3D Foundation - Deep 14​
+    ~ 10235277  name: TimeWise Luminous 3D Foundation - Deep 15 → TimeWise Luminous 3D Foundation - Deep 15​
+    ~ 10210733  name: TimeWise Matte 3D Foundation - Light 1 → TimeWise Matte 3D Foundation - Light 1​
+    ~ 10210734  name: TimeWise Matte 3D Foundation - Light 2 → TimeWise Matte 3D Foundation - Light 2​
+    ~ 10210735  name: TimeWise Matte 3D Foundation - Light 3 → TimeWise Matte 3D Foundation - Light 3​
+    ~ 10210736  name: TimeWise Matte 3D Foundation - Light 4 → TimeWise Matte 3D Foundation - Light 4​
+    ~ 10210737  name: TimeWise Matte 3D Foundation - Light 5 → TimeWise Matte 3D Foundation - Light 5​
+    ~ 10210738  name: TimeWise Matte 3D Foundation - Light 6 → TimeWise Matte 3D Foundation - Light 6​
+    ~ 10210739  name: TimeWise Matte 3D Foundation - Light 7 → TimeWise Matte 3D Foundation - Light 7​
+    ~ 10210741  name: TimeWise Matte 3D Foundation - Medium 1 → TimeWise Matte 3D Foundation - Medium 1​
+    ~ 10210742  name: TimeWise Matte 3D Foundation - Medium 2 → TimeWise Matte 3D Foundation - Medium 2​
+    ~ 10210743  name: TimeWise Matte 3D Foundation - Medium 3 → TimeWise Matte 3D Foundation - Medium 3​
+    ~ 10210744  name: TimeWise Matte 3D Foundation - Medium 4 → TimeWise Matte 3D Foundation - Medium 4​
+    ~ 10210745  name: TimeWise Matte 3D Foundation - Medium 5 → TimeWise Matte 3D Foundation - Medium 5​
+    ~ 10210746  name: TimeWise Matte 3D Foundation - Medium 6 → TimeWise Matte 3D Foundation - Medium 6​
+    ~ 10210747  name: TimeWise Matte 3D Foundation - Medium 7 → TimeWise Matte 3D Foundation - Medium 7​
+    ~ 10210748  name: TimeWise Matte 3D Foundation - Medium 8 → TimeWise Matte 3D Foundation - Medium 8​
+    ~ 10210749  name: TimeWise Matte 3D Foundation - Medium 9 → TimeWise Matte 3D Foundation - Medium 9​
+    ~ 10210750  name: TimeWise Matte 3D Foundation - Medium 10 → TimeWise Matte 3D Foundation - Medium 10​
+    ~ 10210751  name: TimeWise Matte 3D Foundation - Medium 11 → TimeWise Matte 3D Foundation - Medium 11​
+    ~ 10210752  name: TimeWise Matte 3D Foundation - Medium 12 → TimeWise Matte 3D Foundation - Medium 12​
+    ~ 10210753  name: TimeWise Matte 3D Foundation - Medium 13 → TimeWise Matte 3D Foundation - Medium 13​
+    ~ 10210740  name: TimeWise Matte 3D Foundation - Medium 14 → TimeWise Matte 3D Foundation - Medium 14​
+    ~ 10210754  name: TimeWise Matte 3D Foundation - Deep 1 → TimeWise Matte 3D Foundation - Deep 1​
+    ~ 10210755  name: TimeWise Matte 3D Foundation - Deep 2 → TimeWise Matte 3D Foundation - Deep 2​
+    ~ 10210756  name: TimeWise Matte 3D Foundation - Deep 3 → TimeWise Matte 3D Foundation - Deep 3​
+    ~ 10210757  name: TimeWise Matte 3D Foundation - Deep 4 → TimeWise Matte 3D Foundation - Deep 4​
+    ~ 10210758  name: TimeWise Matte 3D Foundation - Deep 5 → TimeWise Matte 3D Foundation - Deep 5​
+    ~ 10219466  name: TimeWise Matte 3D Foundation - Deep 6 → TimeWise Matte 3D Foundation - Deep 6​
+    ~ 10219467  name: TimeWise Matte 3D Foundation - Deep 7 → TimeWise Matte 3D Foundation - Deep 7​
+    ~ 10219468  name: TimeWise Matte 3D Foundation - Deep 8 → TimeWise Matte 3D Foundation - Deep 8​
+    ~ 10219469  name: TimeWise Matte 3D Foundation - Deep 9 → TimeWise Matte 3D Foundation - Deep 9​
+    ~ 10219470  name: TimeWise Matte 3D Foundation - Deep 10 → TimeWise Matte 3D Foundation - Deep 10​
+    ~ 10219471  name: TimeWise Matte 3D Foundation - Deep 11 → TimeWise Matte 3D Foundation - Deep 11​
+    ~ 10235231  name: TimeWise Matte 3D Foundation - Deep 12 → TimeWise Matte 3D Foundation - Deep 12​
+    ~ 10235232  name: TimeWise Matte 3D Foundation - Deep 13 → TimeWise Matte 3D Foundation - Deep 13​
+    ~ 10235233  name: TimeWise Matte 3D Foundation - Deep 14 → TimeWise Matte 3D Foundation - Deep 14​
+    ~ 10235234  name: TimeWise Matte 3D Foundation - Deep 15 → TimeWise Matte 3D Foundation - Deep 15​
+    ~ 10236898  name: Mary Kay Gel Cream Blush - Pink Stars → Mary Kay Gel Cream Blush de edición limitada - Pink Stars
+    ~ 10236901  name: Mary Kay Gel Cream Blush - Coral Kiss → Mary Kay Gel Cream Blush de edición limitada - Coral Kiss
+
+Sending change summary email...
+  Email sent to briankrause@gmail.com
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 549 products.
+  Scraping PDF links for 44 products (first-run may take several minutes)...
+  Found PDF links for 0 of 44 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Clicking Expand All...
+  Warning: could not click Expand All: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Expand All")
+
+  Extracting products...
+  Found 549 products.
+  Auto-labeled: 10211954 → TimeWise Repair Volu-Firm Set (Old SKU)
+  Auto-labeled: 10236194 → TimeWise Repair Ultimate Volu-Firm Set (Old SKU)
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 488 SKUs
+  Scraped        : 549 products
+  Total now      : 490 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+
+  NEW (2):
+    + 10243732  TimeWise Repair Volu-Firm Set  $230.00
+    + 10262871  TimeWise Repair Ultimate Volu-Firm Set  $348.00
+
+  CHANGED (129):
+    ~ 10219506  price: $36.00 → $38.00
+    ~ 10217456  price: $28.00 → $30.00
+    ~ 10217455  price: $28.00 → $30.00
+    ~ 10171886  price: $60.00 → $64.00
+    ~ 10211389  price: $38.00 → $40.00
+    ~ 10177899  price: $38.00 → $40.00
+    ~ 10177906  price: $38.00 → $40.00
+    ~ 10177902  price: $38.00 → $40.00
+    ~ 10177904  price: $38.00 → $40.00
+    ~ 10056743  price: $18.00 → $20.00
+    ~ 10233587  price: $56.00 → $60.00
+    ~ 10179024  price: $20.00 → $22.00
+    ~ 10041758  price: $8.00 → $10.00
+    ~ 10152557  price: $20.00 → $24.00
+    ~ 10175890  price: $20.00 → $22.00
+    ~ 10175891  price: $20.00 → $22.00
+    ~ 10175892  price: $20.00 → $22.00
+    ~ 10175893  price: $20.00 → $22.00
+    ~ 10175894  price: $20.00 → $22.00
+    ~ 10175895  price: $20.00 → $22.00
+    ~ 10175896  price: $20.00 → $22.00
+    ~ 10175897  price: $20.00 → $22.00
+    ~ 10175898  price: $20.00 → $22.00
+    ~ 10175899  price: $20.00 → $22.00
+    ~ 10175901  price: $20.00 → $22.00
+    ~ 10175902  price: $20.00 → $22.00
+    ~ 10060182  price: $18.00 → $22.00
+    ~ 10233087  price: $20.00 → $22.00
+    ~ 10252246  price: $14.00 → $16.00
+    ~ 10252249  price: $14.00 → $16.00
+    ~ 10252248  price: $14.00 → $16.00
+    ~ 10252250  price: $14.00 → $16.00
+    ~ 10252251  price: $14.00 → $16.00
+    ~ 10252247  price: $14.00 → $16.00
+    ~ 10252256  price: $14.00 → $16.00
+    ~ 10252261  price: $14.00 → $16.00
+    ~ 10252257  price: $14.00 → $16.00
+    ~ 10252260  price: $14.00 → $16.00
+    ~ 10250193  price: $8.00 → $10.00
+    ~ 10250185  price: $8.00 → $10.00
+    ~ 10250191  price: $8.00 → $10.00
+    ~ 10250180  price: $8.00 → $10.00
+    ~ 10250190  price: $8.00 → $10.00
+    ~ 10250194  price: $8.00 → $10.00
+    ~ 10250192  price: $8.00 → $10.00
+    ~ 10250188  price: $8.00 → $10.00
+    ~ 10250183  price: $8.00 → $10.00
+    ~ 10250189  price: $8.00 → $10.00
+    ~ 10250186  price: $8.00 → $10.00
+    ~ 10250184  price: $8.00 → $10.00
+    ~ 10250182  price: $8.00 → $10.00
+    ~ 10250195  price: $8.00 → $10.00
+    ~ 10250181  price: $8.00 → $10.00
+    ~ 10250187  price: $8.00 → $10.00
+    ~ 10239154  price: $14.00 → $16.00
+    ~ 10239155  price: $14.00 → $16.00
+    ~ 10239156  price: $14.00 → $16.00
+    ~ 10239151  price: $14.00 → $16.00
+    ~ 10141205  price: $18.00 → $20.00
+    ~ 10222584  price: $16.00 → $18.00
+    ~ 10092105  price: $18.00 → $20.00
+    ~ 10238958  price: $16.00 → $18.00
+    ~ 10222938  price: $14.00 → $16.00
+    ~ 10125032  price: $14.00 → $16.00
+    ~ 10125033  price: $14.00 → $16.00
+    ~ 10125034  price: $14.00 → $16.00
+    ~ 10125035  price: $14.00 → $16.00
+    ~ 10127611  price: $14.00 → $16.00
+    ~ 10127612  price: $14.00 → $16.00
+    ~ 10127613  price: $14.00 → $16.00
+    ~ 10127614  price: $14.00 → $16.00
+    ~ 10127615  price: $14.00 → $16.00
+    ~ 10239164  price: $14.00 → $16.00
+    ~ 10239165  price: $14.00 → $16.00
+    ~ 10239166  price: $14.00 → $16.00
+    ~ 10239167  price: $14.00 → $16.00
+    ~ 10239168  price: $14.00 → $16.00
+    ~ 10239169  price: $14.00 → $16.00
+    ~ 10239170  price: $14.00 → $16.00
+    ~ 10239171  price: $14.00 → $16.00
+    ~ 10153485  price: $18.00 → $20.00
+    ~ 10153484  price: $18.00 → $20.00
+    ~ 10249020  price: $18.00 → $20.00
+    ~ 10249011  price: $18.00 → $20.00
+    ~ 10249014  price: $18.00 → $20.00
+    ~ 10249017  price: $18.00 → $20.00
+    ~ 10249012  price: $18.00 → $20.00
+    ~ 10249019  price: $18.00 → $20.00
+    ~ 10249013  price: $18.00 → $20.00
+    ~ 10249006  price: $18.00 → $20.00
+    ~ 10155207  price: $20.00 → $22.00
+    ~ 10206309  price: $20.00 → $22.00
+    ~ 10155222  price: $20.00 → $22.00
+    ~ 10155212  price: $20.00 → $22.00
+    ~ 10155218  price: $20.00 → $22.00
+    ~ 10206307  price: $20.00 → $22.00
+    ~ 10206306  price: $20.00 → $22.00
+    ~ 10249159  price: $20.00 → $22.00
+    ~ 10249163  price: $20.00 → $22.00
+    ~ 10249162  price: $20.00 → $22.00
+    ~ 10249160  price: $20.00 → $22.00
+    ~ 10202992  price: $20.00 → $24.00
+    ~ 10114610  price: $10.00 → $12.00
+    ~ 10128063  price: $16.00 → $18.00
+    ~ 10135951  price: $12.00 → $14.00
+    ~ 10122325  price: $14.00 → $16.00
+    ~ 10122328  price: $10.00 → $12.00
+    ~ 10080376  price: $36.00 → $40.00
+    ~ 10162409  price: $16.00 → $20.00
+    ~ 10162408  price: $16.00 → $20.00
+    ~ 10162416  price: $16.00 → $20.00
+    ~ 10162443  price: $16.00 → $20.00
+    ~ 10136769  price: $18.00 → $20.00
+    ~ 10073789  price: $18.00 → $20.00
+    ~ 10091504  price: $22.00 → $26.00
+    ~ 10091502  price: $22.00 → $26.00
+    ~ 10091493  price: $22.00 → $26.00
+    ~ 10223788  price: $12.00 → $14.00
+    ~ 10192900  price: $44.00 → $46.00
+    ~ 10012512  price: $44.00 → $46.00
+    ~ 10095688  price: $40.00 → $42.00
+    ~ 10088620  price: $46.00 → $48.00
+    ~ 10094305  price: $48.00 → $50.00
+    ~ 10218635  price: $36.00 → $40.00
+    ~ 10028783  price: $42.00 → $45.00
+    ~ 10109680  price: $46.00 → $50.00
+    ~ 10095123  price: $46.00 → $50.00
+    ~ 10075680  price: $46.00 → $50.00
+    ~ 10221421  price: $56.00 → $60.00
+
+  OLD SKU LABELED (2):
+    ! 10211954  TimeWise Repair Volu-Firm Set (Old SKU)  (replaced by 10243732)
+    ! 10236194  TimeWise Repair Ultimate Volu-Firm Set (Old SKU)  (replaced by 10262871)
+  Auto-labeled: 10211954 → TimeWise Repair Volu-Firm Set (Old SKU)
+  Auto-labeled: 10236194 → TimeWise Repair Ultimate Volu-Firm Set (Old SKU)
+
+[ES] Done.
+  Catalog before : 488 SKUs
+  Scraped        : 549 products
+  Total now      : 490 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  NEW (2):
+    + 10243732  TimeWise Repair Volu-Firm Set  $230.00
+    + 10262871  TimeWise Repair Ultimate Volu-Firm Set  $348.00
+
+  CHANGED (129):
+    ~ 10219506  price: $36.00 → $38.00
+    ~ 10217456  price: $28.00 → $30.00
+    ~ 10217455  price: $28.00 → $30.00
+    ~ 10171886  price: $60.00 → $64.00
+    ~ 10211389  price: $38.00 → $40.00
+    ~ 10177899  price: $38.00 → $40.00
+    ~ 10177906  price: $38.00 → $40.00
+    ~ 10177902  price: $38.00 → $40.00
+    ~ 10177904  price: $38.00 → $40.00
+    ~ 10056743  price: $18.00 → $20.00
+    ~ 10233587  price: $56.00 → $60.00
+    ~ 10179024  price: $20.00 → $22.00
+    ~ 10041758  price: $8.00 → $10.00
+    ~ 10152557  price: $20.00 → $24.00
+    ~ 10175890  price: $20.00 → $22.00
+    ~ 10175891  price: $20.00 → $22.00
+    ~ 10175892  price: $20.00 → $22.00
+    ~ 10175893  price: $20.00 → $22.00
+    ~ 10175894  price: $20.00 → $22.00
+    ~ 10175895  price: $20.00 → $22.00
+    ~ 10175896  price: $20.00 → $22.00
+    ~ 10175897  price: $20.00 → $22.00
+    ~ 10175898  price: $20.00 → $22.00
+    ~ 10175899  price: $20.00 → $22.00
+    ~ 10175901  price: $20.00 → $22.00
+    ~ 10175902  price: $20.00 → $22.00
+    ~ 10060182  price: $18.00 → $22.00
+    ~ 10233087  price: $20.00 → $22.00
+    ~ 10252246  price: $14.00 → $16.00
+    ~ 10252249  price: $14.00 → $16.00
+    ~ 10252248  price: $14.00 → $16.00
+    ~ 10252250  price: $14.00 → $16.00
+    ~ 10252251  price: $14.00 → $16.00
+    ~ 10252247  price: $14.00 → $16.00
+    ~ 10252256  price: $14.00 → $16.00
+    ~ 10252261  price: $14.00 → $16.00
+    ~ 10252257  price: $14.00 → $16.00
+    ~ 10252260  price: $14.00 → $16.00
+    ~ 10250193  price: $8.00 → $10.00
+    ~ 10250185  price: $8.00 → $10.00
+    ~ 10250191  price: $8.00 → $10.00
+    ~ 10250180  price: $8.00 → $10.00
+    ~ 10250190  price: $8.00 → $10.00
+    ~ 10250194  price: $8.00 → $10.00
+    ~ 10250192  price: $8.00 → $10.00
+    ~ 10250188  price: $8.00 → $10.00
+    ~ 10250183  price: $8.00 → $10.00
+    ~ 10250189  price: $8.00 → $10.00
+    ~ 10250186  price: $8.00 → $10.00
+    ~ 10250184  price: $8.00 → $10.00
+    ~ 10250182  price: $8.00 → $10.00
+    ~ 10250195  price: $8.00 → $10.00
+    ~ 10250181  price: $8.00 → $10.00
+    ~ 10250187  price: $8.00 → $10.00
+    ~ 10239154  price: $14.00 → $16.00
+    ~ 10239155  price: $14.00 → $16.00
+    ~ 10239156  price: $14.00 → $16.00
+    ~ 10239151  price: $14.00 → $16.00
+    ~ 10141205  price: $18.00 → $20.00
+    ~ 10222584  price: $16.00 → $18.00
+    ~ 10092105  price: $18.00 → $20.00
+    ~ 10238958  price: $16.00 → $18.00
+    ~ 10222938  price: $14.00 → $16.00
+    ~ 10125032  price: $14.00 → $16.00
+    ~ 10125033  price: $14.00 → $16.00
+    ~ 10125034  price: $14.00 → $16.00
+    ~ 10125035  price: $14.00 → $16.00
+    ~ 10127611  price: $14.00 → $16.00
+    ~ 10127612  price: $14.00 → $16.00
+    ~ 10127613  price: $14.00 → $16.00
+    ~ 10127614  price: $14.00 → $16.00
+    ~ 10127615  price: $14.00 → $16.00
+    ~ 10239164  price: $14.00 → $16.00
+    ~ 10239165  price: $14.00 → $16.00
+    ~ 10239166  price: $14.00 → $16.00
+    ~ 10239167  price: $14.00 → $16.00
+    ~ 10239168  price: $14.00 → $16.00
+    ~ 10239169  price: $14.00 → $16.00
+    ~ 10239170  price: $14.00 → $16.00
+    ~ 10239171  price: $14.00 → $16.00
+    ~ 10153485  price: $18.00 → $20.00
+    ~ 10153484  price: $18.00 → $20.00
+    ~ 10249020  price: $18.00 → $20.00
+    ~ 10249011  price: $18.00 → $20.00
+    ~ 10249014  price: $18.00 → $20.00
+    ~ 10249017  price: $18.00 → $20.00
+    ~ 10249012  price: $18.00 → $20.00
+    ~ 10249019  price: $18.00 → $20.00
+    ~ 10249013  price: $18.00 → $20.00
+    ~ 10249006  price: $18.00 → $20.00
+    ~ 10155207  price: $20.00 → $22.00
+    ~ 10206309  price: $20.00 → $22.00
+    ~ 10155222  price: $20.00 → $22.00
+    ~ 10155212  price: $20.00 → $22.00
+    ~ 10155218  price: $20.00 → $22.00
+    ~ 10206307  price: $20.00 → $22.00
+    ~ 10206306  price: $20.00 → $22.00
+    ~ 10249159  price: $20.00 → $22.00
+    ~ 10249163  price: $20.00 → $22.00
+    ~ 10249162  price: $20.00 → $22.00
+    ~ 10249160  price: $20.00 → $22.00
+    ~ 10202992  price: $20.00 → $24.00
+    ~ 10114610  price: $10.00 → $12.00
+    ~ 10128063  price: $16.00 → $18.00
+    ~ 10135951  price: $12.00 → $14.00
+    ~ 10122325  price: $14.00 → $16.00
+    ~ 10122328  price: $10.00 → $12.00
+    ~ 10080376  price: $36.00 → $40.00
+    ~ 10162409  price: $16.00 → $20.00
+    ~ 10162408  price: $16.00 → $20.00
+    ~ 10162416  price: $16.00 → $20.00
+    ~ 10162443  price: $16.00 → $20.00
+    ~ 10136769  price: $18.00 → $20.00
+    ~ 10073789  price: $18.00 → $20.00
+    ~ 10091504  price: $22.00 → $26.00
+    ~ 10091502  price: $22.00 → $26.00
+    ~ 10091493  price: $22.00 → $26.00
+    ~ 10223788  price: $12.00 → $14.00
+    ~ 10192900  price: $44.00 → $46.00
+    ~ 10012512  price: $44.00 → $46.00
+    ~ 10095688  price: $40.00 → $42.00
+    ~ 10088620  price: $46.00 → $48.00
+    ~ 10094305  price: $48.00 → $50.00
+    ~ 10218635  price: $36.00 → $40.00
+    ~ 10028783  price: $42.00 → $45.00
+    ~ 10109680  price: $46.00 → $50.00
+    ~ 10095123  price: $46.00 → $50.00
+    ~ 10075680  price: $46.00 → $50.00
+    ~ 10221421  price: $56.00 → $60.00
+
+  OLD SKU LABELED (2):
+    ! 10211954  TimeWise Repair Volu-Firm Set (Old SKU)  (replaced by 10243732)
+    ! 10236194  TimeWise Repair Ultimate Volu-Firm Set (Old SKU)  (replaced by 10262871)
+
+Sending change summary email...
+  Email sent to briankrause@gmail.com

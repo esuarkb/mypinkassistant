@@ -901,6 +901,14 @@ def lookbook_get():
         "Content-Disposition": "inline; filename=lookbook.pdf"
     })
 
+@app.get("/lookbook-es")
+def lookbook_es_get():
+    from fastapi.responses import FileResponse
+    pdf_path = WEB_DIR / "lookbook-es.pdf"
+    return FileResponse(pdf_path, media_type="application/pdf", headers={
+        "Content-Disposition": "inline; filename=lookbook-es.pdf"
+    })
+
 
 @app.get("/legal", response_class=HTMLResponse)
 def legal_get(request: Request):

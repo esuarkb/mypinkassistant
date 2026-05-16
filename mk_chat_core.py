@@ -2836,9 +2836,15 @@ class MKChatEngine:
         # -------------------------
         if not pending:
             if "look book" in lowered or "lookbook" in lowered:
+                if language == "es":
+                    lb_url = "https://assets.mypinkassistant.com/lookbook-es.pdf"
+                    lb_label = "La Imagen actual"
+                else:
+                    lb_url = "https://assets.mypinkassistant.com/lookbook.pdf"
+                    lb_label = "current Look Book"
                 return ChatReply(
-                    'Here\'s the <a href="https://mypinkassistant.com/lookbook" class="inapp-overlay-link">current Look Book</a>&nbsp; '
-                    '<button class="fdp-copy copy-link-btn" data-copy="https://mypinkassistant.com/lookbook">Copy Link</button>'
+                    f'Here\'s the <a href="{lb_url}" class="inapp-overlay-link">{lb_label}</a>&nbsp; '
+                    f'<button class="fdp-copy copy-link-btn" data-copy="{lb_url}">Copy Link</button>'
                 )
 
         # PCP enrolled list (no LLM call)
