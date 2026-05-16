@@ -137,6 +137,8 @@ def load_catalog(path: Path) -> dict[str, dict]:
                     "fact_sheet_url":           row.get("fact_sheet_url", ""),
                     "order_of_application_url": row.get("order_of_application_url", ""),
                     "use_up_rate_months":        row.get("use_up_rate_months", ""),
+                    "previous_price":           row.get("previous_price", ""),
+                    "price_changed_at":         row.get("price_changed_at", ""),
                 }
     return catalog
 
@@ -170,7 +172,7 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
     else:
         rows = sorted(catalog.values(), key=lambda r: r["sku"])
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku", "fact_sheet_url", "order_of_application_url", "use_up_rate_months"])
+        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku", "fact_sheet_url", "order_of_application_url", "use_up_rate_months", "previous_price", "price_changed_at"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -193,7 +195,7 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
 
         today = date.today().isoformat()
         if sku not in catalog:
-            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": "", "fact_sheet_url": "", "order_of_application_url": "", "use_up_rate_months": ""}
+            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": "", "fact_sheet_url": "", "order_of_application_url": "", "use_up_rate_months": "", "previous_price": "", "price_changed_at": ""}
             added_items.append({"sku": sku, "product_name": name, "price": price_str})
         else:
             existing = catalog[sku]
@@ -209,6 +211,8 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
                 existing["product_name"] = name
             if existing["price"] != price_str:
                 changes.append({"field": "price", "before": existing["price"], "after": price_str})
+                existing["previous_price"] = existing["price"]
+                existing["price_changed_at"] = today
                 existing["price"] = price_str
             existing["last_seen"] = today
             if changes:

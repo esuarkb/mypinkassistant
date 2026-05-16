@@ -292,10 +292,23 @@ def load_catalog(path: Path) -> List[dict]:
             except ValueError:
                 price_val = None
 
+            from datetime import date as _date, datetime as _datetime
+            prev_price_val = None
+            price_changed_at = (row.get("price_changed_at") or "").strip()
+            if price_changed_at:
+                try:
+                    changed = _datetime.strptime(price_changed_at, "%Y-%m-%d").date()
+                    if (_date.today() - changed).days <= 30:
+                        pp = (row.get("previous_price") or "").strip()
+                        prev_price_val = float(pp) if pp else None
+                except (ValueError, TypeError):
+                    pass
+
             items.append({
                 "sku": sku,
                 "product_name": name,
                 "price": price_val,
+                "previous_price": prev_price_val,
                 "search_terms": search_terms,
                 "search_string": f"{name} {search_terms}".strip(),
                 "fact_sheet_url": (row.get("fact_sheet_url") or "").strip(),
@@ -312,16 +325,23 @@ def fmt_price(p: Any) -> str:
     return ""
 
 
+def _fmt_price_with_change(m: dict) -> str:
+    price = f"${m['price']:.2f}" if m.get("price") is not None else ""
+    if m.get("previous_price") is not None:
+        price += f" (was ${m['previous_price']:.2f})"
+    return price
+
+
 def _fmt_product_list_item(m: dict) -> str:
     name = m['product_name']
-    price = f"${m['price']:.2f}" if m.get('price') is not None else ""
+    price = _fmt_price_with_change(m)
     safe = _html.escape(name, quote=True)
     return f'• <a href="#" data-send="{safe}">{_html.escape(name)}</a> — {price}'
 
 
 def _fmt_product_lookup_single(m: dict) -> str:
     """Format a single product lookup result with optional PDF links."""
-    price = f"${m['price']:.2f}" if m.get("price") is not None else ""
+    price = _fmt_price_with_change(m)
     line = f"{m['product_name']} — {price}".strip(" —")
     parts = ["<strong>Product Look Up</strong>", line]
     links = []
@@ -417,7 +437,8 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", name_l))
         on_the_go = 1 if "the go set" in name_l else 0
         matches.append(
-            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"], "score": score,
+            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"],
+             "previous_price": c.get("previous_price"), "score": score,
              "fact_sheet_url": c.get("fact_sheet_url", ""), "order_of_application_url": c.get("order_of_application_url", ""),
              "use_up_rate_months": c.get("use_up_rate_months", ""),
              "_hits": word_hits, "_otg": on_the_go}
