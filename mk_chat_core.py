@@ -2857,7 +2857,9 @@ class MKChatEngine:
         # -------------------------
         if not pending:
             if "look book" in lowered or "lookbook" in lowered:
-                if language == "es":
+                _force_es = "spanish" in lowered or "español" in lowered or "espanol" in lowered
+                _force_en = "english" in lowered or "inglés" in lowered or "ingles" in lowered
+                if _force_es or (language == "es" and not _force_en):
                     lb_url = "https://assets.mypinkassistant.com/lookbook-es.pdf"
                     lb_label = "La Imagen actual"
                 else:
