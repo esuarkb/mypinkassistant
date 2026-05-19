@@ -1,5 +1,5 @@
 """
-Demo data setup for Facebook presentation — PRODUCTION Postgres.
+Demo data setup for presentations — PRODUCTION Postgres.
 
 Usage:
     python demo_setup_prod.py setup    # back up prod data and load fake data
@@ -10,7 +10,7 @@ import json
 import random
 import psycopg2
 import psycopg2.extras
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from dotenv import dotenv_values
 
@@ -23,17 +23,50 @@ DATABASE_URL = cfg["DATABASE_URL"]
 def connect():
     return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 
+# ── Customer name pool (100 unique combos) ───────────────────────────────────
 FIRST_NAMES = [
     "Ashley", "Brittany", "Chelsea", "Danielle", "Emily",
     "Faith", "Grace", "Hannah", "Isabella", "Jessica",
     "Kaitlyn", "Lauren", "Madison", "Nicole", "Olivia",
     "Paige", "Rachel", "Savannah", "Taylor", "Victoria",
+    "Amber", "Brooke", "Cassandra", "Diana", "Eleanor",
+    "Fiona", "Georgia", "Haley", "Iris", "Julia",
+    "Kayla", "Lindsay", "Morgan", "Natalie", "Peyton",
+    "Quinn", "Rebecca", "Stephanie", "Tiffany", "Vanessa",
+    "Allison", "Bethany", "Courtney", "Delaney", "Eva",
+    "Gabrielle", "Heather", "Jade", "Kelsey", "Leah",
+    "Megan", "Nadia", "Phoebe", "Renee", "Shelby",
+    "Tamara", "Uma", "Wendy", "Ximena", "Yasmine",
+    "Zoey", "April", "Brenda", "Carmen", "Dawn",
+    "Elaine", "Francesca", "Gloria", "Holly", "Ingrid",
+    "Jamie", "Karen", "Lisa", "Maria", "Nancy",
+    "Opal", "Patricia", "Rita", "Sandra", "Theresa",
+    "Ursula", "Valerie", "Whitney", "Xena", "Yvonne",
+    "Zara", "Abigail", "Brianna", "Cecilia", "Daphne",
+    "Esther", "Florence", "Gwendolyn", "Helena", "Ilana",
+    "Josephine", "Katrina", "Lorraine", "Miriam", "Nina",
 ]
 LAST_NAMES = [
     "Anderson", "Baker", "Campbell", "Davis", "Evans",
     "Foster", "Griffin", "Harris", "Johnson", "King",
     "Lewis", "Mitchell", "Nelson", "Parker", "Reynolds",
     "Scott", "Thomas", "Walker", "Young", "Clark",
+    "Adams", "Brown", "Carter", "Dixon", "Edwards",
+    "Flynn", "Graham", "Hall", "Ingram", "Jenkins",
+    "Knight", "Lane", "Moore", "Nash", "Owen",
+    "Price", "Quinn", "Roberts", "Smith", "Turner",
+    "Underwood", "Vaughn", "Warren", "Xavier", "York",
+    "Zimmerman", "Allen", "Brooks", "Collins", "Dean",
+    "Ellis", "Fisher", "Green", "Howard", "Irwin",
+    "James", "Kelly", "Long", "Mason", "Norton",
+    "Oliver", "Perry", "Reed", "Stevens", "Taylor",
+    "Underhill", "Vance", "Webb", "Cross", "Yuan",
+    "Zimmerman", "Avery", "Bell", "Cox", "Dunn",
+    "Eaton", "Ford", "Grant", "Hunt", "Irons",
+    "Jones", "Kim", "Lyons", "Murray", "Neal",
+    "Orton", "Page", "Ramos", "Stone", "Todd",
+    "Upton", "Vega", "Wolfe", "Knox", "Yates",
+    "Zane", "Ash", "Blake", "Cruz", "Day",
 ]
 STREETS = [
     "123 Magnolia Ln", "456 Peach Tree Dr", "789 Rosewood Ct",
@@ -42,22 +75,24 @@ STREETS = [
     "444 Maple Grove Ct", "555 Sunflower St", "666 Honeysuckle Ln",
     "777 Bluebonnet Way", "888 Clover Field Dr", "999 Jasmine Ct",
     "101 Primrose Path", "202 Larkspur Ln", "303 Morning Glory Dr",
-    "404 Camellia Ct", "505 Azalea Ave",
+    "404 Camellia Ct", "505 Azalea Ave", "606 Dahlia Dr",
+    "707 Wisteria Way", "808 Peony Pl", "909 Iris Ct",
+    "1010 Violet Ave", "1111 Tulip Ln", "1212 Lily Rd",
+    "1313 Orchid Way", "1414 Rose Ct", "1515 Daisy Dr",
 ]
 CITIES_STATES = [
     ("Birmingham", "AL"), ("Huntsville", "AL"), ("Mobile", "AL"),
     ("Montgomery", "AL"), ("Tuscaloosa", "AL"), ("Decatur", "AL"),
     ("Florence", "AL"), ("Dothan", "AL"), ("Auburn", "AL"),
-    ("Hoover", "AL"),
+    ("Hoover", "AL"), ("Madison", "AL"), ("Vestavia Hills", "AL"),
+    ("Prattville", "AL"), ("Phenix City", "AL"), ("Gadsden", "AL"),
 ]
-ZIPS = ["35801", "35803", "35816", "36109", "36117", "35401",
-        "35630", "36830", "35242", "36303"]
-BIRTHDAYS = [
-    "03-12", "06-24", "09-05", "01-18", "11-30",
-    "04-07", "07-22", "02-14", "08-19", "05-31",
-    "10-03", "12-25", "03-28", "06-11", "09-17",
-    "01-04", "07-08", "04-21", "11-15", "08-02",
+ZIPS = [
+    "35801", "35803", "35816", "36109", "36117",
+    "35401", "35630", "36830", "35242", "36303",
+    "35758", "35226", "36067", "36867", "35901",
 ]
+TAGS_POOL = ["VIP", "Hostess", "Facial Client", "Warm Lead", "Regular"]
 
 ORDER_PRODUCTS = [
     ("10217417", "TimeWise Miracle Set - Normal/Dry", 116.00),
@@ -82,15 +117,36 @@ ORDER_PRODUCTS = [
     ("10235051", "Mary Kay Confidently You Eau de Parfum", 55.00),
 ]
 
+# Inventory: quantities sized to hit $5000+ retail
 INVENTORY_ITEMS = [
-    ("10217417", 4), ("10217415", 3), ("10223245", 2),
-    ("10171886", 4), ("10198866", 3), ("10245671", 5),
-    ("10176966", 4), ("10163626", 4), ("10217519", 5),
-    ("10163625", 3), ("10176450", 6), ("10176452", 4),
-    ("10190365", 5), ("10180358", 4), ("10107305", 2),
-    ("10157924", 6), ("10211954", 2), ("10208384", 3),
-    ("10235051", 2), ("10213898", 3),
+    ("10217417", 8),   # $116 × 8  = $928
+    ("10217415", 6),   # $116 × 6  = $696
+    ("10223245", 4),   # $208 × 4  = $832
+    ("10171886", 6),   # $60  × 6  = $360
+    ("10198866", 4),   # $58  × 4  = $232
+    ("10245671", 8),   # $44  × 8  = $352
+    ("10176966", 6),   # $32  × 6  = $192
+    ("10163626", 6),   # $40  × 6  = $240
+    ("10217519", 8),   # $28  × 8  = $224
+    ("10163625", 5),   # $34  × 5  = $170
+    ("10176450", 10),  # $20  × 10 = $200
+    ("10176452", 8),   # $20  × 8  = $160
+    ("10190365", 8),   # $18  × 8  = $144
+    ("10180358", 6),   # $16  × 6  = $96
+    ("10107305", 3),   # $60  × 3  = $180
+    ("10157924", 8),   # $20  × 8  = $160
+    ("10208384", 5),   # $55  × 5  = $275
+    ("10235051", 3),   # $55  × 3  = $165
+    ("10213898", 5),   # $42  × 5  = $210
+    ("10233587", 3),   # $56  × 3  = $168
+    # Total: ~$5,984
 ]
+
+
+def _serial(obj):
+    if hasattr(obj, "isoformat"):
+        return obj.isoformat()
+    return str(obj)
 
 
 def setup():
@@ -102,20 +158,18 @@ def setup():
     conn = connect()
     cur  = conn.cursor()
 
-    # Export current data to JSON backup
+    # ── Backup all relevant tables ───────────────────────────────────────────
     backup = {}
-    for table, pk in [
-        ("customers",   "consultant_id"),
-        ("orders",      "consultant_id"),
-        ("inventory",   "consultant_id"),
-        ("customer_followups",         "consultant_id"),
-        ("customer_birthday_followups","consultant_id"),
-        ("pcp_enrollments",            "consultant_id"),
+    for table in [
+        "customers", "orders", "inventory",
+        "customer_followups", "customer_birthday_followups",
+        "pcp_enrollments", "pcp_lookbook_followups",
+        "inventory_order_items", "inventory_intouch_imports",
     ]:
         cur.execute(f"SELECT * FROM {table} WHERE consultant_id = %s", (CONSULTANT_ID,))
         backup[table] = [dict(r) for r in cur.fetchall()]
 
-    # Also back up order_items (no consultant_id — join through orders)
+    # order_items has no consultant_id — join through orders
     cur.execute("""
         SELECT oi.* FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
@@ -123,78 +177,184 @@ def setup():
     """, (CONSULTANT_ID,))
     backup["order_items"] = [dict(r) for r in cur.fetchall()]
 
-    # Convert any non-serializable types
-    def _serial(obj):
-        if hasattr(obj, "isoformat"):
-            return obj.isoformat()
-        return str(obj)
-
     BACKUP_PATH.write_text(json.dumps(backup, default=_serial, indent=2))
     print(f"✅ Backed up production data → {BACKUP_PATH}")
+    for k, v in backup.items():
+        print(f"   {k}: {len(v)} rows")
 
-    # Wipe consultant 1's data
+    # ── Wipe consultant 1's data (FK-safe order) ─────────────────────────────
+    cur.execute("DELETE FROM pcp_lookbook_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM customer_birthday_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM customer_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM pcp_enrollments WHERE consultant_id=%s", (CONSULTANT_ID,))
     cur.execute("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE consultant_id=%s)", (CONSULTANT_ID,))
     cur.execute("DELETE FROM orders WHERE consultant_id=%s", (CONSULTANT_ID,))
-    cur.execute("DELETE FROM customer_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
-    cur.execute("DELETE FROM customer_birthday_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
-    cur.execute("DELETE FROM pcp_enrollments WHERE consultant_id=%s", (CONSULTANT_ID,))
     cur.execute("DELETE FROM customers WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM inventory_order_items WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM inventory_intouch_imports WHERE consultant_id=%s", (CONSULTANT_ID,))
     cur.execute("DELETE FROM inventory WHERE consultant_id=%s", (CONSULTANT_ID,))
+    print("✅ Wiped existing data")
 
     random.seed(42)
     today = date.today()
 
-    # Insert 20 fake customers
-    customer_ids = []
+    # ── Build customer list ──────────────────────────────────────────────────
     names = list(zip(FIRST_NAMES, LAST_NAMES))
     random.shuffle(names)
+    names = names[:100]
+
+    # Birthday this week: May 18–24
+    THIS_WEEK_BDS  = [f"05-{d:02d}" for d in range(18, 25)]  # 7 dates
+    # Birthday this month (not this week): May 1–17 and May 25–31
+    THIS_MONTH_BDS = [f"05-{d:02d}" for d in list(range(1, 18)) + list(range(25, 32))]
+    # Other birthdays spread across the year
+    OTHER_BDS = [
+        "01-08", "01-22", "02-14", "02-28", "03-07", "03-19",
+        "04-03", "04-15", "06-11", "06-28", "07-04", "07-19",
+        "08-05", "08-22", "09-10", "09-27", "10-14", "10-30",
+        "11-08", "11-25", "12-03", "12-19", "01-31", "02-07",
+        "03-25", "04-29", "06-05", "07-14", "08-31", "09-15",
+        "10-06", "11-18", "12-28", "01-15", "02-20", "03-11",
+        "04-08", "06-22", "07-30", "08-10", "09-04", "10-21",
+        "11-02", "12-15", "01-28", "02-03", "03-30", "04-25",
+        "06-16", "07-08", "08-27", "09-20", "10-09", "11-14",
+        "12-07", "01-19", "02-25", "03-04", "04-18", "06-30",
+        "07-23", "08-15", "09-03", "10-28", "11-21", "12-01",
+        "01-05", "02-11", "03-22", "04-01", "06-07", "07-27",
+    ]
+
+    # Assign birthdays: first 12 get this-week, next 18 get this-month, rest other
+    birthdays = []
+    for i in range(100):
+        if i < 12:
+            birthdays.append(THIS_WEEK_BDS[i % len(THIS_WEEK_BDS)])
+        elif i < 30:
+            birthdays.append(THIS_MONTH_BDS[(i - 12) % len(THIS_MONTH_BDS)])
+        else:
+            birthdays.append(OTHER_BDS[(i - 30) % len(OTHER_BDS)])
+
+    random.shuffle(birthdays)  # mix them up so birthday customers aren't all first
+
+    # ── Insert 100 customers ─────────────────────────────────────────────────
+    customer_ids = []
     for i, (first, last) in enumerate(names):
         city, state = random.choice(CITIES_STATES)
-        street      = STREETS[i]
+        street      = STREETS[i % len(STREETS)]
         phone_num   = f"256{random.randint(3000000, 9999999)}"
-        email       = f"{first.lower()}.{last.lower()}@gmail.com"
-        birthday    = BIRTHDAYS[i]
+        email       = f"{first.lower()}.{last.lower()}demo@gmail.com"
+        birthday    = birthdays[i]
+        zip_code    = random.choice(ZIPS)
+        tags        = random.choice(TAGS_POOL) if random.random() < 0.35 else None
+
         cur.execute("""
             INSERT INTO customers
               (consultant_id, first_name, last_name, email, phone, street, city, state,
-               postal_code, birthday, source_status)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'active')
+               postal_code, birthday, source_status, tags)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'active',%s)
             RETURNING id
         """, (CONSULTANT_ID, first, last, email, phone_num, street, city, state,
-              random.choice(ZIPS), birthday))
+              zip_code, birthday, tags))
         customer_ids.append(cur.fetchone()["id"])
 
-    # Insert orders
-    products = list(ORDER_PRODUCTS)
-    for cid in customer_ids:
-        for _ in range(random.randint(1, 2)):
-            days_back  = random.randint(14, 400)
-            order_date = (today - timedelta(days=days_back)).isoformat()
-            items      = random.sample(products, random.randint(2, 3))
-            total      = sum(p[2] for p in items)
-            cur.execute("""
-                INSERT INTO orders (consultant_id, customer_id, order_date, total, source)
-                VALUES (%s,%s,%s,%s,'consultant') RETURNING id
-            """, (CONSULTANT_ID, cid, order_date, total))
-            oid = cur.fetchone()["id"]
-            for sku, name, price in items:
-                cur.execute("""
-                    INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity)
-                    VALUES (%s,%s,%s,%s,1)
-                """, (oid, sku, name, price))
+    print(f"✅ Inserted {len(customer_ids)} customers")
 
-    # Insert inventory
+    # ── Order date buckets ───────────────────────────────────────────────────
+    def date_in(start_days_ago, end_days_ago):
+        d = random.randint(end_days_ago, start_days_ago)
+        return today - timedelta(days=d)
+
+    # Customers 0–9: NO orders (new pipeline customers)
+    # Customers 10–19: gone quiet (orders 6+ months ago only)
+    # Customers 20–99: active — get orders in various buckets
+
+    products = list(ORDER_PRODUCTS)
+
+    def insert_order(cid, order_date):
+        items = random.sample(products, random.randint(1, 4))
+        total = sum(p[2] for p in items)
+        cur.execute("""
+            INSERT INTO orders (consultant_id, customer_id, order_date, total, source)
+            VALUES (%s,%s,%s,%s,'consultant') RETURNING id
+        """, (CONSULTANT_ID, cid, order_date.isoformat(), total))
+        oid = cur.fetchone()["id"]
+        for sku, name, price in items:
+            cur.execute("""
+                INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity)
+                VALUES (%s,%s,%s,%s,1)
+            """, (oid, sku, name, price))
+        return oid
+
+    order_count = 0
+
+    for i, cid in enumerate(customer_ids):
+        if i < 10:
+            # No orders — new customers
+            continue
+        elif i < 20:
+            # Gone quiet — last order 6+ months ago
+            insert_order(cid, date_in(240, 180))
+            order_count += 1
+        elif i < 30:
+            # Today
+            insert_order(cid, today)
+            if random.random() < 0.4:
+                insert_order(cid, date_in(60, 30))
+            order_count += 1
+        elif i < 45:
+            # This week (May 13–17)
+            insert_order(cid, date_in(5, 1))
+            if random.random() < 0.5:
+                insert_order(cid, date_in(90, 45))
+            order_count += 1
+        elif i < 60:
+            # This month (May 1–12)
+            insert_order(cid, date_in(17, 6))
+            if random.random() < 0.4:
+                insert_order(cid, date_in(120, 60))
+            order_count += 1
+        elif i < 80:
+            # Last month (April)
+            insert_order(cid, date_in(48, 19))
+            if random.random() < 0.3:
+                insert_order(cid, date_in(180, 90))
+            order_count += 1
+        else:
+            # 6 months ago (Nov–Dec 2025)
+            insert_order(cid, date_in(200, 160))
+            order_count += 1
+
+    print(f"✅ Inserted ~{order_count} orders")
+
+    # ── PCP enrollments (30 customers from the active group) ────────────────
+    pcp_candidates = customer_ids[20:60]  # active customers with recent orders
+    pcp_selected   = random.sample(pcp_candidates, 30)
+    scraped_at     = datetime.now().isoformat()
+
+    for cid in pcp_selected:
+        # look up the name we inserted
+        cur.execute("SELECT first_name, last_name FROM customers WHERE id=%s", (cid,))
+        row = cur.fetchone()
+        pcp_name = f"{row['first_name']} {row['last_name']}"
+        cur.execute("""
+            INSERT INTO pcp_enrollments (consultant_id, pcp_name, quarter, enrolled, scraped_at, customer_id)
+            VALUES (%s,%s,'2026-Q2',true,%s,%s)
+        """, (CONSULTANT_ID, pcp_name, scraped_at, cid))
+
+    print(f"✅ Enrolled 30 customers in PCP")
+
+    # ── Inventory ────────────────────────────────────────────────────────────
     for sku, qty in INVENTORY_ITEMS:
         cur.execute("""
             INSERT INTO inventory (consultant_id, sku, qty_on_hand)
             VALUES (%s,%s,%s)
         """, (CONSULTANT_ID, sku, qty))
 
+    print(f"✅ Inserted {len(INVENTORY_ITEMS)} inventory items (~$5,984 retail)")
+
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ Inserted 20 demo customers, orders, and inventory into production")
-    print(f"\nRun 'python demo_setup_prod.py restore' after the presentation.")
+    print("\n✅ Demo setup complete. Run 'python demo_setup_prod.py restore' after the presentation.")
 
 
 def restore():
@@ -206,38 +366,42 @@ def restore():
     conn   = connect()
     cur    = conn.cursor()
 
-    # Wipe demo data
+    # Wipe demo data (FK-safe order)
+    cur.execute("DELETE FROM pcp_lookbook_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM customer_birthday_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM customer_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM pcp_enrollments WHERE consultant_id=%s", (CONSULTANT_ID,))
     cur.execute("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE consultant_id=%s)", (CONSULTANT_ID,))
     cur.execute("DELETE FROM orders WHERE consultant_id=%s", (CONSULTANT_ID,))
-    cur.execute("DELETE FROM customer_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
-    cur.execute("DELETE FROM customer_birthday_followups WHERE consultant_id=%s", (CONSULTANT_ID,))
-    cur.execute("DELETE FROM pcp_enrollments WHERE consultant_id=%s", (CONSULTANT_ID,))
     cur.execute("DELETE FROM customers WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM inventory_order_items WHERE consultant_id=%s", (CONSULTANT_ID,))
+    cur.execute("DELETE FROM inventory_intouch_imports WHERE consultant_id=%s", (CONSULTANT_ID,))
     cur.execute("DELETE FROM inventory WHERE consultant_id=%s", (CONSULTANT_ID,))
 
-    def _restore_table(table, rows, skip_id=False):
+    def _restore_table(table, rows):
         if not rows:
             return
         for row in rows:
-            if skip_id:
-                row.pop("id", None)
             cols = ", ".join(row.keys())
             vals = ", ".join(["%s"] * len(row))
             cur.execute(f"INSERT INTO {table} ({cols}) VALUES ({vals})", list(row.values()))
+        print(f"   restored {table}: {len(rows)} rows")
 
-    _restore_table("customers",                    backup.get("customers", []),    skip_id=False)
-    _restore_table("orders",                       backup.get("orders", []),       skip_id=False)
-    _restore_table("order_items",                  backup.get("order_items", []),  skip_id=False)
-    _restore_table("inventory",                    backup.get("inventory", []),    skip_id=False)
-    _restore_table("customer_followups",           backup.get("customer_followups", []),          skip_id=False)
-    _restore_table("customer_birthday_followups",  backup.get("customer_birthday_followups", []), skip_id=False)
-    _restore_table("pcp_enrollments",              backup.get("pcp_enrollments", []),             skip_id=False)
+    _restore_table("customers",                   backup.get("customers", []))
+    _restore_table("orders",                      backup.get("orders", []))
+    _restore_table("order_items",                 backup.get("order_items", []))
+    _restore_table("inventory",                   backup.get("inventory", []))
+    _restore_table("customer_followups",          backup.get("customer_followups", []))
+    _restore_table("customer_birthday_followups", backup.get("customer_birthday_followups", []))
+    _restore_table("pcp_enrollments",             backup.get("pcp_enrollments", []))
+    _restore_table("pcp_lookbook_followups",      backup.get("pcp_lookbook_followups", []))
+    _restore_table("inventory_order_items",       backup.get("inventory_order_items", []))
+    _restore_table("inventory_intouch_imports",   backup.get("inventory_intouch_imports", []))
 
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ Production data restored from backup.")
-    print(f"You can delete {BACKUP_PATH} now if everything looks good.")
+    print(f"\n✅ Production data restored. You can delete {BACKUP_PATH} once everything looks good.")
 
 
 if __name__ == "__main__":

@@ -98,6 +98,20 @@ def _waiting_consultant_count() -> int:
         return int(row[0] if not isinstance(row, dict) else list(row.values())[0]) if row else 0
 
 
+def _running_consultant_count() -> int:
+    """Count distinct consultants with a currently running job (locked to a worker)."""
+    from db import tx
+    with tx() as (conn, cur):
+        is_sqlite = "sqlite" in type(cur).__module__.lower()
+        PH = "?" if is_sqlite else "%s"
+        cur.execute(
+            f"SELECT COUNT(DISTINCT consultant_id) FROM jobs WHERE status = {PH}",
+            ("running",)
+        )
+        row = cur.fetchone()
+        return int(row[0] if not isinstance(row, dict) else list(row.values())[0]) if row else 0
+
+
 def _any_jobs_active() -> bool:
     """Return True if any jobs are queued or running (for scale-down guard)."""
     from db import tx
@@ -157,8 +171,11 @@ def check_and_scale_up() -> bool:
     print(f"[Autoscaler] check_and_scale_up: {waiting} consultant(s) waiting for a worker (max={worker_max})")
     if waiting >= 1:
         current = current_instance_count()
-        if current is not None and current < worker_max:
-            return _scale(min(worker_max, current + 1))
+        if current is not None:
+            running = _running_consultant_count()
+            target = min(worker_max, running + waiting + 1)
+            if current < target:
+                return _scale(target)
     return False
 
 

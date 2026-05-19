@@ -2748,15 +2748,18 @@ class MKChatEngine:
 
             has_zip = bool(re.search(r"\b\d{5}(?:-\d{4})?\b", t))
             has_phone = bool(re.search(r"(?:\+?1[\s\-\.]?)?(?:\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4})", t))
+            has_email = bool(re.search(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", t))
             has_birthday_word = any(x in t.lower() for x in ("birthday", "bday", "dob"))
             has_month_name = bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b", t, re.IGNORECASE))
             has_address_word = any(x in t.lower() for x in ("address", "street", "st ", "road", "rd ", "avenue", "ave ", "drive", "dr ", "lane", "ln ", "court", "ct ", "circle", "cir ", "way", "blvd", "boulevard", "unit", "apt", "apartment", "lot"))
+            has_referred_by = bool(re.search(r'\breferred\s+by\b', t, re.IGNORECASE))
 
             score = sum([
-                has_zip,
+                has_zip or has_address_word,
                 has_phone,
+                has_email,
                 has_birthday_word or has_month_name,
-                has_address_word,
+                has_referred_by,
             ])
 
             # if it looks like a bundle of customer fields, treat it as a customer entry
@@ -3097,7 +3100,7 @@ class MKChatEngine:
         # -------------------------
         # Customer search by product
         # -------------------------
-        if not pending and not _looks_like_full_customer_entry(msg) and not re.match(r'^\s*tags?\s*:', msg, re.IGNORECASE):
+        if not pending and not _looks_like_full_customer_entry(msg) and not re.match(r'^\s*tags?\s*:', msg, re.IGNORECASE) and not re.match(r'^\s*(new|add|create)\s+customer\b', msg, re.IGNORECASE):
             import re as _re2
             _product_term = None
 

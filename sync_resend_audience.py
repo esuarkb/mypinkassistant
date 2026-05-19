@@ -6,13 +6,14 @@ Safe to run anytime.
 Usage:
     python sync_resend_audience.py
 
-Reads RESEND_AUDIENCE_ID and RESEND_API_KEY_FULL from .env.
+Reads RESEND_AUDIENCE_ID and RESEND_API_KEY_FULL from .env.production (falls back to .env).
 """
 import sys
 import os
 import requests
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv()               # base vars (Resend keys, etc.)
+load_dotenv(".env.production", override=True)  # production DATABASE_URL overrides local
 
 from db import connect, is_postgres
 
