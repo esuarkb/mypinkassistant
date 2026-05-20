@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 from typing import Any, Iterable, Optional, Sequence, Dict
 
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -592,6 +592,35 @@ engine = MKChatEngine()
 # Public pages
 # -------------------------
 from urllib.parse import urlencode
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    return "\n".join([
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /login",
+        "Disallow: /onboard",
+        "Disallow: /forgot",
+        "Disallow: /reset-password",
+        "Disallow: /chat",
+        "Disallow: /admin",
+        "Sitemap: https://www.mypinkassistant.com/sitemap.xml",
+    ])
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml():
+    from fastapi.responses import Response
+    content = "\n".join([
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        "  <url><loc>https://www.mypinkassistant.com/</loc><priority>1.0</priority></url>",
+        "  <url><loc>https://www.mypinkassistant.com/faq</loc><priority>0.6</priority></url>",
+        "  <url><loc>https://www.mypinkassistant.com/legal</loc><priority>0.3</priority></url>",
+        "</urlset>",
+    ])
+    return Response(content=content, media_type="application/xml")
+
 
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request):

@@ -134,9 +134,9 @@ filter on jobs with status='done' to ensure confirmed orders only.
 - InTouch/MyCustomers is the official Mary Kay database and source of truth
 - Our mk.db mirrors customer and order data but does not replace InTouch
 - Customer import runs at account creation automatically
-- There is currently NO way to import historical order data from MyCustomers
-  (MyCustomers does not export orders) — order history in mk.db only goes 
-  back to when the consultant started using MyPinkAssistant
+- Historical order data IS imported automatically — the system intercepts the
+  InTouch Apex/LWC response to pull order history. Runs nightly via Render cron
+  and also at onboarding. New consultants get their full order history on day one.
 
 ## Environment Variables Required
 ```
