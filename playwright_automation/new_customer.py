@@ -189,12 +189,19 @@ def create_customer_basic(page: Page, customer: dict) -> None:
                 raise Exception("Subscription dialog failed to open after 3 attempts.")
 
             dialog = page.get_by_role("dialog")
-            dialog.locator("c-cmt-custom-toggle").nth(0).locator("label").click()
-            page.wait_for_timeout(800)
-            dialog.locator("c-cmt-custom-toggle").nth(1).locator("label").click()
-            page.wait_for_timeout(1000)
+            for nth in (0, 1):
+                label = dialog.locator("c-cmt-custom-toggle").nth(nth).locator("label")
+                toggle_input = dialog.locator("c-cmt-custom-toggle").nth(nth).locator("input.toggle-input")
+                for attempt in range(3):
+                    label.click()
+                    page.wait_for_timeout(500)
+                    if toggle_input.is_checked():
+                        break
+                else:
+                    raise Exception(f"Toggle {nth} did not switch on after 3 attempts")
+                page.wait_for_timeout(300)
             dialog.get_by_role("button", name="Save & Exit").click()
-            page.wait_for_timeout(1000)
+            dialog.wait_for(state="hidden", timeout=8000)
         except Exception as e:
             logger.warning(f"Subscription toggle failed (non-fatal): {e}")
             subscription_ok = False

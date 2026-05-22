@@ -218,7 +218,7 @@ def main(username: str, password: str) -> None:
         print("\nStep 8: Closing address dialog and opening Subscriptions edit...")
         try:
             dialog = page.get_by_role("dialog")
-            cancel_btn = dialog.get_by_role("button", name="Cancel")
+            cancel_btn = dialog.get_by_role("button", name="Cancel", exact=True)
             cancel_btn.wait_for(state="visible", timeout=3000)
             cancel_btn.click()
             page.wait_for_timeout(1000)
