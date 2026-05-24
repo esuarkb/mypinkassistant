@@ -614,6 +614,23 @@ def main():
                                 conn.commit()
                             finally:
                                 conn.close()
+                            # PCP (non-fatal: skip_login=True reuses the already-logged-in page)
+                            try:
+                                from scrape_pcp import scrape_enrolled as _pcp_scrape, save_to_db as _pcp_save, current_quarter as _pcp_quarter
+                                enrolled = _pcp_scrape(page, username, password, skip_login=True)
+                                if enrolled:
+                                    conn = connect()
+                                    try:
+                                        cur = conn.cursor()
+                                        _pcp_save(cur, enrolled, cid, _pcp_quarter())
+                                        conn.commit()
+                                    finally:
+                                        conn.close()
+                                    print(f"[InitialSync] PCP: {len(enrolled)} enrolled customers saved")
+                                else:
+                                    print("[InitialSync] PCP: no enrolled customers found")
+                            except Exception as _pcp_err:
+                                print(f"[InitialSync] PCP scrape failed (non-fatal): {_pcp_err}")
                             mark_job_done(job_id, "Customer & order import complete!")
                             conn = connect()
                             try:

@@ -3128,13 +3128,28 @@ class MKChatEngine:
                     _product_term = _candidate
 
             if _product_term:
-                from crm_store import find_customers_by_product, format_customers_by_product
+                from crm_store import find_customers_by_product, find_customers_by_category, format_customers_by_product
                 from db import tx
                 _filler = {"on", "the", "a", "an", "use", "using", "with", "for", "in", "of"}
                 terms = [w for w in _product_term.lower().split() if len(w) > 1 and w not in _filler]
+
+                # Category aliases: map common words to OR-matched product name fragments
+                _FRAGRANCE_TERMS = ["eau de parfum", "eau de toilette", "cologne spray", "body mist"]
+                _CATEGORY_MAP = {
+                    "perfume":   _FRAGRANCE_TERMS,
+                    "fragrance": _FRAGRANCE_TERMS,
+                    "cologne":   _FRAGRANCE_TERMS,
+                    "parfum":    _FRAGRANCE_TERMS,
+                }
+                _category_key = _product_term.lower().strip()
+                _or_terms = _CATEGORY_MAP.get(_category_key) or _CATEGORY_MAP.get(_category_key.rstrip("s"))
+
                 if terms:
                     with tx() as (conn, cur):
-                        results = find_customers_by_product(cur, consultant_id=consultant_id, terms=terms)
+                        if _or_terms:
+                            results = find_customers_by_category(cur, consultant_id=consultant_id, or_terms=_or_terms)
+                        else:
+                            results = find_customers_by_product(cur, consultant_id=consultant_id, terms=terms)
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply(format_customers_by_product(results, _product_term))

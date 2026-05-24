@@ -52,8 +52,9 @@ def current_quarter() -> str:
     return f"{today.year}-Q{q}"
 
 
-def scrape_enrolled(page, username: str, password: str) -> list[dict]:
-    login_intouch(page, username, password)
+def scrape_enrolled(page, username: str, password: str, skip_login: bool = False) -> list[dict]:
+    if not skip_login:
+        login_intouch(page, username, password)
 
     page.goto(PCP_URL, wait_until="domcontentloaded")
     page.wait_for_timeout(3000)
