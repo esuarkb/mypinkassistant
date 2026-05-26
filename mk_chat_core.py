@@ -244,7 +244,22 @@ def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
         "INITIAL_SYNC",
         {},
         consultant_id=consultant_id,
+        priority=1,
     )
+
+    # Queue PCP sync to run right after INITIAL_SYNC (priority=0 so INITIAL_SYNC always goes first)
+    cur.execute(
+        f"""
+        SELECT 1 FROM jobs
+        WHERE consultant_id = {PH}
+          AND type = 'PCP_SYNC'
+          AND status IN ('queued', 'running')
+        LIMIT 1
+        """,
+        (consultant_id,),
+    )
+    if not cur.fetchone():
+        insert_job("PCP_SYNC", {}, consultant_id=consultant_id, priority=0)
 
     return True
 

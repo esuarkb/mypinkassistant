@@ -622,11 +622,6 @@ def main():
                                     f"UPDATE consultants SET initial_sync_completed = TRUE WHERE id = {PH_W}",
                                     (cid,),
                                 )
-                                # Queue PCP sync as a separate low-priority job so it doesn't block onboarding
-                                cur.execute(
-                                    f"INSERT INTO jobs (type, payload_json, status, consultant_id, priority) VALUES ({PH_W}, {PH_W}, 'queued', {PH_W}, {PH_W})",
-                                    ("PCP_SYNC", "{}", cid, 5),
-                                )
                                 conn.commit()
                             finally:
                                 conn.close()
@@ -670,22 +665,27 @@ def main():
                             mark_job_done(job_id, "Nightly sync complete.")
 
                         # -------------------------
-                        # PCP_SYNC (queued by INITIAL_SYNC after onboarding)
+                        # PCP_SYNC (queued at onboarding and quarterly)
                         # -------------------------
                         elif job_type == "PCP_SYNC":
                             from scrape_pcp import scrape_enrolled as _pcp_scrape, save_to_db as _pcp_save, current_quarter as _pcp_quarter
-                            enrolled = _pcp_scrape(page, username, password)
-                            if enrolled:
-                                conn = connect()
-                                try:
-                                    cur = conn.cursor()
-                                    _pcp_save(cur, enrolled, cid, _pcp_quarter())
-                                    conn.commit()
-                                finally:
-                                    conn.close()
-                                mark_job_done(job_id, f"PCP sync complete — {len(enrolled)} enrolled customers saved.")
-                            else:
-                                mark_job_done(job_id, "PCP sync complete — no enrolled customers found.")
+                            try:
+                                enrolled = _pcp_scrape(page, username, password, skip_login=True)
+                                if enrolled:
+                                    conn = connect()
+                                    try:
+                                        cur = conn.cursor()
+                                        _pcp_save(cur, enrolled, cid, _pcp_quarter())
+                                        conn.commit()
+                                    finally:
+                                        conn.close()
+                                    mark_job_done(job_id, f"PCP sync complete — {len(enrolled)} enrolled customers saved.")
+                                else:
+                                    mark_job_done(job_id, "PCP sync complete — no enrolled customers found.")
+                            except RuntimeError:
+                                mark_job_done(job_id, "PCP complete — T&C not yet accepted")
+                            except Exception as _pcp_err:
+                                mark_job_failed(job_id, f"PCP sync failed — {_pcp_err}")
 
                         # -------------------------
                         # Unknown job type

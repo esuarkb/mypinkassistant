@@ -57,6 +57,8 @@ def scrape_enrolled(page, username: str, password: str, skip_login: bool = False
         login_intouch(page, username, password)
 
     page.goto(PCP_URL, wait_until="domcontentloaded")
+    if "Alerts.aspx" in page.url or "TermsAndConditions" in page.url:
+        raise RuntimeError("PCP Terms & Conditions not yet accepted in InTouch")
     page.wait_for_timeout(3000)
 
     page.select_option(f"#{PAGE_SIZE_ID}", "500")
@@ -142,6 +144,22 @@ def save_to_db(cur, enrolled: list[dict], consultant_id: int, quarter: str) -> i
                 scraped_at  = {now}
         """, (consultant_id, c['name'], quarter, c['enrolled'], consultant_id, c['name']))
         upserted += 1
+
+    # Remove anyone no longer on this quarter's list — each quarter is a complete snapshot
+    if enrolled:
+        scraped_names = [c['name'] for c in enrolled]
+        if is_postgres():
+            cur.execute(
+                f"DELETE FROM pcp_enrollments WHERE consultant_id = {PH} AND quarter = {PH} AND pcp_name != ALL({PH})",
+                (consultant_id, quarter, scraped_names)
+            )
+        else:
+            placeholders = ",".join("?" * len(scraped_names))
+            cur.execute(
+                f"DELETE FROM pcp_enrollments WHERE consultant_id = ? AND quarter = ? AND pcp_name NOT IN ({placeholders})",
+                [consultant_id, quarter] + scraped_names
+            )
+
     return upserted
 
 
