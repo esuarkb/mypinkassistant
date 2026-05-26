@@ -569,7 +569,7 @@ def render_followup_cards(followups: list[dict], consultant_first: str) -> str:
     return "\n".join(parts)
 
 
-def render_birthday_search_cards(customers: list[dict], consultant_first: str) -> str:
+def render_birthday_search_cards(customers: list[dict], consultant_first: str, limit: int = 5, period_label: str = "") -> str:
     """
     Render birthday search results as followup-card HTML so the existing circle
     click handler and /followup/complete endpoint work without any JS changes.
@@ -582,8 +582,14 @@ def render_birthday_search_cards(customers: list[dict], consultant_first: str) -
     import html as _html
     from urllib.parse import quote
 
-    parts = ['<div class="followup-list">']
-    for c in customers:
+    pending = [c for c in customers if not c.get("contacted_this_year")]
+    done    = [c for c in customers if c.get("contacted_this_year")]
+
+    # Apply limit to pending only; done cards always shown at bottom
+    show_pending = pending[:limit] if limit and len(pending) > limit else pending
+    remaining = len(pending) - len(show_pending)
+
+    def _card(c, is_done=False):
         first       = c["first_name"]
         last        = c["last_name"]
         phone       = c["phone"]
@@ -607,15 +613,28 @@ def render_birthday_search_cards(customers: list[dict], consultant_first: str) -
         else:
             days_label = f"in {days_until} days"
 
-        parts.append(
+        circle     = '✓' if is_done else '○'
+        circle_cls = 'followup-circle done' if is_done else 'followup-circle'
+        return (
             f'<div class="followup-card" data-card-type="birthday" data-customer-id="{customer_id}" data-phone="{clean_phone}" data-msg="{msg_attr}" data-sms="{sms_uri}">'
-            f'<button class="followup-circle" data-card-type="birthday" data-customer-id="{customer_id}" aria-label="Send birthday text">○</button>'
+            f'<button class="{circle_cls}" data-card-type="birthday" data-customer-id="{customer_id}" aria-label="Send birthday text">{circle}</button>'
             f'<div class="followup-info">'
             f'<span class="followup-name">{_html.escape(first)} {_html.escape(last)}</span>'
             f'<span class="followup-meta">🎂 {bday_month_name} {bday_day} &bull; {days_label}</span>'
             f'</div>'
             f'</div>'
         )
+
+    parts = ['<div class="followup-list">']
+    for c in show_pending:
+        parts.append(_card(c, is_done=False))
+
+    if remaining > 0:
+        send_text = f"show all birthdays {period_label}".strip()
+        parts.append(f'<a href="#" data-send="{_html.escape(send_text)}">+{remaining} more</a>')
+
+    for c in done:
+        parts.append(_card(c, is_done=True))
 
     parts.append('</div>')
     return "\n".join(parts)

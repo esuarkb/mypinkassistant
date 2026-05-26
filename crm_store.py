@@ -1349,16 +1349,24 @@ def get_customers_by_birthday_period(consultant_id: int, period: str, cur) -> li
             )
             is_first = cur.fetchone() is None
 
+        # contacted_this_year: texted for this birthday year specifically
+        cur.execute(
+            f"SELECT 1 FROM customer_birthday_followups WHERE customer_id = {PH} AND consultant_id = {PH} AND year = {PH} AND completed_at IS NOT NULL LIMIT 1",
+            (customer_id, consultant_id, today.year),
+        )
+        contacted_this_year = cur.fetchone() is not None
+
         results.append({
-            "customer_id":     customer_id,
-            "first_name":      first_name,
-            "last_name":       last_name,
-            "phone":           phone,
-            "bday_month":      bday_month,
-            "bday_day":        bday_day,
-            "bday_month_name": bday_month_name,
-            "days_until":      days_until,
-            "is_first_contact": is_first,
+            "customer_id":          customer_id,
+            "first_name":           first_name,
+            "last_name":            last_name,
+            "phone":                phone,
+            "bday_month":           bday_month,
+            "bday_day":             bday_day,
+            "bday_month_name":      bday_month_name,
+            "days_until":           days_until,
+            "is_first_contact":     is_first,
+            "contacted_this_year":  contacted_this_year,
         })
 
     results.sort(key=lambda r: r["days_until"])

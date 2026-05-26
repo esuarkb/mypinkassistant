@@ -3008,8 +3008,11 @@ class MKChatEngine:
                 }
                 if not _bday_customers:
                     return ChatReply(f"No customers with birthdays {_period_labels.get(_bday_period, _bday_period)}.")
-                _header = f"<strong>Birthdays {_period_labels.get(_bday_period, _bday_period).title()}</strong>"
-                return ChatReply(_header + "\n" + _rbsc(_bday_customers, _consultant_first))
+                _period_label = _period_labels.get(_bday_period, _bday_period)
+                _header = f"<strong>Birthdays {_period_label.title()}</strong>"
+                _show_all = lowered.startswith("show all birthdays")
+                _limit = None if _show_all else 5
+                return ChatReply(_header + "\n" + _rbsc(_bday_customers, _consultant_first, limit=_limit, period_label=_period_label))
 
         # -------------------------
         # Guard: "who are my retinol customers" type messages get misclassified as
