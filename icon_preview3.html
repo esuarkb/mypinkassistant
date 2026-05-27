@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MPA Icon Font Preview — Round 3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Marcellus&family=Gilda+Display&family=Forum&family=Vidaloka&family=Alice&family=Philosopher:wght@700&family=Arapey:ital@1&family=Cardo:wght@700&family=Playfair+Display+SC:wght@700&family=Lora:wght@700&family=Ovo&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #f7f7f8;
+      color: #111;
+      padding: 40px 24px;
+    }
+    h1 { font-size: 20px; margin: 0 0 6px; text-align: center; }
+    p.sub { text-align: center; color: #666; font-size: 14px; margin: 0 0 40px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 28px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .item {
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 18px;
+      padding: 28px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .item:hover { box-shadow: 0 6px 20px rgba(0,0,0,.09); border-color: #e91e63; }
+    .circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #e91e63, #c2185b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      user-select: none;
+    }
+    .label { font-size: 12px; color: #888; text-align: center; line-height: 1.4; }
+    .label strong { display: block; font-size: 13px; color: #333; margin-bottom: 2px; }
+    .ref { border: 2px dashed #ccc; }
+    .ref-tag { font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: .5px; margin-bottom: -8px; }
+
+    /* Reference — Marcellus bumped up */
+    .f-ref { font-family: 'Marcellus', serif; font-size: 25px; letter-spacing: 2px; }
+
+    /* Round 3 — feminine, fuller fill */
+    .f1  { font-family: 'Gilda Display', serif;        font-size: 25px; letter-spacing: 2px; }
+    .f2  { font-family: 'Forum', serif;                font-size: 24px; letter-spacing: 2px; }
+    .f3  { font-family: 'Vidaloka', serif;             font-size: 25px; letter-spacing: 1px; }
+    .f4  { font-family: 'Alice', serif;                font-size: 24px; letter-spacing: 1px; }
+    .f5  { font-family: 'Philosopher', serif;          font-size: 24px; letter-spacing: 1px; font-weight: 700; }
+    .f6  { font-family: 'Arapey', serif;               font-size: 26px; letter-spacing: 1px; font-style: italic; }
+    .f7  { font-family: 'Cardo', serif;                font-size: 24px; letter-spacing: 1px; font-weight: 700; }
+    .f8  { font-family: 'Playfair Display SC', serif;  font-size: 22px; letter-spacing: 2px; font-weight: 700; }
+    .f9  { font-family: 'Lora', serif;                 font-size: 24px; letter-spacing: 1px; font-weight: 700; }
+    .f10 { font-family: 'Ovo', serif;                  font-size: 25px; letter-spacing: 2px; }
+  </style>
+</head>
+<body>
+  <h1>MPA Icon — Round 3 (Feminine)</h1>
+  <p class="sub">Marcellus shown at new larger size for comparison. Click to select.</p>
+
+  <div class="grid">
+
+    <div class="item ref" onclick="pick(this)">
+      <div class="ref-tag">← Round 2 best</div>
+      <div class="circle f-ref">MPA</div>
+      <div class="label"><strong>Marcellus</strong>Roman elegance — bumped size</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f1">MPA</div>
+      <div class="label"><strong>Gilda Display</strong>Soft editorial — refined feminine</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f2">MPA</div>
+      <div class="label"><strong>Forum</strong>Roman but softer — open curves</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f3">MPA</div>
+      <div class="label"><strong>Vidaloka</strong>Distinctive display — chic</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f4">MPA</div>
+      <div class="label"><strong>Alice</strong>Storybook elegance — warm and soft</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f5">MPA</div>
+      <div class="label"><strong>Philosopher</strong>Graceful serif — balanced</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f6">MPA</div>
+      <div class="label"><strong>Arapey Italic</strong>Calligraphic — flowing and feminine</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f7">MPA</div>
+      <div class="label"><strong>Cardo Bold</strong>Humanist serif — warm, bookish</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f8">MPA</div>
+      <div class="label"><strong>Playfair Display SC</strong>Fashion small caps — polished</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f9">MPA</div>
+      <div class="label"><strong>Lora Bold</strong>Contemporary serif — elegant warmth</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f10">MPA</div>
+      <div class="label"><strong>Ovo</strong>Delicate display — light and airy</div>
+    </div>
+
+  </div>
+
+  <p id="picked" style="text-align:center;margin-top:32px;font-size:14px;color:#e91e63;font-weight:700;min-height:20px;"></p>
+
+  <script>
+    function pick(el) {
+      document.querySelectorAll('.item').forEach(i => {
+        i.style.borderColor = '';
+        i.style.boxShadow = '';
+      });
+      el.style.borderColor = '#e91e63';
+      el.style.boxShadow = '0 0 0 3px rgba(233,30,99,.2)';
+      const name = el.querySelector('strong').textContent;
+      document.getElementById('picked').textContent = '✓ Selected: ' + name;
+    }
+  </script>
+</body>
+</html>

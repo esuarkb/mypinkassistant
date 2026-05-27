@@ -622,6 +622,8 @@ def sitemap_xml():
     return Response(content=content, media_type="application/xml")
 
 
+
+
 @app.get("/", response_class=HTMLResponse)
 def landing(request: Request):
     # Prefer ref from URL, else session
@@ -1492,8 +1494,8 @@ def inventory_print(request: Request):
     .meta {{ color: #666; font-size: 12px; margin-bottom: 16px; }}
     .controls {{ margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }}
     .controls label {{ font-size: 13px; cursor: pointer; }}
-    .btn-print {{ background: #d63384; color: #fff; border: none; padding: 7px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }}
-    .btn-print:hover {{ background: #b02a6f; }}
+    .btn-print {{ background: #e91e63; color: #fff; border: none; padding: 7px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }}
+    .btn-print:hover {{ background: #c2185b; }}
     .btn-back {{ display: inline-flex; align-items: center; padding: 7px 18px; border-radius: 8px; border: 1px solid #e6e6e6; background: #fff; color: #111; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; }}
     .btn-back:hover {{ background: #f7f7f8; }}
     .inv-input {{ width: 60px; padding: 3px 6px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }}
@@ -1511,7 +1513,7 @@ def inventory_print(request: Request):
       padding: 10px 16px; margin-bottom: 14px;
       font-size: 14px;
     }}
-    .summary-bar .grand-total {{ font-weight: 700; color: #d63384; }}
+    .summary-bar .grand-total {{ font-weight: 700; color: #e91e63; }}
     @media print {{
       .controls {{ display: none; }}
       body {{ padding: 10px; }}

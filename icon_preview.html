@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MPA Icon Font Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=DM+Serif+Display&family=Josefin+Sans:wght@700&family=Libre+Baskerville:wght@700&family=Montserrat:wght@800&family=Nunito:wght@800&family=Playfair+Display:wght@700&family=Raleway:wght@800&family=Rozha+One&family=Satisfy&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #f7f7f8;
+      color: #111;
+      padding: 40px 24px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 6px;
+      text-align: center;
+    }
+    p.sub {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin: 0 0 40px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 28px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .item {
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 18px;
+      padding: 28px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .item:hover {
+      box-shadow: 0 6px 20px rgba(0,0,0,.09);
+      border-color: #e91e63;
+    }
+    .circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #e91e63, #c2185b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 22px;
+      letter-spacing: 1px;
+      user-select: none;
+    }
+    .label {
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .label strong {
+      display: block;
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 2px;
+    }
+
+    /* Font overrides for each circle */
+    .f1 { font-family: system-ui, -apple-system, sans-serif; font-weight: 800; letter-spacing: 1px; }
+    .f2 { font-family: 'Montserrat', sans-serif; font-weight: 800; letter-spacing: 2px; font-size: 20px; }
+    .f3 { font-family: 'Josefin Sans', sans-serif; font-weight: 700; letter-spacing: 3px; font-size: 19px; }
+    .f4 { font-family: 'Raleway', sans-serif; font-weight: 800; letter-spacing: 2px; font-size: 20px; }
+    .f5 { font-family: 'Playfair Display', serif; font-weight: 700; letter-spacing: 1px; font-size: 22px; }
+    .f6 { font-family: 'Cormorant Garamond', serif; font-weight: 600; letter-spacing: 2px; font-size: 26px; }
+    .f7 { font-family: 'DM Serif Display', serif; font-weight: 400; letter-spacing: 1px; font-size: 23px; }
+    .f8 { font-family: 'Libre Baskerville', serif; font-weight: 700; letter-spacing: 0px; font-size: 20px; }
+    .f9 { font-family: 'Rozha One', serif; font-weight: 400; letter-spacing: 1px; font-size: 22px; }
+    .f10 { font-family: 'Satisfy', cursive; font-weight: 400; letter-spacing: 0px; font-size: 20px; }
+  </style>
+</head>
+<body>
+  <h1>MPA Icon — Font Options</h1>
+  <p class="sub">Click any one you like to mark it. Hover highlights the border.</p>
+
+  <div class="grid">
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f1">MPA</div>
+      <div class="label"><strong>Current</strong>system-ui, Bold 800</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f2">MPA</div>
+      <div class="label"><strong>Montserrat</strong>Geometric sans, spaced</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f3">MPA</div>
+      <div class="label"><strong>Josefin Sans</strong>Thin geometric, open spacing</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f4">MPA</div>
+      <div class="label"><strong>Raleway</strong>Elegant sans, wide</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f5">MPA</div>
+      <div class="label"><strong>Playfair Display</strong>Classic editorial serif</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f6">MPA</div>
+      <div class="label"><strong>Cormorant Garamond</strong>Tall, refined serif</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f7">MPA</div>
+      <div class="label"><strong>DM Serif Display</strong>Modern editorial serif</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f8">MPA</div>
+      <div class="label"><strong>Libre Baskerville</strong>Traditional book serif</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f9">MPA</div>
+      <div class="label"><strong>Rozha One</strong>Bold display serif</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f10">MPA</div>
+      <div class="label"><strong>Satisfy</strong>Script / handwritten feel</div>
+    </div>
+
+  </div>
+
+  <p id="picked" style="text-align:center;margin-top:32px;font-size:14px;color:#e91e63;font-weight:700;min-height:20px;"></p>
+
+  <script>
+    function pick(el) {
+      document.querySelectorAll('.item').forEach(i => i.style.borderColor = '');
+      el.style.borderColor = '#e91e63';
+      el.style.boxShadow = '0 0 0 3px rgba(233,30,99,.2)';
+      const name = el.querySelector('strong').textContent;
+      document.getElementById('picked').textContent = '✓ Selected: ' + name;
+    }
+  </script>
+</body>
+</html>

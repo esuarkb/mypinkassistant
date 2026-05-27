@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MPA Icon Font Preview — Round 2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,700&family=Cinzel:wght@700&family=Abril+Fatface&family=Yeseva+One&family=Italiana&family=Marcellus&family=GFS+Didot&family=Spectral:wght@700&family=Rufina:wght@700&family=Cormorant+SC:wght@600&family=Libre+Baskerville:wght@700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #f7f7f8;
+      color: #111;
+      padding: 40px 24px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 6px;
+      text-align: center;
+    }
+    p.sub {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin: 0 0 40px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 28px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .item {
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 18px;
+      padding: 28px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .item:hover {
+      box-shadow: 0 6px 20px rgba(0,0,0,.09);
+      border-color: #e91e63;
+    }
+    .circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #e91e63, #c2185b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      user-select: none;
+    }
+    .label {
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .label strong {
+      display: block;
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 2px;
+    }
+    .ref {
+      border: 2px dashed #ccc;
+    }
+    .ref-tag {
+      font-size: 10px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: -8px;
+    }
+
+    /* Reference */
+    .f-ref  { font-family: 'Libre Baskerville', serif; font-weight: 700; font-size: 20px; letter-spacing: 0px; }
+
+    /* Round 2 */
+    .f1  { font-family: 'Cinzel', serif; font-weight: 700; font-size: 18px; letter-spacing: 3px; }
+    .f2  { font-family: 'Bodoni Moda', serif; font-weight: 700; font-size: 22px; letter-spacing: 2px; }
+    .f3  { font-family: 'Abril Fatface', serif; font-weight: 400; font-size: 24px; letter-spacing: 1px; }
+    .f4  { font-family: 'Yeseva One', serif; font-weight: 400; font-size: 22px; letter-spacing: 1px; }
+    .f5  { font-family: 'Italiana', serif; font-weight: 400; font-size: 26px; letter-spacing: 3px; }
+    .f6  { font-family: 'Marcellus', serif; font-weight: 400; font-size: 21px; letter-spacing: 2px; }
+    .f7  { font-family: 'GFS Didot', serif; font-weight: 400; font-size: 24px; letter-spacing: 2px; }
+    .f8  { font-family: 'Spectral', serif; font-weight: 700; font-size: 21px; letter-spacing: 1px; }
+    .f9  { font-family: 'Rufina', serif; font-weight: 700; font-size: 21px; letter-spacing: 1px; }
+    .f10 { font-family: 'Cormorant SC', serif; font-weight: 600; font-size: 22px; letter-spacing: 3px; }
+  </style>
+</head>
+<body>
+  <h1>MPA Icon — Round 2 (Stylish)</h1>
+  <p class="sub">Best from round 1 shown as reference. Click to select.</p>
+
+  <div class="grid">
+
+    <div class="item ref" onclick="pick(this)">
+      <div class="ref-tag">← Round 1 best</div>
+      <div class="circle f-ref">MPA</div>
+      <div class="label"><strong>Libre Baskerville</strong>Traditional book serif</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f1">MPA</div>
+      <div class="label"><strong>Cinzel</strong>Roman caps — refined, timeless</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f2">MPA</div>
+      <div class="label"><strong>Bodoni Moda</strong>High contrast — fashion editorial</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f3">MPA</div>
+      <div class="label"><strong>Abril Fatface</strong>Bold display — confident, warm</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f4">MPA</div>
+      <div class="label"><strong>Yeseva One</strong>Display serif — friendly elegance</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f5">MPA</div>
+      <div class="label"><strong>Italiana</strong>Fashion-forward — tall and airy</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f6">MPA</div>
+      <div class="label"><strong>Marcellus</strong>Roman elegance — clean and open</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f7">MPA</div>
+      <div class="label"><strong>GFS Didot</strong>Didone — ultra-refined, luxury feel</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f8">MPA</div>
+      <div class="label"><strong>Spectral</strong>Editorial serif — precise, sharp</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f9">MPA</div>
+      <div class="label"><strong>Rufina</strong>Distinctive serif — stylish personality</div>
+    </div>
+
+    <div class="item" onclick="pick(this)">
+      <div class="circle f10">MPA</div>
+      <div class="label"><strong>Cormorant SC</strong>Small caps — ultra elegant, spaced</div>
+    </div>
+
+  </div>
+
+  <p id="picked" style="text-align:center;margin-top:32px;font-size:14px;color:#e91e63;font-weight:700;min-height:20px;"></p>
+
+  <script>
+    function pick(el) {
+      document.querySelectorAll('.item').forEach(i => {
+        i.style.borderColor = '';
+        i.style.boxShadow = '';
+      });
+      el.style.borderColor = '#e91e63';
+      el.style.boxShadow = '0 0 0 3px rgba(233,30,99,.2)';
+      const name = el.querySelector('strong').textContent;
+      document.getElementById('picked').textContent = '✓ Selected: ' + name;
+    }
+  </script>
+</body>
+</html>

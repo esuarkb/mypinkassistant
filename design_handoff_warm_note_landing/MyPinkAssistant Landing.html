@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MyPinkAssistant — Landing Refresh</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Nunito:wght@400;600;700;800&family=Caveat:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; }
+    body { font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif; }
+    #root { width: 100%; height: 100%; }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    // Suppress benign ResizeObserver loop notification (a harmless browser warning)
+    window.addEventListener('error', (e) => {
+      if (e.message && e.message.includes('ResizeObserver loop')) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    }, true);
+    // Some browsers route the notice through console.error directly.
+    const _origConsoleError = console.error.bind(console);
+    console.error = (...args) => {
+      const first = args[0];
+      if (typeof first === 'string' && first.includes('ResizeObserver loop')) return;
+      _origConsoleError(...args);
+    };
+  </script>
+  <script>
+    // Preview environment requires ?t= token on script src fetches. Babel's
+    // built-in src loader strips search params, so fetch + transform manually
+    // with the document's token preserved.
+    (async () => {
+      const files = [
+        'design-canvas.jsx',
+        'tweaks-panel.jsx',
+        'ios-frame.jsx',
+        'shared.jsx',
+        'landing-refined.jsx',
+        'landing-warm.jsx',
+        'app.jsx',
+      ];
+      const search = location.search;
+      for (const f of files) {
+        const res = await fetch(f + search, { credentials: 'include' });
+        if (!res.ok) { console.error('Failed to load', f, res.status); continue; }
+        const src = await res.text();
+        try {
+          const { code } = Babel.transform(src, { presets: ['react', 'env'], filename: f });
+          // Use a sourceURL so devtools shows the original filename.
+          // eslint-disable-next-line no-eval
+          (0, eval)(code + '\n//# sourceURL=' + f);
+        } catch (e) {
+          console.error('Error executing', f, e);
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
