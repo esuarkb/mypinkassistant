@@ -127,7 +127,7 @@ function _showNextToast() {
         (smallText || "").toLowerCase().includes("please open") ||
         (smallText || "").toLowerCase().includes("confirm");
 
-    const duration = isError ? 10000 : 5500;
+    const duration = isError ? 8000 : 3000;
 
     toast.classList.remove("hidden");
     toast.innerHTML = `${text}${smallText ? `<span class="small">${smallText}</span>` : ""}`;

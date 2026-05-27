@@ -384,7 +384,7 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
             try:
                 from datetime import date as _date
                 d = _date.fromisoformat(str(order_date)[:10])
-                date_str = f"{_cal.month_abbr[d.month]} {d.day}"
+                date_str = f"{_cal.month_abbr[d.month]} {d.day}, {d.year}"
             except Exception:
                 date_str = str(order_date)[:10]
         else:
