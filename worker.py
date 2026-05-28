@@ -600,7 +600,7 @@ def main():
                             conn = connect()
                             try:
                                 cur = conn.cursor()
-                                import_customers_from_api(cur, consultant_id=cid, raw_customers=raw_customers)
+                                _cust_summary = import_customers_from_api(cur, consultant_id=cid, raw_customers=raw_customers)
                                 conn.commit()
                             finally:
                                 conn.close()
@@ -610,11 +610,13 @@ def main():
                             conn = connect()
                             try:
                                 cur = conn.cursor()
-                                import_order_history(cur, consultant_id=cid, raw_orders=raw_orders)
+                                _ord_summary = import_order_history(cur, consultant_id=cid, raw_orders=raw_orders)
                                 conn.commit()
                             finally:
                                 conn.close()
-                            mark_job_done(job_id, "Customer & order import complete!")
+                            _cust_count = _cust_summary.get("inserted", 0) + _cust_summary.get("updated", 0)
+                            _ord_count = _ord_summary.get("inserted", 0)
+                            mark_job_done(job_id, f"Customer & order import complete! {_cust_count} customers, {_ord_count} orders imported.")
                             conn = connect()
                             try:
                                 cur = conn.cursor()
