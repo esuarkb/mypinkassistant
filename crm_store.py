@@ -1170,13 +1170,13 @@ def get_customers_by_city(cur, consultant_id: int, city: str):
     return [{"first_name": r[0], "last_name": r[1]} for r in rows]
 
 
-def format_city_customers(rows: list, city: str) -> str:
+def format_city_customers(rows: list, city: str, show_all: bool = False) -> str:
     import html as _html
     if not rows:
         return f"No customers found in {city}."
     total = len(rows)
-    shown = rows[:10]
-    rest = rows[10:]
+    shown = rows if show_all else rows[:10]
+    rest = [] if show_all else rows[10:]
     city_esc = _html.escape(city)
     header = f"{total} customer{'s' if total != 1 else ''} in {city_esc}:"
     lines = []

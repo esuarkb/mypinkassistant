@@ -2516,8 +2516,13 @@ class MKChatEngine:
             name_l = product_name.lower()
             return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
 
-        _is_bare_msg = not pending and len(msg.split()) <= 4 and _re.match(r"^[\w\s\-]+$", msg)
-        if _looks_like_product_price_query(msg) or _is_bare_msg:
+        _is_bare_msg = (
+            not pending
+            and len(msg.split()) <= 4
+            and _re.match(r"^[\w\s\-]+$", msg)
+        )
+        _is_top_n_customers = bool(_re.search(r"\btop\s+\d+\s+customers?\b", lowered))
+        if not _is_top_n_customers and (_looks_like_product_price_query(msg) or _is_bare_msg):
             product_text = _parse_product_price_query_text(msg) if _looks_like_product_price_query(msg) else msg
             if product_text:
                 # Normalize common search terms to MK catalog naming
@@ -3104,11 +3109,7 @@ class MKChatEngine:
             with tx() as (conn, cur):
                 rows = get_customers_by_city(cur, consultant_id=consultant_id, city=city)
 
-            if _show_all_city:
-                from crm_store import format_city_customers as _fcity
-                return ChatReply(format_city_customers(rows, city))
-
-            return ChatReply(format_city_customers(rows, city))
+            return ChatReply(format_city_customers(rows, city, show_all=_show_all_city))
 
         # -------------------------
         # Product price lookup (intent-based fallback)
