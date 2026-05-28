@@ -17,6 +17,7 @@ class IntentResult:
 SUPPORTED_INTENTS = {
     "cancel",
     "customer_info",
+    "customers_by_city",
     "recent_orders",
     "customer_spend",
     "leaderboard",
@@ -129,6 +130,28 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         and not any(t in lowered for t in ("new", "order", "add", "cancel", "tag", "note"))
     )
 
+    # customers by city — check before customer_info to avoid bare-name collision
+    # Pattern 1: "customers in/from [city]" — unambiguous, no exclusions needed
+    # Skip if this looks like a new customer entry
+    _is_new_customer_entry = bool(re.match(r"^(new|add|create)\s+customer", lowered))
+    _city_m1 = None if _is_new_customer_entry else re.search(r"\bcustomers?\s+(?:in|from)\s+([A-Za-z][A-Za-z\s.'-]+?)(?:\s*\??\s*$)", lowered)
+    if _city_m1:
+        return IntentResult(intent="customers_by_city", confidence=0.95,
+                            slots={"city": _city_m1.group(1).strip().title()}, raw_text=msg)
+    # Pattern 2: "[city] customers" reverse order — require plural, exclude state-adjectives
+    # Allow multi-word cities starting with "new" (New York, New Orleans, etc.)
+    _CITY_ADJECTIVES = {"active", "inactive", "lapsed", "top", "best", "recent", "other",
+                        "show", "find", "list", "get", "all", "any", "some"}
+    _city_m2 = re.match(r"^(?:my\s+)?([A-Za-z][A-Za-z\s.'-]+?)\s+customers\b", lowered)
+    if _city_m2:
+        _city = _city_m2.group(1).strip()
+        _first_word = _city.lower().split()[0]
+        _is_adjective = _first_word in _CITY_ADJECTIVES
+        _is_bare_new = _city.lower() == "new"  # "new customers" alone, not "New York"
+        if not _is_adjective and not _is_bare_new:
+            return IntentResult(intent="customers_by_city", confidence=0.95,
+                                slots={"city": _city.title()}, raw_text=msg)
+
     # "new order for X" or "order for X" → new_order (must check before new_customer)
     if re.match(r'^(new\s+)?order\s+for\b', lowered):
         return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
@@ -166,6 +189,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "Allowed intents are:\n"
         "- cancel\n"
         "- customer_info\n"
+        "- customers_by_city\n"
         "- recent_orders\n"
         "- customer_spend\n"
         "- leaderboard\n"
@@ -182,6 +206,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- Choose exactly one allowed intent.\n"
         "- If unsure, return unknown.\n"
         "- If the user is asking about customer details, use customer_info.\n"
+        "- If the user is asking for customers in or from a specific city or location, use customers_by_city.\n"
         "- If the user is asking what someone ordered, use recent_orders.\n"
         "- If the user is asking how much someone spent, use customer_spend.\n"
         "- If the user is asking for top customers / PCP / who spent the most, use leaderboard.\n"

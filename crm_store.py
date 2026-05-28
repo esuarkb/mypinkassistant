@@ -1151,6 +1151,45 @@ def find_customers_by_product(cur, consultant_id: int, terms: list[str]) -> list
     return list(grouped.values())
 
 
+def get_customers_by_city(cur, consultant_id: int, city: str):
+    from db import is_postgres
+    PH = "%s" if is_postgres() else "?"
+    ILIKE = "ILIKE" if is_postgres() else "LIKE"
+    cur.execute(
+        f"""
+        SELECT first_name, last_name
+        FROM customers
+        WHERE consultant_id = {PH}
+          AND city {ILIKE} {PH}
+          AND COALESCE(source_status, 'active') = 'active'
+        ORDER BY last_name, first_name
+        """,
+        (consultant_id, city),
+    )
+    rows = cur.fetchall()
+    return [{"first_name": r[0], "last_name": r[1]} for r in rows]
+
+
+def format_city_customers(rows: list, city: str) -> str:
+    import html as _html
+    if not rows:
+        return f"No customers found in {city}."
+    total = len(rows)
+    shown = rows[:10]
+    rest = rows[10:]
+    city_esc = _html.escape(city)
+    header = f"{total} customer{'s' if total != 1 else ''} in {city_esc}:"
+    lines = []
+    for c in shown:
+        name = f"{c.get('first_name', '')} {c.get('last_name', '')}".strip()
+        safe = _html.escape(name, quote=True)
+        lines.append(f"• <a href=\"#\" data-send=\"{safe}\">{_html.escape(name)}</a>")
+    if rest:
+        send = _html.escape(f"customers in {city} all", quote=True)
+        lines.append(f'\n<a href="#" data-send="{send}">+{len(rest)} more</a>')
+    return header + "\n" + "\n".join(lines)
+
+
 def format_customers_by_product(customers: list[dict], search_term: str) -> str:
     import html as _html
     if not customers:

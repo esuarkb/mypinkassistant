@@ -3075,6 +3075,42 @@ class MKChatEngine:
             return ChatReply(format_lapsed_customers(result, _days))
 
         # -------------------------
+        # Customers by city
+        # -------------------------
+        if not pending and (
+            intent_result.intent == "customers_by_city"
+            or re.match(r"customers\s+in\s+\S.+\s+all$", lowered)
+        ):
+            from crm_store import get_customers_by_city, format_city_customers
+
+            # expand overflow list
+            _show_all_city = bool(re.match(r"customers\s+in\s+(.+?)\s+all$", lowered))
+
+            city = (intent_result.slots or {}).get("city", "")
+            if not city:
+                _cm = re.search(r"\bcustomers?\s+(?:in|from)\s+([A-Za-z][A-Za-z\s.'-]+?)(?:\s+all)?\s*\??$", lowered)
+                if not _cm:
+                    _cm = re.match(r"^(?:my\s+)?([A-Za-z][A-Za-z\s.'-]+?)\s+customers?\b", lowered)
+                city = _cm.group(1).strip().title() if _cm else ""
+
+            if _show_all_city:
+                _cm2 = re.match(r"customers\s+in\s+(.+?)\s+all$", lowered)
+                if _cm2:
+                    city = _cm2.group(1).strip().title()
+
+            if not city:
+                return ChatReply("Which city would you like to look up customers in?")
+
+            with tx() as (conn, cur):
+                rows = get_customers_by_city(cur, consultant_id=consultant_id, city=city)
+
+            if _show_all_city:
+                from crm_store import format_city_customers as _fcity
+                return ChatReply(format_city_customers(rows, city))
+
+            return ChatReply(format_city_customers(rows, city))
+
+        # -------------------------
         # Product price lookup (intent-based fallback)
         # -------------------------
         if not pending and intent_result.intent == "product_lookup":
