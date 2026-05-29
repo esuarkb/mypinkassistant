@@ -105,6 +105,7 @@ async def add_security_headers(request: Request, call_next):
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "img-src 'self' data:; "
+        "media-src 'self' https://cdn.mypinkassistant.com; "
         "style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; "
         "object-src 'none'; "
