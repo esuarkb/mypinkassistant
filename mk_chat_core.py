@@ -3086,7 +3086,11 @@ class MKChatEngine:
             intent_result.intent == "customers_by_city"
             or re.match(r"customers\s+in\s+\S.+\s+all$", lowered)
         ):
-            from crm_store import get_customers_by_city, format_city_customers
+            from crm_store import (
+                get_customers_by_city, format_city_customers,
+                get_customers_by_city_and_state,
+                get_customers_by_state, format_state_customers, parse_city_state,
+            )
 
             # expand overflow list
             _show_all_city = bool(re.match(r"customers\s+in\s+(.+?)\s+all$", lowered))
@@ -3104,12 +3108,26 @@ class MKChatEngine:
                     city = _cm2.group(1).strip().title()
 
             if not city:
-                return ChatReply("Which city would you like to look up customers in?")
+                return ChatReply("Which city or state would you like to look up customers in?")
 
-            with tx() as (conn, cur):
-                rows = get_customers_by_city(cur, consultant_id=consultant_id, city=city)
+            _city_part, _state_abbr, _state_display = parse_city_state(city)
 
-            return ChatReply(format_city_customers(rows, city, show_all=_show_all_city))
+            if _state_abbr and _city_part:
+                # City + state — e.g. "Nashville, TN" or "Austin Texas"
+                _label = f"{_city_part}, {_state_display}"
+                with tx() as (conn, cur):
+                    rows = get_customers_by_city_and_state(cur, consultant_id=consultant_id, city=_city_part, state_abbr=_state_abbr)
+                return ChatReply(format_city_customers(rows, _label, show_all=_show_all_city))
+            elif _state_abbr:
+                # Pure state — e.g. "Alabama" or "TX"
+                with tx() as (conn, cur):
+                    rows = get_customers_by_state(cur, consultant_id=consultant_id, state_abbr=_state_abbr)
+                return ChatReply(format_state_customers(rows, _state_display, show_all=_show_all_city))
+            else:
+                # Pure city
+                with tx() as (conn, cur):
+                    rows = get_customers_by_city(cur, consultant_id=consultant_id, city=_city_part)
+                return ChatReply(format_city_customers(rows, _city_part, show_all=_show_all_city))
 
         # -------------------------
         # Product price lookup (intent-based fallback)

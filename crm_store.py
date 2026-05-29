@@ -1190,6 +1190,133 @@ def format_city_customers(rows: list, city: str, show_all: bool = False) -> str:
     return header + "\n" + "\n".join(lines)
 
 
+_US_STATE_NAMES: dict[str, str] = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
+    "california": "CA", "colorado": "CO", "connecticut": "CT", "delaware": "DE",
+    "florida": "FL", "georgia": "GA", "hawaii": "HI", "idaho": "ID",
+    "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
+    "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
+    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
+    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+    "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY",
+}
+_US_STATE_ABBRS: dict[str, str] = {v.lower(): v for v in _US_STATE_NAMES.values()}
+_STATE_ABBR_TO_NAME: dict[str, str] = {v: k.title() for k, v in _US_STATE_NAMES.items()}
+
+
+def normalize_state(text: str) -> tuple[str, str] | tuple[None, None]:
+    """Return (abbr, display_name) if text is a US state name or abbreviation, else (None, None)."""
+    t = text.strip().lower()
+    if t in _US_STATE_NAMES:
+        abbr = _US_STATE_NAMES[t]
+        return abbr, text.strip().title()
+    if t in _US_STATE_ABBRS:
+        abbr = _US_STATE_ABBRS[t]
+        return abbr, _STATE_ABBR_TO_NAME[abbr]
+    return None, None
+
+
+def parse_city_state(text: str):
+    """
+    Parse location text into (city, state_abbr, state_display).
+    Handles: 'Nashville, TN', 'Nashville, Tennessee', 'Nashville Tennessee',
+             'Alabama' (pure state), 'Guntersville' (pure city).
+    Returns (city_str, abbr, display) where city_str may be '' for pure-state input.
+    """
+    import re as _re
+    t = text.strip()
+
+    # Pattern 1: comma separator — "Nashville, TN" / "Nashville, Tennessee"
+    m = _re.match(r'^(.+?),\s*([A-Za-z][A-Za-z\s]*)$', t)
+    if m:
+        city_part = m.group(1).strip()
+        state_part = m.group(2).strip()
+        abbr, display = normalize_state(state_part)
+        if abbr:
+            return city_part, abbr, display
+
+    # Pattern 2: no comma — try last 2 words then last 1 word as state
+    words = t.split()
+    if len(words) >= 2:
+        abbr, display = normalize_state(" ".join(words[-2:]))
+        if abbr:
+            return " ".join(words[:-2]), abbr, display
+    if len(words) >= 2:
+        abbr, display = normalize_state(words[-1])
+        if abbr:
+            return " ".join(words[:-1]), abbr, display
+
+    # Pure state or pure city
+    abbr, display = normalize_state(t)
+    if abbr:
+        return "", abbr, display
+    return t, None, None
+
+
+def get_customers_by_city_and_state(cur, consultant_id: int, city: str, state_abbr: str):
+    from db import is_postgres
+    PH = "%s" if is_postgres() else "?"
+    ILIKE = "ILIKE" if is_postgres() else "LIKE"
+    cur.execute(
+        f"""
+        SELECT first_name, last_name
+        FROM customers
+        WHERE consultant_id = {PH}
+          AND city {ILIKE} {PH}
+          AND state {ILIKE} {PH}
+          AND COALESCE(source_status, 'active') = 'active'
+        ORDER BY last_name, first_name
+        """,
+        (consultant_id, city, state_abbr),
+    )
+    rows = cur.fetchall()
+    return [{"first_name": r[0], "last_name": r[1]} for r in rows]
+
+
+def get_customers_by_state(cur, consultant_id: int, state_abbr: str):
+    from db import is_postgres
+    PH = "%s" if is_postgres() else "?"
+    ILIKE = "ILIKE" if is_postgres() else "LIKE"
+    cur.execute(
+        f"""
+        SELECT first_name, last_name
+        FROM customers
+        WHERE consultant_id = {PH}
+          AND state {ILIKE} {PH}
+          AND COALESCE(source_status, 'active') = 'active'
+        ORDER BY last_name, first_name
+        """,
+        (consultant_id, state_abbr),
+    )
+    rows = cur.fetchall()
+    return [{"first_name": r[0], "last_name": r[1]} for r in rows]
+
+
+def format_state_customers(rows: list, state_name: str, show_all: bool = False) -> str:
+    import html as _html
+    if not rows:
+        return f"No customers found in {state_name}."
+    total = len(rows)
+    shown = rows if show_all else rows[:10]
+    rest = [] if show_all else rows[10:]
+    state_esc = _html.escape(state_name)
+    header = f"{total} customer{'s' if total != 1 else ''} in {state_esc}:"
+    lines = []
+    for c in shown:
+        name = f"{c.get('first_name', '')} {c.get('last_name', '')}".strip()
+        safe = _html.escape(name, quote=True)
+        lines.append(f"• <a href=\"#\" data-send=\"{safe}\">{_html.escape(name)}</a>")
+    if rest:
+        send = _html.escape(f"customers in {state_name} all", quote=True)
+        lines.append(f'\n<a href="#" data-send="{send}">+{len(rest)} more</a>')
+    return header + "\n" + "\n".join(lines)
+
+
 def format_customers_by_product(customers: list[dict], search_term: str) -> str:
     import html as _html
     if not customers:
