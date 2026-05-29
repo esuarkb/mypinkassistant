@@ -594,6 +594,10 @@ engine = MKChatEngine()
 # -------------------------
 from urllib.parse import urlencode
 
+@app.get("/health")
+def health():
+    return {"ok": True}
+
 @app.get("/robots.txt", response_class=PlainTextResponse)
 def robots_txt():
     return "\n".join([
