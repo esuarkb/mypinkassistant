@@ -3104,14 +3104,13 @@ class MKChatEngine:
                 city = _cm.group(1).strip().title() if _cm else ""
             # Strip "city:" / "city :" label prefix if consultant typed it literally
             city = re.sub(r"^city\s*:\s*", "", city, flags=re.IGNORECASE).strip()
-
             if _show_all_city:
                 _cm2 = re.match(r"customers\s+in\s+(.+?)\s+all$", lowered)
                 if _cm2:
                     city = _cm2.group(1).strip().title()
 
             if not city:
-                return ChatReply("Which city or state would you like to look up customers in?")
+                return ChatReply("This looks like a city/state lookup. Try \"customers in Madison\" or \"customers in Madison, WI\"")
 
             _city_part, _state_abbr, _state_display = parse_city_state(city)
 
