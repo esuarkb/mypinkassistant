@@ -38,6 +38,8 @@ cur.execute("PRAGMA table_info(consultants)")
 cols = {r[1] for r in cur.fetchall()}
 if "created_at" not in cols:
     cur.execute("ALTER TABLE consultants ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))")
+if "welcome_email_sent" not in cols:
+    cur.execute("ALTER TABLE consultants ADD COLUMN welcome_email_sent INTEGER DEFAULT 0")
 
 # ---- password reset table ----
 cur.execute("""

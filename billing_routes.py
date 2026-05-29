@@ -620,48 +620,6 @@ def billing_success(request: Request, session_id: str = ""):
         except Exception:
             pass
         conn.close()
-        
-        # ---------------------------------------------
-        # ✅ Send Welcome Email (after successful billing)
-        # ---------------------------------------------
-        try:
-            # We already know cid_int is valid here
-            conn = connect()
-            cur = conn.cursor()
-            try:
-                cur.execute(
-                    f"SELECT email, first_name, language FROM consultants WHERE id={PH}",
-                    (cid_int,),
-                )
-                row = cur.fetchone()
-            finally:
-                try:
-                    cur.close()
-                except Exception:
-                    pass
-                conn.close()
-
-            if row:
-                email = (row[0] or "").strip()
-                first_name = (row[1] or "").strip()
-                language = (row[2] or "en").strip().lower()
-                send_welcome_email(to_email=email, first_name=first_name, lang=language)
-                try:
-                    _resend_key = (os.getenv("RESEND_API_KEY") or "").strip()
-                    _audience_id = "f223e3a7-143a-4f86-b5fb-e4084687c2d3"
-                    if _resend_key and row:
-                        import requests as _requests
-                        _requests.post(
-                            f"https://api.resend.com/audiences/{_audience_id}/contacts",
-                            headers={"Authorization": f"Bearer {_resend_key}", "Content-Type": "application/json"},
-                            json={"email": email, "first_name": first_name, "last_name": (row[2] or "").strip(), "unsubscribed": False},
-                            timeout=10,
-                        )
-                except Exception as _ae:
-                    print("[Billing] Resend audience sync failed (non-fatal):", _ae)
-
-        except Exception as e:
-            print("[WelcomeEmail after billing] failed:", repr(e))
 
     return RedirectResponse("/app", status_code=302)
 
@@ -874,6 +832,51 @@ async def stripe_webhook(request: Request):
                     stripe_subscription_id=subscription_id or None,
                     billing_status="trialing",
                 )
+
+            # Send welcome email from the webhook — more reliable than /billing/success
+            # which the browser may not reach (back button, slow redirect, mobile IP change).
+            # welcome_email_sent flag prevents duplicates from Stripe retries.
+            if cid_int:
+                try:
+                    conn = connect()
+                    cur = conn.cursor()
+                    try:
+                        cur.execute(
+                            f"UPDATE consultants SET welcome_email_sent = TRUE"
+                            f" WHERE id={PH} AND (welcome_email_sent IS NULL OR welcome_email_sent = FALSE)"
+                            f" RETURNING email, first_name, language",
+                            (cid_int,),
+                        )
+                        row = cur.fetchone()
+                        conn.commit()
+                    finally:
+                        try:
+                            cur.close()
+                        except Exception:
+                            pass
+                        conn.close()
+                    if row:
+                        _email = (row[0] or "").strip()
+                        _first_name = (row[1] or "").strip()
+                        _lang = (row[2] or "en").strip().lower()
+                        send_welcome_email(to_email=_email, first_name=_first_name, lang=_lang)
+                        try:
+                            _resend_key = (os.getenv("RESEND_API_KEY") or "").strip()
+                            _audience_id = "f223e3a7-143a-4f86-b5fb-e4084687c2d3"
+                            if _resend_key:
+                                import requests as _requests
+                                _requests.post(
+                                    f"https://api.resend.com/audiences/{_audience_id}/contacts",
+                                    headers={"Authorization": f"Bearer {_resend_key}", "Content-Type": "application/json"},
+                                    json={"email": _email, "first_name": _first_name, "unsubscribed": False},
+                                    timeout=10,
+                                )
+                        except Exception as _ae:
+                            print("[Webhook] Resend audience sync failed (non-fatal):", _ae)
+                    else:
+                        print(f"[Webhook] WelcomeEmail skipped — already sent for cid={cid_int}")
+                except Exception as _we:
+                    print("[Webhook] WelcomeEmail failed (non-fatal):", repr(_we))
 
             print(f"[Webhook] OK: {etype} (cid={cid_str or 'none'}, updated_rows={updated})")
 

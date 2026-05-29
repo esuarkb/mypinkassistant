@@ -3097,10 +3097,13 @@ class MKChatEngine:
 
             city = (intent_result.slots or {}).get("city", "")
             if not city:
-                _cm = re.search(r"\bcustomers?\s+(?:in|from)\s+([A-Za-z][A-Za-z\s.'-]+?)(?:\s+all)?\s*\??$", lowered)
+                # Allow commas so "Eau Claire, WI" is captured whole, not truncated at the comma
+                _cm = re.search(r"\bcustomers?\s+(?:in|from)\s+([A-Za-z][A-Za-z\s.',\-]+?)(?:\s+all)?\s*\??$", lowered)
                 if not _cm:
-                    _cm = re.match(r"^(?:my\s+)?([A-Za-z][A-Za-z\s.'-]+?)\s+customers?\b", lowered)
+                    _cm = re.match(r"^(?:my\s+)?([A-Za-z][A-Za-z\s.',\-]+?)\s+customers?\b", lowered)
                 city = _cm.group(1).strip().title() if _cm else ""
+            # Strip "city:" / "city :" label prefix if consultant typed it literally
+            city = re.sub(r"^city\s*:\s*", "", city, flags=re.IGNORECASE).strip()
 
             if _show_all_city:
                 _cm2 = re.match(r"customers\s+in\s+(.+?)\s+all$", lowered)
