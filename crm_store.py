@@ -1537,3 +1537,43 @@ def get_customers_by_birthday_period(consultant_id: int, period: str, cur) -> li
 
     results.sort(key=lambda r: r["days_until"])
     return results
+
+
+def get_top_sellers(cur, consultant_id: int, limit: int = 5, since=None) -> list:
+    from db import is_postgres
+    PH = "%s" if is_postgres() else "?"
+    if since:
+        cur.execute(
+            f"""
+            SELECT oi.product_name, SUM(oi.quantity) AS total_qty, COUNT(DISTINCT oi.order_id) AS num_orders
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.consultant_id = {PH}
+              AND o.created_at >= {PH}
+              AND oi.product_name IS NOT NULL
+              AND oi.product_name != ''
+            GROUP BY oi.product_name
+            ORDER BY total_qty DESC
+            LIMIT {PH}
+            """,
+            (consultant_id, since, limit),
+        )
+    else:
+        cur.execute(
+            f"""
+            SELECT oi.product_name, SUM(oi.quantity) AS total_qty, COUNT(DISTINCT oi.order_id) AS num_orders
+            FROM order_items oi
+            JOIN orders o ON o.id = oi.order_id
+            WHERE o.consultant_id = {PH}
+              AND oi.product_name IS NOT NULL
+              AND oi.product_name != ''
+            GROUP BY oi.product_name
+            ORDER BY total_qty DESC
+            LIMIT {PH}
+            """,
+            (consultant_id, limit),
+        )
+    return [
+        {"product_name": r[0], "total_qty": int(r[1] or 0), "num_orders": int(r[2] or 0)}
+        for r in cur.fetchall()
+    ]

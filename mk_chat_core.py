@@ -2524,10 +2524,15 @@ class MKChatEngine:
             name_l = product_name.lower()
             return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
 
+        _BARE_MSG_BLOCKING_INTENTS = {
+            "recent_orders", "new_order", "leaderboard",
+            "customers_by_city", "followup", "pcp", "top_sellers",
+        }
         _is_bare_msg = (
             not pending
             and len(msg.split()) <= 4
             and _re.match(r"^[\w\s\-]+$", msg)
+            and intent_result.intent not in _BARE_MSG_BLOCKING_INTENTS
         )
         _is_top_n_customers = bool(_re.search(r"\btop\s+\d+\s+customers?\b", lowered))
         if not _is_top_n_customers and (_looks_like_product_price_query(msg) or _is_bare_msg):
@@ -2978,6 +2983,42 @@ class MKChatEngine:
                     )
 
                 return ChatReply(format_leaderboard(rows, title))
+
+        # -------------------------
+        # Top sellers
+        # -------------------------
+        if intent_result.intent == "top_sellers":
+            from crm_store import get_top_sellers
+            from datetime import datetime, timezone, timedelta
+
+            timeframe = (intent_result.slots or {}).get("timeframe")
+            now = datetime.now(timezone.utc)
+            if timeframe == "month":
+                since = now - timedelta(days=30)
+                label = "this month"
+            elif timeframe == "quarter":
+                since = now - timedelta(days=90)
+                label = "this quarter"
+            elif timeframe == "year":
+                since = now - timedelta(days=365)
+                label = "this year"
+            elif timeframe == "all_time":
+                since = None
+                label = "all time"
+            else:
+                since = now - timedelta(days=365)
+                label = "the last 12 months"
+
+            with tx() as (conn, cur):
+                rows = get_top_sellers(cur, consultant_id=consultant_id, limit=5, since=since)
+
+            if not rows:
+                return ChatReply(f"No order history found for {label}.")
+
+            lines = [f"<strong>Your Top Sellers</strong> ({label})"]
+            for i, r in enumerate(rows, 1):
+                lines.append(f"{i}. {r['product_name']} — {r['total_qty']} units")
+            return ChatReply("<br>".join(lines))
 
         # -------------------------
         # Lapsed customers (no LLM call)

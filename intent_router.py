@@ -27,6 +27,7 @@ SUPPORTED_INTENTS = {
     "order_add",
     "order_remove",
     "product_lookup",
+    "top_sellers",
     "unknown",
 }
 
@@ -113,6 +114,26 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         and any(k in lowered for k in ("how much", "total", "spent", "spend"))
     ):
         return IntentResult(intent="customer_spend", confidence=0.9, raw_text=msg)
+
+    # top sellers — must come before customer_info since "what's" triggers that rule
+    _top_seller_triggers = (
+        "top seller", "top selling", "best seller", "best selling",
+        "most popular", "sell the most", "sells the most", "sold the most",
+        "most sold", "what do i sell", "what am i selling", "what's my top",
+        "what is my top", "my best selling", "my top selling",
+    )
+    if any(t in lowered for t in _top_seller_triggers):
+        timeframe = None
+        if any(t in lowered for t in ("this month", "last month", "monthly")):
+            timeframe = "month"
+        elif any(t in lowered for t in ("this quarter", "last quarter", "quarterly")):
+            timeframe = "quarter"
+        elif any(t in lowered for t in ("this year", "last year", "yearly", "annually")):
+            timeframe = "year"
+        elif any(t in lowered for t in ("all time", "all-time", "ever", "overall", "since")):
+            timeframe = "all_time"
+        return IntentResult(intent="top_sellers", confidence=0.95,
+                            slots={"timeframe": timeframe}, raw_text=msg)
 
     # customer info
     looks_like_possessive_info = bool(
@@ -216,6 +237,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- If the user is adding an item to an existing order, use order_add.\n"
         "- If the user is removing an item from an existing order, use order_remove.\n"
         "- If the user is asking for the price or cost of a Mary Kay product (with no customer or order context), use product_lookup.\n"
+        "- If the user is asking what products they sell the most, their top sellers, or best selling items, use top_sellers.\n"
     )
 
     user = f"Message: {msg}\nLast referenced customer: {last_ref_name or '(none)'}"
