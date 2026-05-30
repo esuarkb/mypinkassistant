@@ -221,6 +221,19 @@ CREATE TABLE IF NOT EXISTS guest_orders (
 )
 """)
 
+cur.execute("""
+CREATE TABLE IF NOT EXISTS intent_logs (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL,
+  intent        TEXT    NOT NULL,
+  confidence    REAL,
+  message_text  TEXT,
+  created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_intent_logs_consultant ON intent_logs(consultant_id, created_at)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_intent_logs_intent ON intent_logs(intent, created_at)")
+
 conn.commit()
 conn.close()
 

@@ -2458,6 +2458,14 @@ class MKChatEngine:
 
         intent_result = parse_intent(msg, state)
         print("[INTENT]", intent_result.intent, intent_result.confidence, intent_result.raw_text)
+        try:
+            with tx() as (_il_conn, _il_cur):
+                _il_cur.execute(
+                    f"INSERT INTO intent_logs (consultant_id, intent, confidence, message_text) VALUES ({PH}, {PH}, {PH}, {PH})",
+                    (consultant_id, intent_result.intent, intent_result.confidence, msg[:200]),
+                )
+        except Exception:
+            pass
 
         # Intent override: some "recent_orders" phrasings are actually NEW order entry
         if intent_result.intent == "recent_orders" and _looks_like_new_order_entry(msg):
