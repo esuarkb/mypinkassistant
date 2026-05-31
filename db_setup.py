@@ -233,6 +233,9 @@ CREATE TABLE IF NOT EXISTS intent_logs (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_intent_logs_consultant ON intent_logs(consultant_id, created_at)")
 cur.execute("CREATE INDEX IF NOT EXISTS idx_intent_logs_intent ON intent_logs(intent, created_at)")
+cur.execute("PRAGMA table_info(intent_logs)")
+if "response_text" not in {r[1] for r in cur.fetchall()}:
+    cur.execute("ALTER TABLE intent_logs ADD COLUMN response_text TEXT")
 
 conn.commit()
 conn.close()

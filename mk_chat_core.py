@@ -2176,7 +2176,9 @@ def _format_inventory_list(rows: List[dict], catalog: List[dict]) -> str:
         shown_any = True
 
         cat = by_sku.get(sku) or {}
-        name = (cat.get("product_name") or sku or "Unknown product").strip()
+        name = (cat.get("product_name") or "").strip()
+        if not name:
+            continue  # skip unmatched SKUs (samples, discontinued items not in catalog)
         retail = cat.get("price")
         retail_txt = fmt_price(retail)
 

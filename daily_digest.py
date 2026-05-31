@@ -1,7 +1,7 @@
 """
 daily_digest.py
 
-Analyzes yesterday's chat intent logs and emails a summary to Brian.
+Emails a daily chat activity table to Brian.
 Run via Mac cron at 6am local time: 0 6 * * *
 """
 
@@ -28,217 +28,165 @@ if not DATABASE_URL:
     print("Missing DATABASE_URL"); sys.exit(1)
 
 
+def strip_html(text: str) -> str:
+    import re
+    return re.sub(r"<[^>]+>", "", text or "").strip()
+
+
 def run():
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
 
-    # Yesterday in UTC
     now_utc = datetime.now(timezone.utc)
     today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today_start - timedelta(days=1)
     yesterday_label = yesterday_start.strftime("%B %-d, %Y")
 
-    # ── Pull intent logs for yesterday ──────────────────────────────────────
+    # Pull all intent logs for yesterday with consultant name
     cur.execute("""
-        SELECT il.consultant_id, il.intent, il.confidence, il.message_text, il.created_at,
-               c.first_name, c.last_name
+        SELECT il.consultant_id, c.first_name, c.last_name,
+               il.intent, il.confidence, il.message_text,
+               il.response_text, il.created_at
         FROM intent_logs il
         JOIN consultants c ON c.id = il.consultant_id
         WHERE il.created_at >= %s AND il.created_at < %s
-        ORDER BY il.created_at
+        ORDER BY c.last_name, c.first_name, il.created_at
     """, (yesterday_start, today_start))
     rows = cur.fetchall()
 
     if not rows:
-        print(f"No intent logs for {yesterday_label}, skipping email.")
+        print(f"No intent logs for {yesterday_label}, skipping.")
         conn.close()
         return
 
-    # ── New consultants who chatted for the first time ───────────────────────
+    total = len(rows)
+    unique_consultants = len({r[0] for r in rows})
+    intent_counts = Counter(r[3] for r in rows)
+    unknown_count = sum(v for k, v in intent_counts.items() if k in ("unknown", "fallback"))
+
+    # New consultants who chatted
     cur.execute("""
-        SELECT c.id, c.first_name, c.last_name
-        FROM consultants c
-        WHERE c.created_at >= %s AND c.created_at < %s
-    """, (yesterday_start, today_start))
-    new_consultants = {r[0]: f"{r[1]} {r[2]}" for r in cur.fetchall()}
+        SELECT DISTINCT il.consultant_id, c.first_name, c.last_name
+        FROM intent_logs il
+        JOIN consultants c ON c.id = il.consultant_id
+        WHERE il.created_at >= %s AND il.created_at < %s
+          AND c.created_at >= %s
+    """, (yesterday_start, today_start, yesterday_start - timedelta(days=7)))
+    new_chatters = [f"{r[1]} {r[2]}" for r in cur.fetchall()]
 
     conn.close()
 
-    # ── Stats ────────────────────────────────────────────────────────────────
-    total_messages = len(rows)
-    consultant_message_counts = Counter(r[0] for r in rows)
-    unique_consultants = len(consultant_message_counts)
-    intent_counts = Counter(r[1] for r in rows)
-
-    # Most active consultants (top 5)
-    consultant_names = {r[0]: f"{r[5]} {r[6]}" for r in rows}
-    most_active = [
-        (consultant_names[cid], count)
-        for cid, count in consultant_message_counts.most_common(5)
-    ]
-
-    # New consultants who chatted
-    new_who_chatted = [
-        consultant_names[cid]
-        for cid in consultant_message_counts
-        if cid in new_consultants
-    ]
-
-    # ── Routing gaps: low confidence or fallback ─────────────────────────────
-    LOW_CONFIDENCE = 0.75
-    FALLBACK_INTENTS = {"fallback", "unknown", "clarify", "other"}
-
-    gap_messages = [
-        r for r in rows
-        if (r[2] is not None and r[2] < LOW_CONFIDENCE)
-        or r[1].lower() in FALLBACK_INTENTS
-    ]
-
-    # ── Repeated attempts: same consultant, 3+ messages within 2 minutes ────
-    repeated_attempts = []
-    by_consultant = defaultdict(list)
-    for r in rows:
-        by_consultant[r[0]].append(r)
-
-    for cid, msgs in by_consultant.items():
-        msgs_sorted = sorted(msgs, key=lambda x: x[4])
-        i = 0
-        while i < len(msgs_sorted):
-            window = [msgs_sorted[i]]
-            j = i + 1
-            while j < len(msgs_sorted):
-                delta = (msgs_sorted[j][4] - msgs_sorted[i][4]).total_seconds()
-                if delta <= 120:
-                    window.append(msgs_sorted[j])
-                    j += 1
-                else:
-                    break
-            if len(window) >= 3:
-                repeated_attempts.append({
-                    "name": f"{msgs_sorted[i][5]} {msgs_sorted[i][6]}",
-                    "count": len(window),
-                    "messages": [w[3] for w in window],
-                    "intent": window[0][1],
-                })
-                i = j
-            else:
-                i += 1
-
-    # ── OpenAI analysis of gaps ──────────────────────────────────────────────
+    # ── AI analysis of gaps ──────────────────────────────────────────────────
     ai_analysis = ""
-    samples_for_ai = []
-    for r in rows:
-        if (r[2] is not None and r[2] < LOW_CONFIDENCE) or r[1] in FALLBACK_INTENTS:
-            samples_for_ai.append(f"[{r[1]}] {r[3]}")
-    for attempt in repeated_attempts:
-        for m in attempt["messages"]:
-            samples_for_ai.append(f"[repeated/{attempt['intent']}] {m}")
-
-    # Also sample a few random messages for broader context
-    import random
-    all_texts = [r[3] for r in rows if r[3]]
-    random_sample = random.sample(all_texts, min(20, len(all_texts)))
-    for t in random_sample:
-        if t not in samples_for_ai:
-            samples_for_ai.append(f"[sample] {t}")
-
-    if samples_for_ai and OPENAI_API_KEY:
+    gap_rows = [r for r in rows if r[3] in ("unknown", "fallback") or (r[4] is not None and r[4] < 0.75)]
+    if gap_rows and OPENAI_API_KEY:
         try:
             client = OpenAI(api_key=OPENAI_API_KEY)
+            samples = [f'"{r[5]}" → {r[3]}' for r in gap_rows[:30]]
             prompt = (
-                "You are analyzing chat messages sent by Mary Kay consultants to an AI assistant app called MyPinkAssistant. "
-                "The app helps them look up customers, place orders, check product prices, run follow-ups, and manage inventory.\n\n"
-                "Below are chat messages from yesterday — some flagged as low-confidence routing, some as repeated attempts "
-                "(consultant tried multiple times), and some random samples.\n\n"
-                "Identify:\n"
-                "1. Patterns where consultants seem confused about how to phrase requests\n"
-                "2. Things consultants are trying to do that the app probably doesn't support yet (potential features)\n"
-                "3. Anything else notable\n\n"
-                "Be specific and concise. Use bullet points. Max 200 words.\n\n"
-                "Messages:\n" + "\n".join(samples_for_ai[:40])
+                "You are analyzing failed or low-confidence chat messages from Mary Kay consultants "
+                "using an AI assistant app. The app handles: customer lookups, orders, product prices, "
+                "followups, top customers, lapsed customers, top sellers, city searches.\n\n"
+                "Below are messages that didn't route well. In 3-5 bullet points, identify patterns "
+                "and suggest what features or phrasings to add. Be specific and concise.\n\n"
+                + "\n".join(samples)
             )
             resp = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=400,
+                max_tokens=300,
                 temperature=0.3,
             )
             ai_analysis = resp.choices[0].message.content.strip()
         except Exception as e:
-            ai_analysis = f"(AI analysis unavailable: {e})"
+            ai_analysis = f"(unavailable: {e})"
 
-    # ── Build email ──────────────────────────────────────────────────────────
-    intent_rows_html = "".join(
-        f"<tr><td style='padding:2px 12px 2px 0'>{intent}</td><td style='padding:2px 0'><strong>{count}</strong></td></tr>"
-        for intent, count in intent_counts.most_common()
+    # ── Build header stats ───────────────────────────────────────────────────
+    intent_summary = " &nbsp;·&nbsp; ".join(
+        f"{intent}: {count}" for intent, count in intent_counts.most_common(6)
     )
 
-    most_active_html = "".join(
-        f"<li>{name} ({count} messages)</li>"
-        for name, count in most_active
+    new_chatters_html = (
+        " &nbsp;·&nbsp; ".join(new_chatters) if new_chatters else "none"
     )
 
-    new_chatted_html = (
-        "<li>" + "</li><li>".join(new_who_chatted) + "</li>"
-        if new_who_chatted else "<li>None</li>"
+    # ── Build 4-column table ─────────────────────────────────────────────────
+    row_styles = {
+        "unknown": "background:#fff3cd",
+        "fallback": "background:#fff3cd",
+    }
+
+    table_rows_html = ""
+    prev_consultant = None
+    for r in rows:
+        cid, first, last, intent, conf, msg_text, response, created_at = r
+        name = f"{first} {last}"
+        time_str = created_at.astimezone(timezone(timedelta(hours=-5))).strftime("%-I:%M %p")
+
+        # Shade unknown/fallback rows
+        low_conf = conf is not None and conf < 0.75
+        row_bg = ""
+        if intent in ("unknown", "fallback") or low_conf:
+            row_bg = "background:#fff3cd;"
+
+        # Bold first row per consultant
+        name_cell = ""
+        if name != prev_consultant:
+            name_cell = f"<strong>{name}</strong>"
+            prev_consultant = name
+        else:
+            name_cell = ""
+
+        clean_response = strip_html(response)[:120] if response else "—"
+        conf_str = f"{conf:.0%}" if conf is not None else "—"
+        intent_display = intent if intent else "—"
+
+        table_rows_html += f"""
+        <tr style="{row_bg}border-bottom:1px solid #f0f0f0">
+          <td style="padding:6px 10px;vertical-align:top;white-space:nowrap;color:#666;font-size:12px">{time_str}</td>
+          <td style="padding:6px 10px;vertical-align:top;font-size:13px">{name_cell}</td>
+          <td style="padding:6px 10px;vertical-align:top;font-size:13px">{msg_text or '—'}</td>
+          <td style="padding:6px 10px;vertical-align:top;font-size:12px;color:#555">{clean_response}</td>
+          <td style="padding:6px 10px;vertical-align:top;white-space:nowrap;font-size:12px;color:#888">{intent_display}<br><span style="color:#bbb">{conf_str}</span></td>
+        </tr>"""
+
+    ai_html = (
+        "<ul>" + "".join(f"<li>{line.lstrip('•- ')}</li>" for line in ai_analysis.split("\n") if line.strip()) + "</ul>"
+        if ai_analysis else "<p>No gaps detected.</p>"
     )
-
-    gap_html = ""
-    if gap_messages:
-        gap_html = "<ul>" + "".join(
-            f"<li><strong>{r[5]} {r[6]}</strong>: \"{r[3]}\" → {r[1]} ({r[2]:.0%} confidence)</li>"
-            for r in gap_messages[:10]
-        ) + "</ul>"
-    else:
-        gap_html = "<p>None — all messages routed with high confidence.</p>"
-
-    repeated_html = ""
-    if repeated_attempts:
-        repeated_html = "<ul>"
-        for a in repeated_attempts:
-            msgs_preview = "; ".join(f'"{m}"' for m in a["messages"][:4])
-            repeated_html += f"<li><strong>{a['name']}</strong> sent {a['count']} similar messages: {msgs_preview}</li>"
-        repeated_html += "</ul>"
-    else:
-        repeated_html = "<p>None.</p>"
-
-    ai_html = f"<p>{ai_analysis.replace(chr(10), '<br>')}</p>" if ai_analysis else "<p>No unusual patterns to report.</p>"
 
     html = f"""
-    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;margin:0 auto;color:#1a1a1a">
-      <h2 style="color:#d63384;margin-bottom:4px">MPA Chat Summary</h2>
-      <p style="color:#666;margin-top:0">{yesterday_label}</p>
+    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:900px;margin:0 auto;color:#1a1a1a">
+      <h2 style="color:#d63384;margin-bottom:4px">MPA Chat Log</h2>
+      <p style="color:#666;margin-top:0">{yesterday_label} &nbsp;·&nbsp; {total} messages &nbsp;·&nbsp; {unique_consultants} consultants &nbsp;·&nbsp; {unknown_count} unrouted</p>
 
-      <h3>Yesterday at a glance</h3>
-      <ul>
-        <li>{unique_consultants} consultants sent {total_messages} messages</li>
-      </ul>
+      <p style="font-size:13px;color:#555"><strong>Intents:</strong> {intent_summary}</p>
+      <p style="font-size:13px;color:#555"><strong>New consultants who chatted:</strong> {new_chatters_html}</p>
 
-      <h4>Most active</h4>
-      <ul>{most_active_html}</ul>
+      {"<h3 style='color:#d63384'>⚠ Gap Analysis</h3>" + ai_html if ai_analysis else ""}
 
-      <h4>New consultants who chatted</h4>
-      <ul>{new_chatted_html}</ul>
-
-      <h3>Intent breakdown</h3>
-      <table style="border-collapse:collapse">{intent_rows_html}</table>
-
-      <h3>Routing gaps &amp; low confidence</h3>
-      {gap_html}
-
-      <h3>Repeated attempts (possible confusion)</h3>
-      {repeated_html}
-
-      <h3>AI analysis — gaps &amp; feature signals</h3>
-      {ai_html}
+      <h3>Full Chat Log</h3>
+      <table style="border-collapse:collapse;width:100%;font-size:13px">
+        <thead>
+          <tr style="background:#f8f8f8;border-bottom:2px solid #ddd">
+            <th style="padding:6px 10px;text-align:left;font-size:12px;color:#888">Time (CST)</th>
+            <th style="padding:6px 10px;text-align:left">Consultant</th>
+            <th style="padding:6px 10px;text-align:left">Message</th>
+            <th style="padding:6px 10px;text-align:left">Response</th>
+            <th style="padding:6px 10px;text-align:left">Intent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {table_rows_html}
+        </tbody>
+      </table>
 
       <hr style="margin-top:32px;border:none;border-top:1px solid #eee">
-      <p style="color:#999;font-size:12px">MyPinkAssistant daily digest · {now_utc.strftime("%Y-%m-%d %H:%M UTC")}</p>
+      <p style="color:#999;font-size:11px">Highlighted rows = unknown intent or low confidence · {now_utc.strftime("%Y-%m-%d %H:%M UTC")}</p>
     </div>
     """
 
-    # ── Send via Resend ──────────────────────────────────────────────────────
-    subject = f"MPA Chat Summary — {yesterday_label}"
+    subject = f"MPA Chat Log — {yesterday_label} ({total} messages, {unique_consultants} consultants)"
     resp = requests.post(
         "https://api.resend.com/emails",
         headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
@@ -249,7 +197,7 @@ def run():
         print(f"Resend error {resp.status_code}: {resp.text}")
         sys.exit(1)
     else:
-        print(f"Digest sent for {yesterday_label} ({total_messages} messages, {unique_consultants} consultants)")
+        print(f"Digest sent for {yesterday_label} ({total} messages, {unique_consultants} consultants)")
 
 
 if __name__ == "__main__":

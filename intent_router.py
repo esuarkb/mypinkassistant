@@ -83,6 +83,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # leaderboard
     if (
         "leaderboard" in lowered
+        or "vip" in lowered
         or "spent the most" in lowered
         or "spend the most" in lowered
         or "ordered the most" in lowered

@@ -1832,6 +1832,16 @@ async def chat(request: Request):
 
     try:
         reply_obj = engine.handle_message(message, consultant_id=cid)
+        try:
+            with tx() as (_lc, _lcu):
+                _lcu.execute(
+                    f"UPDATE intent_logs SET response_text = {PH}"
+                    f" WHERE id = (SELECT id FROM intent_logs WHERE consultant_id = {PH}"
+                    f" ORDER BY created_at DESC LIMIT 1)",
+                    (reply_obj.reply[:300] if reply_obj.reply else "", cid),
+                )
+        except Exception:
+            pass
         return {"reply": reply_obj.reply}
     except Exception as e:
         logging.error("Chat handler error: %s", repr(e))
