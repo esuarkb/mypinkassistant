@@ -2253,6 +2253,10 @@ def _looks_like_low_stock_query(msg: str) -> bool:
         "show low",
         "low inventory",
         "low stock",
+        "out of stock",
+        "what am i out of",
+        "what items am i out of",
+        "need to reorder",
     ))
 
 

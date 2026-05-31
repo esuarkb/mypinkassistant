@@ -162,6 +162,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         fill_discount_fields(page, discount_amount=discount_amount, tax_amount=tax_amount)
 
     # save and review order
+    page.get_by_role("button", name="Save and Review").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Save and Review").click()
 
     if leave_pending:
@@ -170,7 +171,9 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         return
 
     # Process order: confirm delivery status change
+    page.get_by_role("button", name="Change Delivery Status Icon").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Change Delivery Status Icon").click()
+    page.get_by_role("button", name="Yes, Confirm").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Yes, Confirm").click()
     try:
         ensure_orders_ready(page)

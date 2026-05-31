@@ -7,14 +7,16 @@ load_dotenv(override=True)  # must run before any module that reads DATABASE_URL
 
 import json
 import time
+import asyncio
 import secrets
 import hashlib
 import logging
 #from turtle import color
 import requests
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlencode
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from typing import Any, Iterable, Optional, Sequence, Dict
 
@@ -45,8 +47,98 @@ BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
 PAGES_DIR = BASE_DIR / "pages"
 
+_STALE_JOB_TIMEOUTS = {
+    "NEW_ORDER_ROW": 10,
+    "NEW_CUSTOMER":  10,
+    "PCP_SYNC":      10,
+    "INITIAL_SYNC":  10,
+    "FULL_SYNC":     90,
+}
+
+
+def _check_stale_jobs() -> None:
+    try:
+        conn = connect()
+        cur = conn.cursor()
+        stale = []
+        try:
+            for job_type, max_minutes in _STALE_JOB_TIMEOUTS.items():
+                cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_minutes)
+                cur.execute(
+                    f"""
+                    SELECT j.id, j.type, j.claimed_by, j.started_at,
+                           c.first_name, c.last_name, j.consultant_id
+                    FROM jobs j
+                    LEFT JOIN consultants c ON c.id = j.consultant_id
+                    WHERE j.type = {PH}
+                      AND j.status = 'running'
+                      AND j.started_at < {PH}
+                    """,
+                    (job_type, cutoff),
+                )
+                stale.extend(cur.fetchall())
+
+            if not stale:
+                return
+
+            for row in stale:
+                job_id, job_type, claimed_by, started_at, first, last, cid = row
+                cur.execute(
+                    f"UPDATE jobs SET status='failed', finished_at=NOW(),"
+                    f" error='watchdog: stale job exceeded timeout',"
+                    f" status_msg='Failed ❌ (auto-failed by watchdog after timeout)'"
+                    f" WHERE id={PH}",
+                    (job_id,),
+                )
+                cur.execute(
+                    f"DELETE FROM consultant_locks WHERE consultant_id={PH} AND locked_by={PH}",
+                    (cid, claimed_by),
+                )
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+
+        # Send email alert
+        if RESEND_API_KEY and MAIL_FROM:
+            lines = [f"• job={r[0]} {r[1]} for {r[4]} {r[5]} — running since {r[3].strftime('%H:%M UTC')}" for r in stale]
+            body = (
+                f"<p>The stale job watchdog auto-failed {len(stale)} stuck job(s):</p>"
+                f"<ul>{''.join(f'<li>{l}</li>' for l in lines)}</ul>"
+                f"<p>Consultant locks have been released. No action needed.</p>"
+            )
+            requests.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "from": MAIL_FROM,
+                    "to": ["briankrause@gmail.com"],
+                    "subject": f"⚠ MPA Watchdog: {len(stale)} stale job(s) auto-failed",
+                    "html": body,
+                },
+                timeout=10,
+            )
+            logging.info("[Watchdog] Auto-failed %d stale job(s), alert sent.", len(stale))
+
+    except Exception as e:
+        logging.error("[Watchdog] Error during stale job check: %s", repr(e))
+
+
+async def _watchdog_loop() -> None:
+    await asyncio.sleep(300)  # wait 5 min after startup before first check
+    while True:
+        _check_stale_jobs()
+        await asyncio.sleep(300)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(_watchdog_loop())
+    yield
+
+
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.include_router(billing_router)
