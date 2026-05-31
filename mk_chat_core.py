@@ -2460,14 +2460,36 @@ class MKChatEngine:
 
         intent_result = parse_intent(msg, state)
         print("[INTENT]", intent_result.intent, intent_result.confidence, intent_result.raw_text)
+        _intent_log_id = None
         try:
             with tx() as (_il_conn, _il_cur):
-                _il_cur.execute(
-                    f"INSERT INTO intent_logs (consultant_id, intent, confidence, message_text) VALUES ({PH}, {PH}, {PH}, {PH})",
-                    (consultant_id, intent_result.intent, intent_result.confidence, msg[:200]),
-                )
+                if is_postgres():
+                    _il_cur.execute(
+                        f"INSERT INTO intent_logs (consultant_id, intent, confidence, message_text) VALUES ({PH}, {PH}, {PH}, {PH}) RETURNING id",
+                        (consultant_id, intent_result.intent, intent_result.confidence, msg[:200]),
+                    )
+                    _row = _il_cur.fetchone()
+                    _intent_log_id = _row[0] if _row else None
+                else:
+                    _il_cur.execute(
+                        f"INSERT INTO intent_logs (consultant_id, intent, confidence, message_text) VALUES ({PH}, {PH}, {PH}, {PH})",
+                        (consultant_id, intent_result.intent, intent_result.confidence, msg[:200]),
+                    )
+                    _intent_log_id = _il_cur.lastrowid
         except Exception:
             pass
+
+        def _correct_intent_log(effective_intent: str) -> None:
+            if not _intent_log_id:
+                return
+            try:
+                with tx() as (_cl_conn, _cl_cur):
+                    _cl_cur.execute(
+                        f"UPDATE intent_logs SET intent = {PH} WHERE id = {PH}",
+                        (effective_intent, _intent_log_id),
+                    )
+            except Exception:
+                pass
 
         # Intent override: some "recent_orders" phrasings are actually NEW order entry
         if intent_result.intent == "recent_orders" and _looks_like_new_order_entry(msg):
@@ -2547,6 +2569,7 @@ class MKChatEngine:
                     word_matches = [c for c in catalog if _all_words_in_product(product_text, c["product_name"])]
                     if len(word_matches) == 1:
                         m = word_matches[0]
+                        _correct_intent_log("product_lookup")
                         return ChatReply(_fmt_product_lookup_single(m))
                     elif len(word_matches) > 1:
                         lines = ["<strong>Product Look Up</strong>"]
@@ -2555,16 +2578,19 @@ class MKChatEngine:
                         if len(word_matches) > 3:
                             remaining = len(word_matches) - 3
                             lines.append(f'<a href="#" data-send="show all {product_text}">+{remaining} more</a>')
+                        _correct_intent_log("product_lookup")
                         return ChatReply("<br>".join(lines))
                     # Word match found nothing — fall back to fuzzy
                     matches = best_matches(catalog, product_text, limit=3, min_score=70)
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
+                            _correct_intent_log("product_lookup")
                             return ChatReply(_fmt_product_lookup_single(top))
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in matches:
                             lines.append(_fmt_product_list_item(m))
+                        _correct_intent_log("product_lookup")
                         return ChatReply("<br>".join(lines))
                 else:
                     # Explicit price query — fuzzy only
@@ -2572,10 +2598,12 @@ class MKChatEngine:
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
+                            _correct_intent_log("product_lookup")
                             return ChatReply(_fmt_product_lookup_single(top))
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in matches:
                             lines.append(_fmt_product_list_item(m))
+                        _correct_intent_log("product_lookup")
                         return ChatReply("<br>".join(lines))
                     return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
 
