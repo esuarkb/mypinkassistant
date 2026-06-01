@@ -1863,3 +1863,76 @@ Call log:
   No changes.
 
 No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Warning: could not click Expand All: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Expand All")
+
+  Extracting products...
+  Found 0 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Clicking Expand All...
+  Warning: could not click Expand All: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Expand All")
+
+  Extracting products...
+  Found 554 products.
+
+[EN] No products found — skipping.
+  Auto-labeled: 10217417 → Juego Milagroso TimeWise - Normal/Reseca (Old SKU)
+  Auto-labeled: 10223243 → Juego Milagroso TimeWise Ultimate - Normal/reseca (Old SKU)
+  Auto-labeled: 10223246 → Juego Milagroso TimeWise Beyond Ultimate - Normal/Reseca (Old SKU)
+  Auto-labeled: 10171886 → TimeWise Replenishing Serum C+E (Old SKU)
+  Auto-labeled: 10256972 → TimeWise Repair Volu-Fill Deep Wrinkle Filler (Old SKU)
+  Auto-labeled: 10234061 → Mary Kay Clinical Solutions Barrier Restore 1:1:3 (Old SKU)
+  Auto-labeled: 10177906 → Mary Kay Clinical Solutions HA + Ceramide Hydrator (Old SKU)
+  Auto-labeled: 10227734 → Mary Kay Clinical Solutions Dynamic Wrinkle Limiter (Old SKU)
+  Auto-labeled: 10177902 → Mary Kay Clinical Solutions Ferulic + Niacinamide Brightener (Old SKU)
+  Auto-labeled: 10177899 → Mary Kay Clinical Solutions C + Resveratrol Line-Reducer (Old SKU)
+  Auto-labeled: 10177904 → Mary Kay Clinical Solutions PHA + AHA Resurfacer (Old SKU)
+
+[ES] Done.
+  Catalog before : 492 SKUs
+  Scraped        : 554 products
+  Total now      : 504 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  NEW (12):
+    + 10254309  Juego Milagroso TimeWise - Normal/reseca  $116.00
+    + 10257238  Juego Milagroso TimeWise Ultimate - Normal/reseca  $150.00
+    + 10257837  Juego Milagroso TimeWise Beyond Ultimate - Normal/Reseca  $208.00
+    + 10260325  TimeWise Replenishing Serum C+E  $64.00
+    + 10260322  TimeWise Repair Volu-Fill Deep Wrinkle Filler  $50.00
+    + 10264267  Mary Kay Clinical Solutions Barrier Restore 1:1:3  $46.00
+    + 10260331  Mary Kay Clinical Solutions HA + Ceramide Hydrator  $40.00
+    + 10260326  Mary Kay Clinical Solutions Dynamic Wrinkle Limiter  $58.00
+    + 10260329  Mary Kay Clinical Solutions Ferulic + Niacinamide Brightener  $40.00
+    + 10260328  Mary Kay Clinical Solutions C + Resveratrol Line-Reducer  $40.00
+    + 10260330  Mary Kay Clinical Solutions PHA + AHA Resurfacer  $40.00
+    + 10260324  TimeWise Repair Volu-Firm Advanced Lifting Serum - Cuidado de la piel de junio  $74.00
+
+  CHANGED (1):
+    ~ 10217415  name: Juego Milagroso TimeWise - Combinada/grasa → Juego Milagroso TimeWise - Combination/Oily
+
+  OLD SKU LABELED (11):
+    ! 10217417  Juego Milagroso TimeWise - Normal/Reseca (Old SKU)  (replaced by 10254309)
+    ! 10223243  Juego Milagroso TimeWise Ultimate - Normal/reseca (Old SKU)  (replaced by 10257238)
+    ! 10223246  Juego Milagroso TimeWise Beyond Ultimate - Normal/Reseca (Old SKU)  (replaced by 10257837)
+    ! 10171886  TimeWise Replenishing Serum C+E (Old SKU)  (replaced by 10260325)
+    ! 10256972  TimeWise Repair Volu-Fill Deep Wrinkle Filler (Old SKU)  (replaced by 10260322)
+    ! 10234061  Mary Kay Clinical Solutions Barrier Restore 1:1:3 (Old SKU)  (replaced by 10264267)
+    ! 10177906  Mary Kay Clinical Solutions HA + Ceramide Hydrator (Old SKU)  (replaced by 10260331)
+    ! 10227734  Mary Kay Clinical Solutions Dynamic Wrinkle Limiter (Old SKU)  (replaced by 10260326)
+    ! 10177902  Mary Kay Clinical Solutions Ferulic + Niacinamide Brightener (Old SKU)  (replaced by 10260329)
+    ! 10177899  Mary Kay Clinical Solutions C + Resveratrol Line-Reducer (Old SKU)  (replaced by 10260328)
+    ! 10177904  Mary Kay Clinical Solutions PHA + AHA Resurfacer (Old SKU)  (replaced by 10260330)
+
+Sending change summary email...
+  Email sent to briankrause@gmail.com

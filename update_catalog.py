@@ -51,12 +51,22 @@ def scrape_products(page, opos_url: str) -> list[dict]:
     page.goto(opos_url, wait_until="domcontentloaded")
     page.wait_for_timeout(3000)
 
-    print("  Clicking Expand All...")
-    try:
-        page.get_by_text("Expand All").click()
-        page.wait_for_timeout(8000)
-    except Exception as e:
-        print(f"  Warning: could not click Expand All: {e}")
+    # EN requires Expand All; ES products are already expanded by default
+    if "lang=en" in opos_url:
+        print("  Clicking Expand All...")
+        for attempt in range(3):
+            try:
+                page.get_by_text("Expand All").wait_for(state="visible", timeout=15000)
+                page.get_by_text("Expand All").click()
+                page.wait_for_timeout(8000)
+                break
+            except Exception as e:
+                if attempt < 2:
+                    print(f"  Expand All not ready, retrying ({attempt + 1}/3)...")
+                    page.wait_for_timeout(5000)
+                else:
+                    print(f"  Warning: could not click Expand All after 3 attempts: {e}")
+                    page.wait_for_timeout(3000)
 
     print("  Extracting products...")
     products = page.evaluate("""
