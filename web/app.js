@@ -4,6 +4,13 @@ const msg = document.getElementById("msg");
 const send = document.getElementById("send");
 const toast = document.getElementById("jobToast");
 
+// Capture Android/Chrome install prompt for later use
+let _installPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    _installPrompt = e;
+});
+
 const composerCenter = document.getElementById("composerCenter");
 const composerDock = document.getElementById("composerDock");
 const dockComposerInner = composerDock ? composerDock.querySelector(".composer-bottom") : null;

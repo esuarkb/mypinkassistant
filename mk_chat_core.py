@@ -2391,6 +2391,346 @@ def _parse_inventory_threshold(msg: str) -> tuple[int | None, str]:
 
 
 # -------------------------
+# App install help
+# -------------------------
+
+_APP_HELP_HTML = (
+    "<strong>Add MPA to your home screen</strong>\n\n"
+    "<strong>iPhone / iPad (Safari):</strong>\n"
+    "1. Tap the <strong>Share</strong> button (box with arrow) at the bottom of the screen\n"
+    "2. Scroll down and tap <strong>Add to Home Screen</strong>\n"
+    "3. Tap <strong>Add</strong> — done!\n\n"
+    "<strong>Android (Chrome):</strong>\n"
+    "1. Tap the <strong>⋮ menu</strong> in the top-right corner\n"
+    "2. Tap <strong>Add to Home Screen</strong> or <strong>Install App</strong>\n"
+    "3. Tap <strong>Add</strong> — done!\n\n"
+    "Once installed it opens full-screen with no browser bar, just like a real app."
+)
+
+
+# -------------------------
+# Unit Query (text-to-SQL for team/unit member data)
+# -------------------------
+
+_UNIT_SCHEMA = {
+    "unit_members": (
+        "All unit members synced from InTouch. "
+        "Columns: consultant_id, intouch_contact_id, consultant_number, "
+        "first_name, last_name, email, phone, address, city, state, zip, "
+        "career_level_code, career_level_desc (e.g. 'Conslt', 'Sr Conslt', 'Star Tm Bldr', 'DIQ', 'DIR'), "
+        "activity_status — codes are always stored without spaces (A1, A2, A3=active; "
+        "T1-T7=terminating, T6/T7=last month; I1, I2, I3=inactive; N1, N2, N3=new). "
+        "If user writes 'I 3' or 'i 3' treat as I3. "
+        "If user says just 'N', 'I', 'A', or 'T' as a status group, use activity_status LIKE 'N%' etc. "
+        "language (English or Spanish), myshop_active (1=yes, 0=no or never created), "
+        "birthday, start_date, last_order_date, last_order_wholesale, last_order_retail, "
+        "unit_number, segments (semicolon-separated contest/program tags), "
+        "is_personal_recruit (1=personally recruited by this consultant, 0=in unit via downline), "
+        "synced_at"
+    ),
+    "unit_great_start": (
+        "Great Start bundle tracking for new consultants (current month). "
+        "Columns: consultant_id, consultant_number, total_bundles, needed_next_bundle ($ still needed for next bundle — NULL means window expired), "
+        "promotion_end_date (when the Great Start window closes), total_production, rsks_bundles, rsks_production_left, "
+        "production_month_key, synced_at. "
+        "Join to unit_members via consultant_number. "
+        "IMPORTANT: always filter WHERE promotion_end_date >= date('now') to exclude consultants whose window has already closed, "
+        "unless the user specifically asks about expired or past consultants. "
+        "Always include promotion_end_date in the SELECT when querying this table so the window end date is visible."
+    ),
+    "unit_star_tracking": (
+        "Star Consultant contest tracking for current quarter. "
+        "Columns: consultant_id, consultant_number, contest_amount ($ produced this quarter), "
+        "level_name (NULL=no level yet, 'Ruby'=achieved Ruby, 'Diamond', 'Emerald', 'Pearl' — levels in ascending order), "
+        "needed_ruby, needed_diamond, needed_emerald, needed_pearl "
+        "($ still needed for that level — 0 means already achieved, > 0 means still working toward it). "
+        "Join to unit_members via consultant_number. "
+        "IMPORTANT: level_name is stored as SQL NULL (not the string 'None') — always use IS NULL / IS NOT NULL. "
+        "To find consultants still working toward Ruby: needed_ruby > 0. "
+        "To find their NEXT level: if level_name = 'Ruby' → show needed_diamond; "
+        "if level_name = 'Diamond' → show needed_emerald; if level_name = 'Emerald' → show needed_pearl; "
+        "if level_name IS NULL → show needed_ruby. "
+        "Do not select contest_begin_date, contest_end_date, total_star_quarters, or level_achieved in results."
+    ),
+}
+
+_UNIT_SQL_SYSTEM = """You generate SQLite SELECT queries for a Mary Kay consultant's team data.
+
+{schema}
+
+Rules:
+- Return ONLY a raw SQL SELECT statement — no markdown, no explanation, no semicolon at the end
+- ALWAYS include WHERE consultant_id = {consultant_id} (or join condition that enforces this)
+- Use LIMIT 50 unless the user is asking for a count or total
+- For names, SELECT first_name, last_name from unit_members (not just last name)
+- For yes/no fields: myshop_active = 1 means yes, 0 means no (includes never created)
+- Activity status: A1/A2/A3 = active, T6/T7 = last month before termination, I = inactive, N = new
+- When joining tables, always join unit_great_start or unit_star_tracking to unit_members on consultant_number with the same consultant_id filter on both tables
+- Default to the full unit (all rows) unless the user explicitly says "personal" or "my personal team" — in that case add AND is_personal_recruit = 1
+- Do not SELECT a column that is already fixed by an equality filter in WHERE (e.g. if filtering WHERE activity_status = 'I3', do not also SELECT activity_status — the user already knows)
+- When filtering by first_name or last_name, always use LOWER() on both sides: LOWER(first_name) = LOWER('samyra') — names in the DB are title-cased but user input may not be
+- Always include first_name and last_name in the SELECT when querying unit_members, even for single-person queries
+- In JOIN queries, always qualify consultant_id with the table alias (e.g., um.consultant_id = 1) to avoid ambiguity
+- Keep queries simple and readable"""
+
+_UNIT_SQL_USER = "Question: {msg}"
+
+
+def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
+    """
+    Text-to-SQL handler for unit/team questions. Checks if the consultant has team
+    data, builds a schema description, asks an LLM to generate a SELECT query,
+    validates it, executes it, and formats the result.
+
+    Also handles consultant card requests of the form "team member [name]" which
+    are generated by clicking a name in the chat output.
+    """
+    from db import connect, is_postgres, tx
+    _ph = "%s" if is_postgres() else "?"
+
+    # Consultant card shortcut: "team member [name]" sent by clicking a chat link
+    import re as _re
+    _card_match = _re.match(r"^team member\s+(.+)$", msg.strip(), _re.IGNORECASE)
+    if _card_match:
+        _name = _card_match.group(1).strip()
+        from crm_store import find_unit_member_by_name, format_consultant_card
+        from db import tx
+        with tx() as (conn, cur):
+            matches = find_unit_member_by_name(cur, consultant_id, _name)
+        if not matches:
+            return ChatReply(f"I couldn't find a team member named {_name}.")
+        if len(matches) == 1:
+            return ChatReply(format_consultant_card(matches[0]))
+        # Multiple close matches — show them all as cards
+        cards = "\n\n".join(format_consultant_card(m) for m in matches[:3])
+        return ChatReply(cards)
+
+    # Check which tables have data for this consultant
+    with tx() as (conn, cur):
+        tables_with_data = []
+        for tbl in _UNIT_SCHEMA:
+            cur.execute(f"SELECT 1 FROM {tbl} WHERE consultant_id = {_ph} LIMIT 1", (consultant_id,))
+            if cur.fetchone():
+                tables_with_data.append(tbl)
+
+    if not tables_with_data:
+        return ChatReply(
+            "I don't have team data synced for your account yet. "
+            "Once a report sync runs, I'll be able to answer questions about your team."
+        )
+
+    # Build schema description from tables that actually have data
+    schema_lines = []
+    for tbl in tables_with_data:
+        schema_lines.append(f"Table: {tbl}\n  {_UNIT_SCHEMA[tbl]}")
+    schema_text = "\n\n".join(schema_lines)
+
+    system = _UNIT_SQL_SYSTEM.format(schema=schema_text, consultant_id=consultant_id)
+    user = _UNIT_SQL_USER.format(msg=msg)
+
+    client = OpenAI()
+    try:
+        resp = client.responses.create(
+            model=MODEL,
+            input=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            timeout=30,
+        )
+        sql = ""
+        try:
+            for out in (resp.output or []):
+                for c in (getattr(out, "content", None) or []):
+                    t = getattr(c, "text", None)
+                    if t:
+                        sql += t
+            sql = sql.strip().rstrip(";").strip()
+        except Exception:
+            sql = ""
+    except Exception as e:
+        print(f"[UnitQuery] LLM error: {e}")
+        return ChatReply("I had trouble generating a query. Please try rephrasing your question.")
+
+    if not sql:
+        return ChatReply("I wasn't able to form a query for that. Try rephrasing — for example, 'who has MyShop set up' or 'show me inactive consultants'.")
+
+    # Safety: SELECT-only, and must reference the consultant_id
+    sql_upper = sql.upper().strip()
+    if not sql_upper.startswith("SELECT"):
+        print(f"[UnitQuery] Rejected non-SELECT: {sql[:100]}")
+        return ChatReply("I can only read data, not modify it. Please ask a question about your team.")
+
+    forbidden = ("DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE", "TRUNCATE")
+    if any(kw in sql_upper for kw in forbidden):
+        print(f"[UnitQuery] Rejected destructive SQL: {sql[:100]}")
+        return ChatReply("That query isn't something I can run safely. Please ask a read-only question.")
+
+    # Verify consultant_id is scoped in the query
+    if str(consultant_id) not in sql:
+        print(f"[UnitQuery] Missing consultant_id in SQL, injecting: {sql[:100]}")
+        sql = f"SELECT * FROM ({sql}) AS q WHERE consultant_id = {consultant_id}"
+
+    # Ensure first_name and last_name appear in the SELECT clause.
+    # Use regex word boundary so we find FROM regardless of surrounding whitespace.
+    import re as _re
+    _from_match = _re.search(r'\bFROM\b', sql, _re.IGNORECASE)
+    _select_clause = sql[:_from_match.start()].upper() if _from_match else ""
+    if "unit_members" in sql.lower() and "FIRST_NAME" not in _select_clause:
+        sql = _re.sub(r'(?i)^SELECT\s+', 'SELECT first_name, last_name, ', sql)
+        print(f"[UnitQuery] Injected name columns into SELECT")
+
+    if "unit_great_start" in sql.lower() and "promotion_end_date" not in _select_clause.lower():
+        # Append after existing columns rather than prepend, so date shows after the dollar amount
+        sql = _re.sub(r'(?i)\bFROM\b', ', promotion_end_date FROM', sql, count=1)
+        print(f"[UnitQuery] Injected promotion_end_date into SELECT")
+
+    print(f"[UnitQuery] Executing: {sql[:400]}")
+
+    try:
+        with tx() as (conn, cur):
+            cur.execute(sql)
+            rows = cur.fetchall()
+            # If rows have consultant_number but no first_name, stitch in names from unit_members
+            if rows:
+                sample = dict(rows[0]) if hasattr(rows[0], "keys") else {}
+                if "consultant_number" in sample and "first_name" not in sample:
+                    cn_list = [
+                        (dict(r) if hasattr(r, "keys") else dict(zip([d[0] for d in cur.description], r)))
+                        .get("consultant_number")
+                        for r in rows
+                    ]
+                    placeholders = ",".join([_ph] * len(cn_list))
+                    cur.execute(
+                        f"SELECT consultant_number, first_name, last_name FROM unit_members "
+                        f"WHERE consultant_id = {_ph} AND consultant_number IN ({placeholders})",
+                        (consultant_id, *cn_list),
+                    )
+                    name_map = {r[0]: (r[1], r[2]) for r in cur.fetchall()}
+                    enriched = []
+                    for r in rows:
+                        d = dict(r) if hasattr(r, "keys") else dict(zip([d[0] for d in cur.description], r))
+                        cn = d.get("consultant_number")
+                        if cn and cn in name_map:
+                            d["first_name"], d["last_name"] = name_map[cn]
+                        enriched.append(d)
+                    rows = enriched
+    except Exception as e:
+        print(f"[UnitQuery] DB error: {e}")
+        return ChatReply("I ran into a problem executing that query. Try a simpler question, like 'who doesn't have MyShop set up'.")
+
+    return ChatReply(_format_unit_results(rows, msg))
+
+
+def _format_unit_results(rows: list, original_msg: str) -> str:
+    """Format unit query results as a natural language response."""
+    if not rows:
+        return "No consultants match that criteria."
+
+    # Normalize rows to dicts
+    if hasattr(rows[0], "keys"):
+        dicts = [dict(r) for r in rows]
+    elif hasattr(rows[0], "_fields"):
+        dicts = [r._asdict() for r in rows]
+    else:
+        return f"{len(rows)} result(s) found."
+
+    cols = list(dicts[0].keys())
+
+    # Pure count result
+    if len(cols) == 1 and cols[0].startswith("count"):
+        count = list(dicts[0].values())[0]
+        return f"{count}"
+
+    import html as _html
+
+    # Build name column if present
+    has_name = "first_name" in cols and "last_name" in cols
+
+    def _name(d: dict) -> str:
+        fn = (d.get("first_name") or "").strip()
+        ln = (d.get("last_name") or "").strip()
+        return f"{fn} {ln}".strip() or d.get("consultant_number", "Unknown")
+
+    def _name_link(d: dict) -> str:
+        n = _name(d)
+        safe = _html.escape(n)
+        return f'<a href="#" data-send="team member {safe}">{safe}</a>'
+
+    # Names-only result
+    value_cols = [c for c in cols if c not in ("first_name", "last_name", "consultant_id",
+                                                 "intouch_contact_id", "synced_at", "id",
+                                                 "is_personal_recruit", "recruiter_info",
+                                                 "total_bundles", "production_month_key",
+                                                 "consultant_number", "level_achieved",
+                                                 "contest_begin_date", "contest_end_date",
+                                                 "total_star_quarters")]
+    if has_name and not value_cols:
+        links = [_name_link(d) for d in dicts]
+        header = f"{len(links)} consultant{'s' if len(links) != 1 else ''}:"
+        return header + "\n" + "\n".join(f"• {lnk}" for lnk in links)
+
+    # Names + value columns
+    if has_name and len(value_cols) <= 3:
+        # Drop columns where every row has the same value — only meaningful with multiple rows
+        if len(dicts) > 1:
+            uniform_cols = {c for c in value_cols if len({d.get(c) for d in dicts}) == 1}
+            value_cols = [c for c in value_cols if c not in uniform_cols]
+
+        lines = []
+        for d in dicts:
+            parts = []
+            for c in value_cols:
+                v = d.get(c)
+                if v is None:
+                    continue
+                if c == "needed_next_bundle":
+                    parts.append(f"${v:,.2f} to next bundle")
+                elif c == "promotion_end_date":
+                    try:
+                        from datetime import date as _dt
+                        import calendar as _cal
+                        _d = _dt.fromisoformat(str(v)[:10])
+                        parts.append(f"ends {_cal.month_name[_d.month]} {_d.day}")
+                    except Exception:
+                        parts.append(f"ends {str(v)[:10]}")
+                elif c == "contest_amount":
+                    parts.append(f"${v:,.2f} this quarter")
+                elif c in ("needed_ruby", "needed_diamond", "needed_emerald", "needed_pearl"):
+                    if v and v > 0:
+                        level = c.replace("needed_", "").title()
+                        parts.append(f"needs ${v:,.2f} for {level}")
+                elif "needed_for_next" in c or "next_level" in c:
+                    if v and v > 0:
+                        parts.append(f"needs ${v:,.2f} for next level")
+                elif c == "level_name" and v:
+                    parts.append(f"{v} ✓")
+                elif c == "myshop_active":
+                    parts.append("MyShop: " + ("✓" if v == 1 else "✗"))
+                elif isinstance(v, float):
+                    parts.append(f"{c.replace('_',' ').title()}: ${v:,.2f}")
+                else:
+                    parts.append(f"{c.replace('_',' ').title()}: {_html.escape(str(v))}")
+            suffix = "  —  " + ", ".join(parts) if parts else ""
+            lines.append(f"• {_name_link(d)}{suffix}")
+        header = f"{len(lines)} consultant{'s' if len(lines) != 1 else ''}:"
+        return header + "\n" + "\n".join(lines)
+
+    # Fallback: just names or count
+    if has_name:
+        links = [_name_link(d) for d in dicts]
+        header = f"{len(links)} consultant{'s' if len(links) != 1 else ''}:"
+        return header + "\n" + "\n".join(f"• {lnk}" for lnk in links)
+
+    # Single value column, no names
+    if len(cols) == 1:
+        vals = [str(list(d.values())[0]) for d in dicts]
+        return "\n".join(vals)
+
+    return f"{len(dicts)} result(s) found."
+
+
+# -------------------------
 # Chat Engine
 # -------------------------
 @dataclass
@@ -3023,10 +3363,10 @@ class MKChatEngine:
         # -------------------------
         if intent_result.intent == "top_sellers":
             from crm_store import get_top_sellers
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime as _datetime, timezone, timedelta
 
             timeframe = (intent_result.slots or {}).get("timeframe")
-            now = datetime.now(timezone.utc)
+            now = _datetime.now(timezone.utc)
             if timeframe == "month":
                 since = now - timedelta(days=30)
                 label = "this month"
@@ -3498,7 +3838,17 @@ class MKChatEngine:
             state["last_customer"] = None
             save_session_state(state, session_id=sid)
             return ChatReply(ui["canceled"])
-        
+
+        # App install help
+        if intent_result.intent == "app_help":
+            return ChatReply(_APP_HELP_HTML)
+
+        # -------------------------
+        # Unit query (team/unit member text-to-SQL)
+        # -------------------------
+        if not pending and intent_result.intent == "unit_query":
+            return _handle_unit_query(msg, consultant_id)
+
         # -------------------------
         # CRM quick lookup: customer info lookup (no LLM call)
         # -------------------------
@@ -3550,6 +3900,15 @@ class MKChatEngine:
                             pcp_enrolled = get_pcp_enrolled(cur, consultant_id, matches[0]["id"])
 
                     if len(matches) == 0:
+                        # Fallback: search unit_members if this consultant has team data
+                        from crm_store import find_unit_member_by_name, format_consultant_card as _fmt_cons
+                        with tx() as (_uc, _ucur):
+                            _unit_matches = find_unit_member_by_name(_ucur, consultant_id, guess)
+                        if _unit_matches:
+                            if len(_unit_matches) == 1:
+                                return ChatReply(_fmt_cons(_unit_matches[0]))
+                            cards = "\n\n".join(_fmt_cons(m) for m in _unit_matches[:3])
+                            return ChatReply(cards)
                         return ChatReply(ui["no_customer_found_yet"].format(name=guess))
 
                     if len(matches) == 1:

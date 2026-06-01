@@ -15,6 +15,7 @@ class IntentResult:
 
 
 SUPPORTED_INTENTS = {
+    "app_help",
     "cancel",
     "customer_info",
     "customers_by_city",
@@ -28,6 +29,7 @@ SUPPORTED_INTENTS = {
     "order_remove",
     "product_lookup",
     "top_sellers",
+    "unit_query",
     "unknown",
 }
 
@@ -67,9 +69,43 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if not msg:
         return IntentResult(intent="unknown", confidence=0.0, raw_text=msg)
 
+    # app installation help
+    if lowered in ("app", "install app", "install", "the app", "app help", "help app") or any(t in lowered for t in (
+        "help with app", "app help", "help app", "install app", "add to home", "home screen",
+        "add the app", "download the app", "make the app", "get the app",
+        "add to my phone", "save to phone", "put on my phone",
+    )):
+        return IntentResult(intent="app_help", confidence=1.0, raw_text=msg)
+
     # cancel
     if lowered in ("cancel", "stop", "nevermind", "never mind"):
         return IntentResult(intent="cancel", confidence=1.0, raw_text=msg)
+
+    # unit_query — activity status code pattern (i3, t6, "who is i3", "show t6", etc.)
+    # Must run early — bare codes like "i3" are only 2 chars and skip the OpenAI fallback
+    if re.search(r'\b[aAiItTnN][1-7]\b', msg):
+        return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
+
+    # unit_query — questions about the consultant's team/unit members
+    # Must come before customer_info and lapsed_customers to avoid misrouting
+    _unit_triggers = (
+        "my team", "my unit", "my consultants", "my downline",
+        "team member", "unit member",
+        "great start", "star consultant", "star tracking",
+        "myshop", "my shop",
+        "who is inactive", "who are inactive", "inactive consultant",
+        "who is active", "who are active", "active consultant",
+        "who is on track", "who are on track",
+        "rise and radiate", "rise & radiate",
+        "who needs", "who still needs",
+        "who hasn't set up", "who haven't set up",
+        "activity status", "career level", "consultant number",
+        "new consultant", "new consultants",
+        "who is terminating", "terminating consultant",
+        "power of pink", "diq", "red jacket",
+    )
+    if any(t in lowered for t in _unit_triggers):
+        return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
 
     # lapsed customers
     _lapsed_triggers = (
@@ -221,6 +257,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- order_add\n"
         "- order_remove\n"
         "- product_lookup\n"
+        "- unit_query\n"
         "- unknown\n\n"
         "Return JSON like:\n"
         '{"intent":"customer_info","confidence":0.92}\n\n'
@@ -239,6 +276,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- If the user is removing an item from an existing order, use order_remove.\n"
         "- If the user is asking for the price or cost of a Mary Kay product (with no customer or order context), use product_lookup.\n"
         "- If the user is asking what products they sell the most, their top sellers, or best selling items, use top_sellers.\n"
+        "- If the user is asking about their team members, unit consultants, who has MyShop set up, Great Start bundles, Star Consultant progress, or any question about their downline, use unit_query.\n"
     )
 
     user = f"Message: {msg}\nLast referenced customer: {last_ref_name or '(none)'}"

@@ -418,6 +418,122 @@ def format_customer_card(c: Dict[str, Any], last_order: Dict[str, Any] | None = 
 
     return "\n".join(lines)
 
+
+def format_consultant_card(m: Dict[str, Any]) -> str:
+    import re
+    import html
+
+    first = (m.get("first_name") or "").strip()
+    last  = (m.get("last_name")  or "").strip()
+    full_name = html.escape(f"{first} {last}".strip() or "Consultant")
+
+    num    = html.escape(m.get("consultant_number") or "")
+    level  = html.escape(m.get("career_level_desc") or "")
+    status = html.escape(m.get("activity_status")   or "")
+    meta_parts = [p for p in [num, level, status] if p]
+    meta = f" <span style='font-size:0.85em;color:#888'>· {html.escape(' · '.join(meta_parts))}</span>" if meta_parts else ""
+
+    email_raw = (m.get("email") or "").strip()
+    if email_raw:
+        email_val = f'<a href="mailto:{html.escape(email_raw)}">{html.escape(email_raw)}</a>'
+    else:
+        email_val = "(none)"
+
+    phone_raw = (m.get("phone") or "").strip()
+    phone_digits = re.sub(r"\D", "", phone_raw)
+    phone_display = html.escape(_format_phone_pretty(phone_raw) or phone_raw)
+    if phone_digits:
+        phone_val = f'<a href="tel:{phone_digits}">{phone_display}</a>'
+    else:
+        phone_val = "(none)"
+
+    addr  = (m.get("address") or "").strip()
+    city  = (m.get("city")    or "").strip()
+    state = (m.get("state")   or "").strip()
+    zip_  = (m.get("zip")     or "").strip()
+    addr_parts = [p for p in [addr, city, state, zip_] if p]
+    if addr_parts:
+        address_text = ", ".join(addr_parts)
+        address_val = f'<a href="#" class="address-link" data-address="{html.escape(address_text)}" target="_blank">{html.escape(address_text)}</a>'
+    else:
+        address_val = "(none)"
+
+    myshop = m.get("myshop_active")
+    if myshop == 1:
+        myshop_val = "Yes"
+    elif myshop == 0:
+        myshop_val = "No"
+    else:
+        myshop_val = "Unknown"
+
+    lo_date = (m.get("last_order_date") or "")[:10]
+    lo_amt  = m.get("last_order_wholesale")
+    if lo_date:
+        try:
+            from datetime import date as _date
+            import calendar as _cal
+            d = _date.fromisoformat(lo_date)
+            lo_date_str = f"{_cal.month_abbr[d.month]} {d.day}, {d.year}"
+        except Exception:
+            lo_date_str = lo_date
+        if lo_amt is not None:
+            last_order_val = f"{lo_date_str} · ${lo_amt:,.2f} wholesale"
+        else:
+            last_order_val = lo_date_str
+    else:
+        last_order_val = "(none)"
+
+    lines = [
+        f"<strong>{full_name}</strong>{meta}",
+        f"• Email: {email_val}",
+        f"• Phone: {phone_val}",
+        f"• Address: {address_val}",
+        f"• MyShop: {myshop_val}",
+        f"• Last order: {last_order_val}",
+    ]
+    return "\n".join(lines)
+
+
+def find_unit_member_by_name(cur, consultant_id: int, name: str) -> list[Dict[str, Any]]:
+    """
+    Search unit_members by name. Prefers exact prefix/substring matches on first or
+    last name, falls back to fuzzy only for full-name queries with a high threshold.
+    """
+    from rapidfuzz import process, fuzz
+    _ph = "?" if _is_sqlite_cursor(cur) else "%s"
+    cur.execute(
+        f"SELECT * FROM unit_members WHERE consultant_id = {_ph}",
+        (consultant_id,),
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return []
+
+    name_lower = name.strip().lower()
+    all_members = []
+    for r in rows:
+        d = dict(r) if hasattr(r, "keys") else dict(zip([c[0] for c in cur.description], r))
+        all_members.append(d)
+
+    # Tier 1: exact substring match on first_name, last_name, or full name
+    tier1 = [
+        d for d in all_members
+        if name_lower in (d.get("first_name") or "").lower()
+        or name_lower in (d.get("last_name") or "").lower()
+        or name_lower in f"{d.get('first_name','')} {d.get('last_name','')}".strip().lower()
+    ]
+    if tier1:
+        return tier1[:5]
+
+    # Tier 2: fuzzy match on full name, but only with a tight threshold
+    candidates = {
+        f"{d.get('first_name','')} {d.get('last_name','')}".strip(): d
+        for d in all_members
+    }
+    results = process.extract(name, list(candidates.keys()), scorer=fuzz.WRatio, limit=3)
+    return [candidates[k] for k, score, _ in results if score >= 80]
+
+
 def upsert_customer_from_pending(cur, consultant_id: int, customer: Dict[str, Any]) -> int:
     """
     For now, always INSERT a new customer row.

@@ -690,6 +690,30 @@ def main():
                                 mark_job_failed(job_id, f"PCP sync failed — {_pcp_err}")
 
                         # -------------------------
+                        # REPORT_SYNC (team/unit member data sync)
+                        # -------------------------
+                        elif job_type == "REPORT_SYNC":
+                            from playwright_automation.report_sync import run_report_sync
+                            from db import is_postgres
+                            _ph = "%s" if is_postgres() else "?"
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                summary = run_report_sync(page, cur, cid, ph=_ph)
+                                conn.commit()
+                            finally:
+                                conn.close()
+                            if summary["members"] == 0:
+                                mark_job_done(job_id, "Report sync complete — no team members found.")
+                            else:
+                                mark_job_done(
+                                    job_id,
+                                    f"Report sync complete — {summary['members']} members, "
+                                    f"{summary['great_start']} great start, "
+                                    f"{summary['star_tracking']} star tracking records synced.",
+                                )
+
+                        # -------------------------
                         # Unknown job type
                         # -------------------------
                         else:

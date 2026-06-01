@@ -237,6 +237,79 @@ cur.execute("PRAGMA table_info(intent_logs)")
 if "response_text" not in {r[1] for r in cur.fetchall()}:
     cur.execute("ALTER TABLE intent_logs ADD COLUMN response_text TEXT")
 
+cur.execute("""
+CREATE TABLE IF NOT EXISTS unit_members (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id           INTEGER NOT NULL,
+  intouch_contact_id      TEXT    NOT NULL,
+  consultant_number       TEXT,
+  first_name              TEXT,
+  last_name               TEXT,
+  email                   TEXT,
+  phone                   TEXT,
+  address                 TEXT,
+  city                    TEXT,
+  state                   TEXT,
+  zip                     TEXT,
+  career_level_code       TEXT,
+  career_level_desc       TEXT,
+  activity_status         TEXT,
+  language                TEXT,
+  myshop_active           INTEGER,
+  birthday                TEXT,
+  start_date              TEXT,
+  last_order_date         TEXT,
+  last_order_wholesale    REAL,
+  last_order_retail       REAL,
+  unit_number             TEXT,
+  segments                TEXT,
+  recruiter_info          TEXT,
+  is_personal_recruit     INTEGER NOT NULL DEFAULT 0,
+  synced_at               TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (consultant_id, intouch_contact_id)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_members_consultant ON unit_members(consultant_id)")
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS unit_great_start (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id           INTEGER NOT NULL,
+  consultant_number       TEXT    NOT NULL,
+  total_bundles           INTEGER,
+  needed_next_bundle      REAL,
+  promotion_end_date      TEXT,
+  total_production        REAL,
+  rsks_bundles            INTEGER,
+  rsks_production_left    REAL,
+  production_month_key    TEXT,
+  synced_at               TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (consultant_id, consultant_number)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_great_start_consultant ON unit_great_start(consultant_id)")
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS unit_star_tracking (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id           INTEGER NOT NULL,
+  consultant_number       TEXT    NOT NULL,
+  contest_amount          REAL,
+  level_achieved          TEXT,
+  level_name              TEXT,
+  needed_ruby             REAL,
+  needed_diamond          REAL,
+  needed_emerald          REAL,
+  needed_pearl            REAL,
+  contest_begin_date      TEXT,
+  contest_end_date        TEXT,
+  total_star_quarters     INTEGER,
+  synced_at               TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (consultant_id, consultant_number)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_star_tracking_consultant ON unit_star_tracking(consultant_id)")
+
 conn.commit()
 conn.close()
 
