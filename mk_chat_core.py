@@ -2590,7 +2590,13 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
     try:
         with tx() as (conn, cur):
             cur.execute(sql)
-            rows = cur.fetchall()
+            raw_rows = cur.fetchall()
+            # Normalize to dicts — psycopg2 returns plain tuples, SQLite returns Row objects
+            if raw_rows and not hasattr(raw_rows[0], "keys") and cur.description:
+                col_names = [d[0] for d in cur.description]
+                rows = [dict(zip(col_names, r)) for r in raw_rows]
+            else:
+                rows = raw_rows
             # If rows have consultant_number but no first_name, stitch in names from unit_members
             if rows:
                 sample = dict(rows[0]) if hasattr(rows[0], "keys") else {}
