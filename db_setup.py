@@ -310,6 +310,53 @@ CREATE TABLE IF NOT EXISTS unit_star_tracking (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_star_tracking_consultant ON unit_star_tracking(consultant_id)")
 
+cur.execute("""
+CREATE TABLE IF NOT EXISTS unit_rise_radiate (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id           INTEGER NOT NULL,
+  intouch_contact_id      INTEGER,
+  consultant_number       TEXT    NOT NULL,
+  contest_goal            REAL,
+  amount_needed           REAL,
+  challenge_count         INTEGER,
+  month0_production       REAL,
+  month1_production       REAL,
+  month2_production       REAL,
+  month3_production       REAL,
+  month4_production       REAL,
+  month5_production       REAL,
+  display_month0          TEXT,
+  display_month1          TEXT,
+  display_month2          TEXT,
+  display_month3          TEXT,
+  display_month4          TEXT,
+  display_month5          TEXT,
+  synced_at               TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (consultant_id, consultant_number)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_rise_radiate_consultant ON unit_rise_radiate(consultant_id)")
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS unit_registrations (
+  id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id               INTEGER NOT NULL,
+  intouch_contact_id          INTEGER,
+  consultant_number           TEXT    NOT NULL,
+  event_key                   INTEGER NOT NULL,
+  event_name                  TEXT,
+  event_begin_date            TEXT,
+  registered_count            INTEGER DEFAULT 0,
+  wait_list_count             INTEGER DEFAULT 0,
+  guest_registered_count      INTEGER DEFAULT 0,
+  guest_wait_list_count       INTEGER DEFAULT 0,
+  registered_status           TEXT,
+  synced_at                   TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (consultant_id, consultant_number, event_key)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_registrations_consultant ON unit_registrations(consultant_id)")
+
 conn.commit()
 conn.close()
 

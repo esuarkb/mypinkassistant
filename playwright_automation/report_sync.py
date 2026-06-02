@@ -1,7 +1,8 @@
 # playwright_automation/report_sync.py
 #
 # Syncs team/unit member data from InTouch for any consultant with a team.
-# Populates: unit_members, unit_great_start, unit_star_tracking
+# Populates: unit_members, unit_great_start, unit_star_tracking,
+#            unit_rise_radiate, unit_registrations
 #
 # Call run_report_sync(page, cur, consultant_id) after login_intouch() has run.
 
@@ -100,9 +101,22 @@ def fetch_unit_members(page: Page) -> list[dict]:
 # Extract cookies from Playwright context for requests calls
 # ---------------------------------------------------------------------------
 
-def _get_cookies_dict(page: Page) -> dict:
+def _get_cookies_dict(page: Page, target_host: str = "applications.marykayintouch.com") -> dict:
+    """
+    Return only the cookies that a browser would send to target_host.
+    Filters to exact-domain cookies and wildcard (.domain) cookies that cover
+    target_host — prevents host-specific cookies from other subdomains (mk., apps.,
+    order.) from overwriting the correct wildcard-domain values in the flat dict.
+    """
     all_cookies = page.context.cookies()
-    return {c["name"]: c["value"] for c in all_cookies}
+    result = {}
+    for c in all_cookies:
+        domain = c.get("domain", "")
+        is_exact = (domain == target_host)
+        is_wildcard = domain.startswith(".") and target_host.endswith(domain)
+        if is_exact or is_wildcard:
+            result[c["name"]] = c["value"]
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +195,34 @@ def _map_great_start(raw: dict, consultant_id: int, month_key: str) -> dict:
         "rsks_bundles":       raw.get("totalRSKSBundles"),
         "rsks_production_left": raw.get("totalRSKSProductionLeft"),
         "production_month_key": month_key,
+        "synced_at":          datetime.utcnow().isoformat(),
+    }
+
+
+def _map_rise_radiate(raw: dict, consultant_id: int) -> dict:
+    def _iso(val):
+        if not val:
+            return None
+        return str(val)[:10]  # trim to YYYY-MM-DD
+    return {
+        "consultant_id":      consultant_id,
+        "intouch_contact_id": raw.get("contactID"),
+        "consultant_number":  str(raw.get("consultantNumber") or raw.get("consultantKey") or ""),
+        "contest_goal":       raw.get("contestGoal"),
+        "amount_needed":      raw.get("amountNeededToReachContestGoal"),
+        "challenge_count":    raw.get("challengeCount"),
+        "month0_production":  raw.get("month0ProductionAmount"),
+        "month1_production":  raw.get("month1ProductionAmount"),
+        "month2_production":  raw.get("month2ProductionAmount"),
+        "month3_production":  raw.get("month3ProductionAmount"),
+        "month4_production":  raw.get("month4ProductionAmount"),
+        "month5_production":  raw.get("month5ProductionAmount"),
+        "display_month0":     _iso(raw.get("displayMonth0")),
+        "display_month1":     _iso(raw.get("displayMonth1")),
+        "display_month2":     _iso(raw.get("displayMonth2")),
+        "display_month3":     _iso(raw.get("displayMonth3")),
+        "display_month4":     _iso(raw.get("displayMonth4")),
+        "display_month5":     _iso(raw.get("displayMonth5")),
         "synced_at":          datetime.utcnow().isoformat(),
     }
 
@@ -288,6 +330,113 @@ def _upsert_great_start(cur, records: list[dict], ph: str) -> int:
     return len(records)
 
 
+def _upsert_rise_radiate(cur, records: list[dict], ph: str) -> int:
+    if not records:
+        return 0
+    sql = f"""
+        INSERT INTO unit_rise_radiate
+          (consultant_id, intouch_contact_id, consultant_number,
+           contest_goal, amount_needed, challenge_count,
+           month0_production, month1_production, month2_production,
+           month3_production, month4_production, month5_production,
+           display_month0, display_month1, display_month2,
+           display_month3, display_month4, display_month5,
+           synced_at)
+        VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        ON CONFLICT (consultant_id, consultant_number) DO UPDATE SET
+          intouch_contact_id = excluded.intouch_contact_id,
+          contest_goal       = excluded.contest_goal,
+          amount_needed      = excluded.amount_needed,
+          challenge_count    = excluded.challenge_count,
+          month0_production  = excluded.month0_production,
+          month1_production  = excluded.month1_production,
+          month2_production  = excluded.month2_production,
+          month3_production  = excluded.month3_production,
+          month4_production  = excluded.month4_production,
+          month5_production  = excluded.month5_production,
+          display_month0     = excluded.display_month0,
+          display_month1     = excluded.display_month1,
+          display_month2     = excluded.display_month2,
+          display_month3     = excluded.display_month3,
+          display_month4     = excluded.display_month4,
+          display_month5     = excluded.display_month5,
+          synced_at          = excluded.synced_at
+    """
+    for r in records:
+        cur.execute(sql, (
+            r["consultant_id"], r["intouch_contact_id"], r["consultant_number"],
+            r["contest_goal"], r["amount_needed"], r["challenge_count"],
+            r["month0_production"], r["month1_production"], r["month2_production"],
+            r["month3_production"], r["month4_production"], r["month5_production"],
+            r["display_month0"], r["display_month1"], r["display_month2"],
+            r["display_month3"], r["display_month4"], r["display_month5"],
+            r["synced_at"],
+        ))
+    return len(records)
+
+
+def _fetch_seminar_event_key(cookies: dict) -> tuple[int | None, str | None, str | None]:
+    """
+    Fetch the upcoming Seminar event key from registration-events.
+    Returns (event_key, event_name, begin_date_iso) for the next in-person Seminar,
+    or (None, None, None) if not found.
+    """
+    url = f"{_FOREPORTS_BASE}/report?id=registration-events"
+    try:
+        resp = requests.get(url, cookies=cookies, timeout=30)
+        resp.raise_for_status()
+        events = resp.json()
+        if not isinstance(events, list):
+            return None, None, None
+        today = date.today().isoformat()
+        # Find the next in-person Seminar (eventCode "SM") with a future or current begin date
+        seminars = [
+            e for e in events
+            if (e.get("eventCode") or "").strip() == "SM"
+            and str(e.get("beginDate") or "")[:10] >= today[:4]  # same year or future
+        ]
+        # Take the most recent one (closest to today)
+        seminars.sort(key=lambda e: e.get("beginDate") or "")
+        for s in seminars:
+            return s["eventKey"], s["eventName"], str(s["beginDate"])[:10]
+    except Exception as e:
+        print(f"[ReportSync] registration-events fetch error: {e}")
+    return None, None, None
+
+
+def _upsert_registrations(cur, records: list[dict], ph: str) -> int:
+    if not records:
+        return 0
+    sql = f"""
+        INSERT INTO unit_registrations
+          (consultant_id, intouch_contact_id, consultant_number,
+           event_key, event_name, event_begin_date,
+           registered_count, wait_list_count,
+           guest_registered_count, guest_wait_list_count,
+           registered_status, synced_at)
+        VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        ON CONFLICT (consultant_id, consultant_number, event_key) DO UPDATE SET
+          intouch_contact_id     = excluded.intouch_contact_id,
+          event_name             = excluded.event_name,
+          event_begin_date       = excluded.event_begin_date,
+          registered_count       = excluded.registered_count,
+          wait_list_count        = excluded.wait_list_count,
+          guest_registered_count = excluded.guest_registered_count,
+          guest_wait_list_count  = excluded.guest_wait_list_count,
+          registered_status      = excluded.registered_status,
+          synced_at              = excluded.synced_at
+    """
+    for r in records:
+        cur.execute(sql, (
+            r["consultant_id"], r["intouch_contact_id"], r["consultant_number"],
+            r["event_key"], r["event_name"], r["event_begin_date"],
+            r["registered_count"], r["wait_list_count"],
+            r["guest_registered_count"], r["guest_wait_list_count"],
+            r["registered_status"], r["synced_at"],
+        ))
+    return len(records)
+
+
 def _upsert_star_tracking(cur, records: list[dict], ph: str) -> int:
     if not records:
         return 0
@@ -367,7 +516,16 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
                              if _owner_email.lower() in (m.get("recruiter_info") or "").lower())
         print(f"[ReportSync] Marked {personal_count} personal recruits (owner={_owner_email})")
 
-    # Step 2: extract session cookies for FOReports calls
+    # Step 2: navigate directly to a FOReports page so the browser handles the SSO
+    # redirect and sets fresh applications.marykayintouch.com auth cookies.
+    # The inventory import uses a different auth path on that domain which can break
+    # the FOReports session — this forces a clean re-auth before any API calls.
+    print("[ReportSync] Refreshing FOReports auth cookies via direct navigation...")
+    page.goto(
+        "https://applications.marykayintouch.com/FOReports/Report?id=default&noHeader=true",
+        wait_until="domcontentloaded",
+    )
+    page.wait_for_timeout(4000)
     cookies = _get_cookies_dict(page)
 
     # Step 3: great start (new-consultant-promotion-unit)
@@ -386,4 +544,48 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
     star_count = _upsert_star_tracking(cur, mapped_star, ph)
     print(f"[ReportSync] Upserted {star_count} unit_star_tracking records")
 
-    return {"members": members_count, "great_start": gs_count, "star_tracking": star_count}
+    # Step 5: Rise + Radiate IBC selling challenge
+    raw_rr = _foreposts_get(cookies, "rise-and-radiate-challenge-unit", {})
+    mapped_rr = [_map_rise_radiate(r, consultant_id) for r in raw_rr]
+    mapped_rr = [r for r in mapped_rr if r["consultant_number"]]
+    rr_count = _upsert_rise_radiate(cur, mapped_rr, ph)
+    print(f"[ReportSync] Upserted {rr_count} unit_rise_radiate records")
+
+    # Step 6: seminar registration — find current Seminar event, then pull unit registrations
+    reg_count = 0
+    event_key, event_name, event_begin = _fetch_seminar_event_key(cookies)
+    if event_key:
+        print(f"[ReportSync] Fetching registrations for {event_name} (key={event_key})")
+        raw_reg = _foreposts_get(cookies, "registration-unit", {"EventKey": event_key})
+        now = datetime.utcnow().isoformat()
+        mapped_reg = []
+        for r in raw_reg:
+            cn = str(r.get("consultantNumber") or r.get("consultantID") or "")
+            if not cn:
+                continue
+            mapped_reg.append({
+                "consultant_id":           consultant_id,
+                "intouch_contact_id":      r.get("contactID"),
+                "consultant_number":       cn,
+                "event_key":               event_key,
+                "event_name":              event_name,
+                "event_begin_date":        event_begin,
+                "registered_count":        r.get("registeredCount") or 0,
+                "wait_list_count":         r.get("waitListCount") or 0,
+                "guest_registered_count":  r.get("guestRegisteredCount") or 0,
+                "guest_wait_list_count":   r.get("guestWaitListCount") or 0,
+                "registered_status":       r.get("registeredStatus"),
+                "synced_at":               now,
+            })
+        reg_count = _upsert_registrations(cur, mapped_reg, ph)
+        print(f"[ReportSync] Upserted {reg_count} unit_registrations records")
+    else:
+        print("[ReportSync] No upcoming Seminar event found — skipping registration sync")
+
+    return {
+        "members": members_count,
+        "great_start": gs_count,
+        "star_tracking": star_count,
+        "rise_radiate": rr_count,
+        "registrations": reg_count,
+    }

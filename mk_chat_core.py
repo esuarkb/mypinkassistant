@@ -1196,6 +1196,18 @@ UI_EN = {
     "customer_not_in_mc": "I'm not finding {name} in MyCustomers. We will need to add {name} as a new customer first.",
     "propose_top": "I think you mean: {line}. Is that right? (yes/no)",
     "render_top5_intro": "Got it \u2014 select the best match (reply {range}), or type different search words and I'll search again:",
+
+    # Unit / team query strings
+    "unit_no_data": "I don't have team data synced for your account yet. Once a report sync runs, I'll be able to answer questions about your team.",
+    "unit_query_rephrase": "I had trouble generating a query. Please try rephrasing your question.",
+    "unit_query_unclear": "I wasn't able to form a query for that. Try rephrasing \u2014 for example, 'who has MyShop set up' or 'show me inactive consultants'.",
+    "unit_read_only": "I can only read data, not modify it. Please ask a question about your team.",
+    "unit_unsafe_query": "That query isn't something I can run safely. Please ask a read-only question.",
+    "unit_query_error": "I wasn't able to pull that report right now. Try rephrasing, or ask something like 'who doesn't have MyShop set up' or 'who is close to a Great Start bundle'.",
+    "unit_member_not_found": "I couldn't find a team member named {name}.",
+    "unit_no_results": "No consultants match that criteria.",
+    "unit_consultant_count": "{n} consultant:",
+    "unit_consultants_count": "{n} consultants:",
 }
 
 UI_ES = {
@@ -1261,6 +1273,18 @@ UI_ES = {
     "trouble": "Estoy teniendo un pequeño problema ahora mismo, por favor intenta de nuevo en un momento.",
     "customer_not_in_mc": "No encuentro a {name} en MyCustomers. Necesitaremos agregar a {name} como nueva cliente primero.",
     "propose_top": "Creo que te refieres a: {line}. ¿Es correcto? (sí/no)",
+
+    # Unit / team query strings
+    "unit_no_data": "Aún no tengo datos del equipo sincronizados. Una vez que se realice una sincronización, podré responder preguntas sobre tu equipo.",
+    "unit_query_rephrase": "Tuve problemas para generar esa consulta. Por favor, intenta reformularla.",
+    "unit_query_unclear": "No pude formular esa consulta. Intenta de otra forma — por ejemplo, '¿quién no tiene MyShop configurado?' o 'muestra consultoras inactivas'.",
+    "unit_read_only": "Solo puedo leer datos, no modificarlos. Por favor, hazme una pregunta sobre tu equipo.",
+    "unit_unsafe_query": "Esa consulta no es algo que pueda ejecutar de forma segura. Por favor, haz una pregunta de solo lectura.",
+    "unit_query_error": "No pude obtener ese reporte en este momento. Intenta reformularlo, o pregunta algo como '¿quién no tiene MyShop configurado?' o '¿quién está cerca de un paquete Gran Inicio?'.",
+    "unit_member_not_found": "No encontré a un miembro del equipo con el nombre {name}.",
+    "unit_no_results": "Ninguna consultora coincide con ese criterio.",
+    "unit_consultant_count": "{n} consultora:",
+    "unit_consultants_count": "{n} consultoras:",
     "render_top5_intro": "Listo \u2014 elige la mejor opción (responde {range}), o escribe otras palabras de búsqueda:",
 }
 
@@ -2394,32 +2418,59 @@ def _parse_inventory_threshold(msg: str) -> tuple[int | None, str]:
 # App install help
 # -------------------------
 
-def _build_chat_help_html(has_team: bool) -> str:
-    lines = [
-        "<strong>Here are some things you can do in chat:</strong>\n",
-        "<strong>Customers</strong>",
-        "• Look up a customer — just type their name: <em>Jane Doe</em>",
-        "• Add a customer — <em>New customer Jane Doe, 555-1234, jane@gmail.com</em>",
-        "• What someone ordered — <em>What did Jane order</em>\n",
-        "<strong>Orders</strong>",
-        "• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>\n",
-        "<strong>Your customers</strong>",
-        "• By city — <em>Customers in Huntsville</em>",
-        "• Lapsed — <em>Who hasn't ordered in 3 months</em>",
-        "• Top spenders — <em>Who are my top customers</em>",
-        "• Birthdays — <em>Who has birthdays this month</em>\n",
-        "<strong>Inventory</strong>",
-        "• Check stock — <em>How many TimeWise moisturizers do I have</em>",
-        "• Set a par — <em>Set charcoal mask par to 3</em>",
-    ]
-    if has_team:
-        lines += [
-            "\n<strong>Your team</strong>",
-            "• <em>Who is on my team</em>",
-            "• <em>Who hasn't set up MyShop</em>",
-            "• <em>Who is close to a Great Start bundle</em>",
-            "• <em>Who is on Sarah's team</em>",
+def _build_chat_help_html(has_team: bool, lang: str = "en") -> str:
+    if lang == "es":
+        lines = [
+            "<strong>Aquí hay algunas cosas que puedes hacer en el chat:</strong>\n",
+            "<strong>Clientes</strong>",
+            "• Buscar un cliente — solo escribe su nombre: <em>Jane Doe</em>",
+            "• Agregar un cliente — <em>Nuevo cliente Jane Doe, 555-1234, jane@gmail.com</em>",
+            "• Qué ordenó alguien — <em>¿Qué ordenó Jane?</em>\n",
+            "<strong>Pedidos</strong>",
+            "• Hacer un pedido — <em>Pedido para Jane: 2 labiales y una base</em>\n",
+            "<strong>Tus clientes</strong>",
+            "• Por ciudad — <em>Clientes en Houston</em>",
+            "• Sin pedidos recientes — <em>¿Quién no ha ordenado en 3 meses?</em>",
+            "• Mejores compradoras — <em>¿Cuáles son mis mejores clientes?</em>",
+            "• Cumpleaños — <em>¿Quién cumple años este mes?</em>\n",
+            "<strong>Inventario</strong>",
+            "• Verificar existencias — <em>¿Cuántas mascarillas de carbón tengo?</em>",
+            "• Establecer mínimo — <em>Set charcoal mask par to 3</em>",
         ]
+        if has_team:
+            lines += [
+                "\n<strong>Tu equipo</strong>",
+                "• <em>¿Quiénes son mis consultoras?</em>",
+                "• <em>¿Quién no ha configurado MyShop?</em>",
+                "• <em>¿Quién está cerca de un paquete Gran Inicio?</em>",
+                "• <em>¿Quién es el equipo de Sarah?</em>",
+            ]
+    else:
+        lines = [
+            "<strong>Here are some things you can do in chat:</strong>\n",
+            "<strong>Customers</strong>",
+            "• Look up a customer — just type their name: <em>Jane Doe</em>",
+            "• Add a customer — <em>New customer Jane Doe, 555-1234, jane@gmail.com</em>",
+            "• What someone ordered — <em>What did Jane order</em>\n",
+            "<strong>Orders</strong>",
+            "• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>\n",
+            "<strong>Your customers</strong>",
+            "• By city — <em>Customers in Huntsville</em>",
+            "• Lapsed — <em>Who hasn't ordered in 3 months</em>",
+            "• Top spenders — <em>Who are my top customers</em>",
+            "• Birthdays — <em>Who has birthdays this month</em>\n",
+            "<strong>Inventory</strong>",
+            "• Check stock — <em>How many TimeWise moisturizers do I have</em>",
+            "• Set a par — <em>Set charcoal mask par to 3</em>",
+        ]
+        if has_team:
+            lines += [
+                "\n<strong>Your team</strong>",
+                "• <em>Who is on my team</em>",
+                "• <em>Who hasn't set up MyShop</em>",
+                "• <em>Who is close to a Great Start bundle</em>",
+                "• <em>Who is on Sarah's team</em>",
+            ]
     return "\n".join(lines)
 
 
@@ -2449,8 +2500,8 @@ _UNIT_SCHEMA = {
         "career_level_code, career_level_desc (e.g. 'Conslt', 'Sr Conslt', 'Star Tm Bldr', 'DIQ', 'DIR'), "
         "activity_status — codes are always stored without spaces (A1, A2, A3=active; "
         "T1-T7=terminating, T6/T7=last month; I1, I2, I3=inactive; N1, N2, N3=new). "
-        "If user writes 'I 3' or 'i 3' treat as I3. "
-        "If user says just 'N', 'I', 'A', or 'T' as a status group, use activity_status LIKE 'N%' etc. "
+        "If the user gives a full code with a number (e.g. 'T3', 'i3', 'I 3', 'a2'), ALWAYS use exact match: activity_status = 'T3'. "
+        "Only use LIKE 'T%' when the user says just the letter with no number (e.g. 'show T status', 'who is terminating'). "
         "language (English or Spanish), myshop_active (1=yes, 0=no or never created), "
         "birthday, start_date, last_order_date, last_order_wholesale, last_order_retail, "
         "unit_number, segments (semicolon-separated contest/program tags), "
@@ -2487,6 +2538,41 @@ _UNIT_SCHEMA = {
         "When the query is about who is close to or working toward a level, always ORDER BY the relevant needed amount ASC (lowest need first). "
         "Do not select contest_begin_date, contest_end_date, total_star_quarters, or level_achieved in results."
     ),
+    "unit_rise_radiate": (
+        "Rise + Radiate IBC Selling Challenge (Jan 1 – June 30, 2026). "
+        "A consultant earns one month toward the challenge each month she orders $600+ in wholesale Section 1 products. "
+        "Months do not need to be consecutive. Reward tiers: 4 months = Seminar recognition, "
+        "5 months = Rise+Radiate sash, 6 months = quilted crossbody bag + onstage Seminar recognition. "
+        "Columns: consultant_id, consultant_number, contest_goal (always 600.0 — the per-month target), "
+        "amount_needed ($ still needed to hit $600 in the CURRENT month — 0 means she already qualified this month, "
+        "600 means she has not placed any qualifying orders yet this month), "
+        "challenge_count (number of months achieved so far — NULL or 0 means not yet earned any month), "
+        "month0_production through month5_production (wholesale $ per month, month0=current month, month1=last month, etc.), "
+        "display_month0 through display_month5 (YYYY-MM-DD first of each month). "
+        "Join to unit_members via consultant_number. "
+        "Prize tiers: 4 months = Seminar standing recognition (first prize), 5 months = sash, 6 months = bag + onstage recognition. "
+        "June 2026 is the FINAL month of the contest, so the maximum a consultant can reach is their current count + 1. "
+        "For 'who has earned' or 'who has a shot at' rise and radiate: use challenge_count >= 3 "
+        "(3 months can still reach 4 with June; below 3 is mathematically impossible to earn a prize). "
+        "For 'who has already earned a prize': use challenge_count >= 4. "
+        "For 'who earned the sash': challenge_count >= 5. "
+        "For 'who earned all 6 months': challenge_count = 6. "
+        "NEVER show consultants with challenge_count < 3 on earned/on-track queries — they cannot earn a prize. "
+        "To find who is close to qualifying THIS month: amount_needed > 0 AND amount_needed < 600, ORDER BY amount_needed ASC. "
+        "Do not select display_month columns unless the user specifically asks about monthly breakdown."
+    ),
+    "unit_registrations": (
+        "Event registration status for each unit member. Currently tracks 2026 Seminar (Aug 8-16, 2026). "
+        "Columns: consultant_id, consultant_number, event_key, event_name, event_begin_date, "
+        "registered_count (1=registered, 0=not registered), "
+        "wait_list_count (1=on waitlist), "
+        "guest_registered_count, guest_wait_list_count, "
+        "registered_status (text description, often NULL). "
+        "Join to unit_members via consultant_number. "
+        "To find who is registered: registered_count > 0. "
+        "To find who is NOT registered: registered_count = 0 AND wait_list_count = 0. "
+        "Always include event_name in SELECT so it's clear which event is shown."
+    ),
 }
 
 _UNIT_SQL_SYSTEM = """You generate SQL SELECT queries for a Mary Kay consultant's team data. Use standard SQL compatible with both SQLite and PostgreSQL — use CURRENT_DATE (not date('now')) for today's date.
@@ -2507,12 +2593,15 @@ Rules:
 - When filtering by first_name or last_name, always use LOWER() on both sides: LOWER(first_name) = LOWER('samyra') — names in the DB are title-cased but user input may not be
 - Always include first_name and last_name in the SELECT when querying unit_members, even for single-person queries
 - In JOIN queries, always qualify consultant_id with the table alias (e.g., um.consultant_id = 1) to avoid ambiguity — do NOT use a table alias prefix when querying a single table with no JOIN
+- When querying unit_star_tracking, always include level_name in the SELECT — show the consultant's current star level even when the question is about progress toward the next level
 - Keep queries simple and readable"""
 
 _UNIT_SQL_USER = "Question: {msg}"
 
 
-def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
+def _handle_unit_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatReply":
+    if ui is None:
+        ui = UI_EN
     """
     Text-to-SQL handler for unit/team questions. Checks if the consultant has team
     data, builds a schema description, asks an LLM to generate a SELECT query,
@@ -2534,7 +2623,7 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
         with tx() as (conn, cur):
             matches = find_unit_member_by_name(cur, consultant_id, _name)
         if not matches:
-            return ChatReply(f"I couldn't find a team member named {_name}.")
+            return ChatReply(ui["unit_member_not_found"].format(name=_name))
         if len(matches) == 1:
             return ChatReply(format_consultant_card(matches[0]))
         # Multiple close matches — show them all as cards
@@ -2550,10 +2639,7 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
                 tables_with_data.append(tbl)
 
     if not tables_with_data:
-        return ChatReply(
-            "I don't have team data synced for your account yet. "
-            "Once a report sync runs, I'll be able to answer questions about your team."
-        )
+        return ChatReply(ui["unit_no_data"])
 
     # Build schema description from tables that actually have data
     schema_lines = []
@@ -2586,21 +2672,21 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
             sql = ""
     except Exception as e:
         print(f"[UnitQuery] LLM error: {e}")
-        return ChatReply("I had trouble generating a query. Please try rephrasing your question.")
+        return ChatReply(ui["unit_query_rephrase"])
 
     if not sql:
-        return ChatReply("I wasn't able to form a query for that. Try rephrasing — for example, 'who has MyShop set up' or 'show me inactive consultants'.")
+        return ChatReply(ui["unit_query_unclear"])
 
     # Safety: SELECT-only, and must reference the consultant_id
     sql_upper = sql.upper().strip()
     if not sql_upper.startswith("SELECT"):
         print(f"[UnitQuery] Rejected non-SELECT: {sql[:100]}")
-        return ChatReply("I can only read data, not modify it. Please ask a question about your team.")
+        return ChatReply(ui["unit_read_only"])
 
     forbidden = ("DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE", "TRUNCATE")
     if any(kw in sql_upper for kw in forbidden):
         print(f"[UnitQuery] Rejected destructive SQL: {sql[:100]}")
-        return ChatReply("That query isn't something I can run safely. Please ask a read-only question.")
+        return ChatReply(ui["unit_unsafe_query"])
 
     # Verify consultant_id is scoped in the query
     if str(consultant_id) not in sql:
@@ -2619,7 +2705,9 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
     # Only inject identity columns for pure unit_members queries — skip when joining
     # star/bundle tables (those have their own consultant_number + ambiguity issues)
     _no_other_unit_tables = ("unit_star_tracking" not in sql.lower()
-                              and "unit_great_start" not in sql.lower())
+                              and "unit_great_start" not in sql.lower()
+                              and "unit_rise_radiate" not in sql.lower()
+                              and "unit_registrations" not in sql.lower())
     if "unit_members" in sql.lower() and _no_other_unit_tables:
         _id_inject = []
         if "consultant_number" not in _select_clause.lower():
@@ -2638,9 +2726,9 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
 
     if "unit_star_tracking" in sql.lower():
         _inject = []
-        if "contest_amount" not in _select_clause.lower():
+        if not _re.search(r'\bcontest_amount\b', _select_clause, _re.IGNORECASE):
             _inject.append("contest_amount")
-        if "level_name" not in _select_clause.lower():
+        if not _re.search(r'\blevel_name\b', _select_clause, _re.IGNORECASE):
             _inject.append("level_name")
         if _inject:
             sql = _re.sub(r'(?i)\bFROM\b', f', {", ".join(_inject)} FROM', sql, count=1)
@@ -2691,15 +2779,17 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
                     rows = enriched
     except Exception as e:
         print(f"[UnitQuery] DB error: {e}")
-        return ChatReply("I wasn't able to pull that report right now. Try rephrasing, or ask something like 'who doesn't have MyShop set up' or 'who is close to a Great Start bundle'.")
+        return ChatReply(ui["unit_query_error"])
 
-    return ChatReply(_format_unit_results(rows, msg))
+    return ChatReply(_format_unit_results(rows, msg, ui=ui))
 
 
-def _format_unit_results(rows: list, original_msg: str) -> str:
+def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
     """Format unit query results as a natural language response."""
+    if ui is None:
+        ui = UI_EN
     if not rows:
-        return "No consultants match that criteria."
+        return ui["unit_no_results"]
 
     # Normalize rows to dicts
     if hasattr(rows[0], "keys"):
@@ -2742,7 +2832,7 @@ def _format_unit_results(rows: list, original_msg: str) -> str:
                                                  "contest_end_date", "total_star_quarters")]
     if has_name and not value_cols:
         links = [_name_link(d) for d in dicts]
-        header = f"{len(links)} consultant{'s' if len(links) != 1 else ''}:"
+        header = ui["unit_consultants_count" if len(links) != 1 else "unit_consultant_count"].format(n=len(links))
         shown = links[:_SHOW_DETAIL]
         rest  = links[_SHOW_DETAIL:]
         body  = "\n".join(f"• {lnk}" for lnk in shown)
@@ -2755,6 +2845,22 @@ def _format_unit_results(rows: list, original_msg: str) -> str:
         return header + "\n" + body
 
     # Names + value columns
+    # Strip contact-detail columns — they live on the consultant card, not the list view
+    _CARD_ONLY = {"email", "phone", "address", "city", "state", "zip", "language",
+                  "unit_number", "intouch_contact_id", "synced_at", "career_level_code"}
+    value_cols = [c for c in value_cols if c not in _CARD_ONLY]
+
+    # On financial report results (Great Start / Star Consultant), also suppress the
+    # identity meta tags — those belong on team lists, not bundle/star rows
+    _FINANCIAL_COLS = {"contest_amount", "needed_next_bundle", "total_bundles",
+                       "needed_ruby", "needed_diamond", "needed_emerald", "needed_pearl",
+                       "level_name", "level_achieved", "total_star_quarters",
+                       "rsks_bundles", "rsks_production_left", "total_production",
+                       "promotion_end_date", "amount_needed", "challenge_count",
+                       "registered_count", "wait_list_count", "event_name"}
+    if any(c in _FINANCIAL_COLS for c in value_cols):
+        value_cols = [c for c in value_cols if c not in {"career_level_desc", "activity_status", "consultant_number"}]
+
     if has_name and len(value_cols) <= 5:
         # Drop columns where every row has the same value — but keep identity columns
         # (consultant_number, career_level_desc, activity_status) always visible per row
@@ -2794,6 +2900,15 @@ def _format_unit_results(rows: list, original_msg: str) -> str:
                 return None
             if "needed_for_next" in c or "next_level" in c:
                 return f"${v:,.2f} to next level" if v and v > 0 else None
+            if c == "challenge_count":
+                if not v:
+                    return None
+                mo = "month" if v == 1 else "months"
+                return f"{v} {mo} achieved"
+            if c == "amount_needed":
+                if v and v > 0:
+                    return f"${v:,.2f} to qualify this month"
+                return None
             if c == "consultant_number":
                 return _html.escape(str(v))
             if c == "career_level_desc":
@@ -2809,7 +2924,8 @@ def _format_unit_results(rows: list, original_msg: str) -> str:
         def _fmt_row(d: dict) -> str:
             # Identity columns (id, level, status) render as small gray meta tag like PCP badge
             _IDENTITY = ["consultant_number", "career_level_desc", "activity_status"]
-            _VALUE_ORDER = ["level_name", "contest_amount", "needed_next_bundle",
+            _VALUE_ORDER = ["level_name", "contest_amount", "challenge_count",
+                            "amount_needed", "needed_next_bundle",
                             "promotion_end_date", "needed_ruby", "needed_diamond",
                             "needed_emerald", "needed_pearl"]
 
@@ -2830,7 +2946,7 @@ def _format_unit_results(rows: list, original_msg: str) -> str:
         rest_dicts   = dicts[_SHOW_DETAIL:]
 
         total = len(dicts)
-        header = f"{total} consultant{'s' if total != 1 else ''}:"
+        header = ui["unit_consultants_count" if total != 1 else "unit_consultant_count"].format(n=total)
         body = "\n".join(_fmt_row(d) for d in detail_dicts)
         if rest_dicts:
             rest_body = "\n".join(_fmt_row(d) for d in rest_dicts)
@@ -2844,7 +2960,7 @@ def _format_unit_results(rows: list, original_msg: str) -> str:
     if has_name:
         links = [_name_link(d) for d in dicts]
         total = len(links)
-        header = f"{total} consultant{'s' if total != 1 else ''}:"
+        header = ui["unit_consultants_count" if total != 1 else "unit_consultant_count"].format(n=total)
         shown = links[:_SHOW_DETAIL]
         rest  = links[_SHOW_DETAIL:]
         body  = "\n".join(f"• {lnk}" for lnk in shown)
@@ -3029,6 +3145,7 @@ class MKChatEngine:
         _BARE_MSG_BLOCKING_INTENTS = {
             "recent_orders", "new_order", "leaderboard",
             "customers_by_city", "followup", "pcp", "top_sellers",
+            "unit_query",
         }
         _is_bare_msg = (
             not pending
@@ -3985,13 +4102,13 @@ class MKChatEngine:
                     (consultant_id,),
                 )
                 has_team = cur.fetchone() is not None
-            return ChatReply(_build_chat_help_html(has_team))
+            return ChatReply(_build_chat_help_html(has_team, lang=language))
 
         # -------------------------
         # Unit query (team/unit member text-to-SQL)
         # -------------------------
         if not pending and intent_result.intent == "unit_query":
-            return _handle_unit_query(msg, consultant_id)
+            return _handle_unit_query(msg, consultant_id, ui=ui)
 
         # -------------------------
         # CRM quick lookup: customer info lookup (no LLM call)

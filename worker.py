@@ -664,6 +664,21 @@ def main():
                                     date_range=date_range,
                                     seed_only=seed_only,
                                 )
+                            # Reports (team data, challenge tracking, registrations)
+                            try:
+                                from playwright_automation.report_sync import run_report_sync as _run_reports
+                                from db import is_postgres as _isp
+                                _rph = "%s" if _isp() else "?"
+                                conn = connect()
+                                try:
+                                    cur = conn.cursor()
+                                    _rs = _run_reports(page, cur, cid, ph=_rph)
+                                    conn.commit()
+                                finally:
+                                    conn.close()
+                                print(f"[FullSync] Report sync: {_rs}")
+                            except Exception as _re:
+                                print(f"[FullSync] Report sync failed (non-fatal): {_re}")
                             mark_job_done(job_id, "Nightly sync complete.")
 
                         # -------------------------
@@ -671,6 +686,7 @@ def main():
                         # -------------------------
                         elif job_type == "PCP_SYNC":
                             from scrape_pcp import scrape_enrolled as _pcp_scrape, save_to_db as _pcp_save, current_quarter as _pcp_quarter
+                            _pcp_msg = "PCP sync complete — no enrolled customers found."
                             try:
                                 enrolled = _pcp_scrape(page, username, password, skip_login=True)
                                 if enrolled:
@@ -681,13 +697,32 @@ def main():
                                         conn.commit()
                                     finally:
                                         conn.close()
-                                    mark_job_done(job_id, f"PCP sync complete — {len(enrolled)} enrolled customers saved.")
-                                else:
-                                    mark_job_done(job_id, "PCP sync complete — no enrolled customers found.")
+                                    _pcp_msg = f"PCP sync complete — {len(enrolled)} enrolled customers saved."
                             except RuntimeError:
-                                mark_job_done(job_id, "PCP complete — T&C not yet accepted")
+                                _pcp_msg = "PCP complete — T&C not yet accepted"
                             except Exception as _pcp_err:
-                                mark_job_failed(job_id, f"PCP sync failed — {_pcp_err}")
+                                _pcp_msg = f"PCP sync failed — {_pcp_err}"
+                                print(f"[PcpSync] {_pcp_msg}")
+                            # Reports (team data, challenge tracking, registrations) — same login session
+                            _report_msg = ""
+                            try:
+                                from playwright_automation.report_sync import run_report_sync as _run_reports
+                                from db import is_postgres as _isp
+                                _rph = "%s" if _isp() else "?"
+                                conn = connect()
+                                try:
+                                    cur = conn.cursor()
+                                    _rs = _run_reports(page, cur, cid, ph=_rph)
+                                    conn.commit()
+                                finally:
+                                    conn.close()
+                                if _rs["members"] > 0:
+                                    _report_msg = (f" | Reports: {_rs['members']} members, "
+                                                   f"{_rs['rise_radiate']} rise+radiate, "
+                                                   f"{_rs['registrations']} registrations synced.")
+                            except Exception as _re:
+                                print(f"[PcpSync] Report sync failed (non-fatal): {_re}")
+                            mark_job_done(job_id, _pcp_msg + _report_msg)
 
                         # -------------------------
                         # REPORT_SYNC (team/unit member data sync)

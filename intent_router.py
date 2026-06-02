@@ -92,7 +92,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
 
     # unit_query — activity status code pattern (i3, t6, "who is i3", "show t6", etc.)
     # Must run early — bare codes like "i3" are only 2 chars and skip the OpenAI fallback
-    if re.search(r'\b[aAiItTnN][1-7]\b', msg):
+    if re.search(r'\b[aAiItTnN]\s?[1-7]\b', msg):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
 
     # unit_query — questions about the consultant's team/unit members
@@ -112,6 +112,9 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "new consultant", "new consultants",
         "who is terminating", "terminating consultant",
         "power of pink", "diq", "red jacket",
+        "rise and radiate", "rise + radiate", "rise radiate", "radiate",
+        "seminar", "registered for", "registration", "who is registered",
+        "who has registered", "who signed up",
     )
     if any(t in lowered for t in _unit_triggers):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
