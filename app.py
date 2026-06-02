@@ -611,49 +611,6 @@ def render_page(filename: str, replaces: dict | None = None) -> HTMLResponse:
 
     html = path.read_text(encoding="utf-8")
 
-    # Inject emergency banner (global UI guardrail)
-    ui = get_ui_emergency()
-    if ui["enabled"] and ui["message"]:
-        banner = f"""
-        <style>
-        /* banner */
-        #ui-emergency-banner {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 99999;
-            background: #fff3cd;
-            color: #856404;
-            padding: 14px 16px;
-            text-align: center;
-            font-weight: 600;
-            border-bottom: 1px solid #ffeeba;
-        }}
-
-        /* default: push page content down */
-        body {{
-            padding-top: 70px !important;
-        }}
-
-        /* login page compatibility (centering layouts) */
-        html.ui-emergency-on body {{
-            align-items: flex-start !important;
-        }}
-        </style>
-
-        <div id="ui-emergency-banner">{ui["message"]}</div>
-
-        <script>
-        document.documentElement.classList.add("ui-emergency-on");
-        </script>
-        """
-
-        if "<body" in html.lower():
-            body_index = html.lower().find("<body")
-            insert_index = html.find(">", body_index) + 1
-            html = html[:insert_index] + banner + html[insert_index:]
-
     if replaces:
         for k, v in replaces.items():
             html = html.replace(k, v)

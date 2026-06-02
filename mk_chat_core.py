@@ -2426,6 +2426,9 @@ _UNIT_SCHEMA = {
         "birthday, start_date, last_order_date, last_order_wholesale, last_order_retail, "
         "unit_number, segments (semicolon-separated contest/program tags), "
         "is_personal_recruit (1=personally recruited by this consultant, 0=in unit via downline), "
+        "recruiter_info (text containing the recruiter's name in format 'First Name: X, Last Name: Y, Email: ...' — "
+        "to find members recruited by a specific person use: "
+        "recruiter_info LIKE '%First Name: Jamila%' AND recruiter_info LIKE '%Last Name: Saqqa%'), "
         "synced_at"
     ),
     "unit_great_start": (
@@ -2436,7 +2439,8 @@ _UNIT_SCHEMA = {
         "Join to unit_members via consultant_number. "
         "IMPORTANT: always filter WHERE promotion_end_date >= date('now') to exclude consultants whose window has already closed, "
         "unless the user specifically asks about expired or past consultants. "
-        "Always include promotion_end_date in the SELECT when querying this table so the window end date is visible."
+        "Always include promotion_end_date in the SELECT when querying this table so the window end date is visible. "
+        "When the query is about who is close to or working toward a bundle, ORDER BY needed_next_bundle ASC (lowest need first)."
     ),
     "unit_star_tracking": (
         "Star Consultant contest tracking for current quarter. "
@@ -2450,6 +2454,8 @@ _UNIT_SCHEMA = {
         "To find their NEXT level: if level_name = 'Ruby' → show needed_diamond; "
         "if level_name = 'Diamond' → show needed_emerald; if level_name = 'Emerald' → show needed_pearl; "
         "if level_name IS NULL → show needed_ruby. "
+        "Only include consultants who have placed at least one order this quarter: contest_amount > 0. "
+        "When the query is about who is close to or working toward a level, always ORDER BY the relevant needed amount ASC (lowest need first). "
         "Do not select contest_begin_date, contest_end_date, total_star_quarters, or level_achieved in results."
     ),
 }
@@ -2461,16 +2467,17 @@ _UNIT_SQL_SYSTEM = """You generate SQLite SELECT queries for a Mary Kay consulta
 Rules:
 - Return ONLY a raw SQL SELECT statement — no markdown, no explanation, no semicolon at the end
 - ALWAYS include WHERE consultant_id = {consultant_id} (or join condition that enforces this)
-- Use LIMIT 50 unless the user is asking for a count or total
+- Do not use LIMIT unless the user asks for a specific number — always return all matching rows
 - For names, SELECT first_name, last_name from unit_members (not just last name)
 - For yes/no fields: myshop_active = 1 means yes, 0 means no (includes never created)
 - Activity status: A1/A2/A3 = active, T6/T7 = last month before termination, I = inactive, N = new
 - When joining tables, always join unit_great_start or unit_star_tracking to unit_members on consultant_number with the same consultant_id filter on both tables
 - Default to the full unit (all rows) unless the user explicitly says "personal" or "my personal team" — in that case add AND is_personal_recruit = 1
+- When the user asks about a specific person's team or recruits (e.g. "who is on Heidi's team", "who did Sandra recruit", "show Mary's consultants"), filter by recruiter_info: WHERE recruiter_info LIKE '%First Name: Heidi%'. Use only the first name if no last name is given, or add AND recruiter_info LIKE '%Last Name: Smith%' if a last name is provided. Do NOT return all rows for these queries.
 - Do not SELECT a column that is already fixed by an equality filter in WHERE (e.g. if filtering WHERE activity_status = 'I3', do not also SELECT activity_status — the user already knows)
 - When filtering by first_name or last_name, always use LOWER() on both sides: LOWER(first_name) = LOWER('samyra') — names in the DB are title-cased but user input may not be
 - Always include first_name and last_name in the SELECT when querying unit_members, even for single-person queries
-- In JOIN queries, always qualify consultant_id with the table alias (e.g., um.consultant_id = 1) to avoid ambiguity
+- In JOIN queries, always qualify consultant_id with the table alias (e.g., um.consultant_id = 1) to avoid ambiguity — do NOT use a table alias prefix when querying a single table with no JOIN
 - Keep queries simple and readable"""
 
 _UNIT_SQL_USER = "Question: {msg}"
@@ -2580,10 +2587,35 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
         sql = _re.sub(r'(?i)^SELECT\s+', 'SELECT first_name, last_name, ', sql)
         print(f"[UnitQuery] Injected name columns into SELECT")
 
+    # Only inject identity columns for pure unit_members queries — skip when joining
+    # star/bundle tables (those have their own consultant_number + ambiguity issues)
+    _no_other_unit_tables = ("unit_star_tracking" not in sql.lower()
+                              and "unit_great_start" not in sql.lower())
+    if "unit_members" in sql.lower() and _no_other_unit_tables:
+        _id_inject = []
+        if "consultant_number" not in _select_clause.lower():
+            _id_inject.append("consultant_number")
+        if "career_level_desc" not in _select_clause.lower():
+            _id_inject.append("career_level_desc")
+        if "activity_status" not in _select_clause.lower():
+            _id_inject.append("activity_status")
+        if _id_inject:
+            sql = _re.sub(r'(?i)\bFROM\b', f', {", ".join(_id_inject)} FROM', sql, count=1)
+            print(f"[UnitQuery] Injected {_id_inject} into SELECT")
+
     if "unit_great_start" in sql.lower() and "promotion_end_date" not in _select_clause.lower():
-        # Append after existing columns rather than prepend, so date shows after the dollar amount
         sql = _re.sub(r'(?i)\bFROM\b', ', promotion_end_date FROM', sql, count=1)
         print(f"[UnitQuery] Injected promotion_end_date into SELECT")
+
+    if "unit_star_tracking" in sql.lower():
+        _inject = []
+        if "contest_amount" not in _select_clause.lower():
+            _inject.append("contest_amount")
+        if "level_name" not in _select_clause.lower():
+            _inject.append("level_name")
+        if _inject:
+            sql = _re.sub(r'(?i)\bFROM\b', f', {", ".join(_inject)} FROM', sql, count=1)
+            print(f"[UnitQuery] Injected {_inject} into SELECT")
 
     print(f"[UnitQuery] Executing: {sql[:400]}")
 
@@ -2663,70 +2695,130 @@ def _format_unit_results(rows: list, original_msg: str) -> str:
         safe = _html.escape(n)
         return f'<a href="#" data-send="team member {safe}">{safe}</a>'
 
+    _SHOW_DETAIL = 20  # rows shown with full detail before collapsing to names-only
+
     # Names-only result
     value_cols = [c for c in cols if c not in ("first_name", "last_name", "consultant_id",
                                                  "intouch_contact_id", "synced_at", "id",
                                                  "is_personal_recruit", "recruiter_info",
                                                  "total_bundles", "production_month_key",
-                                                 "consultant_number", "level_achieved",
-                                                 "contest_begin_date", "contest_end_date",
-                                                 "total_star_quarters")]
+                                                 "level_achieved", "contest_begin_date",
+                                                 "contest_end_date", "total_star_quarters")]
     if has_name and not value_cols:
         links = [_name_link(d) for d in dicts]
         header = f"{len(links)} consultant{'s' if len(links) != 1 else ''}:"
-        return header + "\n" + "\n".join(f"• {lnk}" for lnk in links)
+        shown = links[:_SHOW_DETAIL]
+        rest  = links[_SHOW_DETAIL:]
+        body  = "\n".join(f"• {lnk}" for lnk in shown)
+        if rest:
+            rest_body = "\n".join(f"• {lnk}" for lnk in rest)
+            body += (
+                f"\n<details><summary style='cursor:pointer;color:var(--pink);font-weight:600'>"
+                f"+ {len(rest)} more</summary>\n{rest_body}\n</details>"
+            )
+        return header + "\n" + body
 
     # Names + value columns
-    if has_name and len(value_cols) <= 3:
-        # Drop columns where every row has the same value — only meaningful with multiple rows
+    if has_name and len(value_cols) <= 5:
+        # Drop columns where every row has the same value — but keep identity columns
+        # (consultant_number, career_level_desc, activity_status) always visible per row
+        _ALWAYS_SHOW = {"consultant_number", "career_level_desc", "activity_status"}
         if len(dicts) > 1:
-            uniform_cols = {c for c in value_cols if len({d.get(c) for d in dicts}) == 1}
+            uniform_cols = {c for c in value_cols
+                            if c not in _ALWAYS_SHOW and len({d.get(c) for d in dicts}) == 1}
             value_cols = [c for c in value_cols if c not in uniform_cols]
 
-        lines = []
-        for d in dicts:
-            parts = []
-            for c in value_cols:
-                v = d.get(c)
-                if v is None:
-                    continue
-                if c == "needed_next_bundle":
-                    parts.append(f"${v:,.2f} to next bundle")
-                elif c == "promotion_end_date":
-                    try:
-                        from datetime import date as _dt
-                        import calendar as _cal
-                        _d = _dt.fromisoformat(str(v)[:10])
-                        parts.append(f"ends {_cal.month_name[_d.month]} {_d.day}")
-                    except Exception:
-                        parts.append(f"ends {str(v)[:10]}")
-                elif c == "contest_amount":
-                    parts.append(f"${v:,.2f} this quarter")
-                elif c in ("needed_ruby", "needed_diamond", "needed_emerald", "needed_pearl"):
-                    if v and v > 0:
-                        level = c.replace("needed_", "").title()
-                        parts.append(f"needs ${v:,.2f} for {level}")
-                elif "needed_for_next" in c or "next_level" in c:
-                    if v and v > 0:
-                        parts.append(f"needs ${v:,.2f} for next level")
-                elif c == "level_name" and v:
-                    parts.append(f"{v} ✓")
-                elif c == "myshop_active":
-                    parts.append("MyShop: " + ("✓" if v == 1 else "✗"))
-                elif isinstance(v, float):
-                    parts.append(f"{c.replace('_',' ').title()}: ${v:,.2f}")
-                else:
-                    parts.append(f"{c.replace('_',' ').title()}: {_html.escape(str(v))}")
-            suffix = "  —  " + ", ".join(parts) if parts else ""
-            lines.append(f"• {_name_link(d)}{suffix}")
-        header = f"{len(lines)} consultant{'s' if len(lines) != 1 else ''}:"
-        return header + "\n" + "\n".join(lines)
+        _LEVEL_EMOJI = {
+            "Ruby": "❤️", "Diamond": "💎",
+            "Emerald": "💚", "Pearl": "🤍", "Sapphire": "💙",
+        }
+
+        def _fmt_col(c: str, v) -> str | None:
+            """Format a single column value. Returns None to skip."""
+            if v is None:
+                return None
+            if c == "level_name":
+                emoji = _LEVEL_EMOJI.get(v, "⭐")
+                return f"{emoji} {v}"
+            if c == "contest_amount":
+                return f"${v:,.2f} this quarter"
+            if c == "needed_next_bundle":
+                return f"${v:,.2f} to next bundle"
+            if c == "promotion_end_date":
+                try:
+                    from datetime import date as _dt
+                    import calendar as _cal
+                    _d = _dt.fromisoformat(str(v)[:10])
+                    return f"ends {_cal.month_name[_d.month]} {_d.day}"
+                except Exception:
+                    return f"ends {str(v)[:10]}"
+            if c in ("needed_ruby", "needed_diamond", "needed_emerald", "needed_pearl"):
+                if v and v > 0:
+                    return f"${v:,.2f} to {c.replace('needed_','').title()}"
+                return None
+            if "needed_for_next" in c or "next_level" in c:
+                return f"${v:,.2f} to next level" if v and v > 0 else None
+            if c == "consultant_number":
+                return _html.escape(str(v))
+            if c == "career_level_desc":
+                return _html.escape(str(v))
+            if c == "activity_status":
+                return _html.escape(str(v))
+            if c == "myshop_active":
+                return "MyShop: " + ("✓" if v == 1 else "✗")
+            if isinstance(v, float):
+                return f"{c.replace('_',' ').title()}: ${v:,.2f}"
+            return f"{c.replace('_',' ').title()}: {_html.escape(str(v))}"
+
+        def _fmt_row(d: dict) -> str:
+            # Identity columns (id, level, status) render as small gray meta tag like PCP badge
+            _IDENTITY = ["consultant_number", "career_level_desc", "activity_status"]
+            _VALUE_ORDER = ["level_name", "contest_amount", "needed_next_bundle",
+                            "promotion_end_date", "needed_ruby", "needed_diamond",
+                            "needed_emerald", "needed_pearl"]
+
+            id_parts = [p for c in _IDENTITY
+                        if c in value_cols and (p := _fmt_col(c, d.get(c))) is not None]
+            meta = (f" <span style='font-size:0.85em;color:#888'>· "
+                    f"{' · '.join(id_parts)}</span>") if id_parts else ""
+
+            val_ordered = [c for c in _VALUE_ORDER if c in value_cols]
+            val_rest    = [c for c in value_cols if c not in _IDENTITY and c not in _VALUE_ORDER]
+            val_parts = [p for c in (val_ordered + val_rest)
+                         if (p := _fmt_col(c, d.get(c))) is not None]
+            suffix = "  —  " + ", ".join(val_parts) if val_parts else ""
+
+            return f"• {_name_link(d)}{meta}{suffix}"
+
+        detail_dicts = dicts[:_SHOW_DETAIL]
+        rest_dicts   = dicts[_SHOW_DETAIL:]
+
+        total = len(dicts)
+        header = f"{total} consultant{'s' if total != 1 else ''}:"
+        body = "\n".join(_fmt_row(d) for d in detail_dicts)
+        if rest_dicts:
+            rest_body = "\n".join(_fmt_row(d) for d in rest_dicts)
+            body += (
+                f"\n<details><summary style='cursor:pointer;color:var(--pink);font-weight:600'>"
+                f"+ {len(rest_dicts)} more</summary>\n{rest_body}\n</details>"
+            )
+        return header + "\n" + body
 
     # Fallback: just names or count
     if has_name:
         links = [_name_link(d) for d in dicts]
-        header = f"{len(links)} consultant{'s' if len(links) != 1 else ''}:"
-        return header + "\n" + "\n".join(f"• {lnk}" for lnk in links)
+        total = len(links)
+        header = f"{total} consultant{'s' if total != 1 else ''}:"
+        shown = links[:_SHOW_DETAIL]
+        rest  = links[_SHOW_DETAIL:]
+        body  = "\n".join(f"• {lnk}" for lnk in shown)
+        if rest:
+            rest_body = "\n".join(f"• {lnk}" for lnk in rest)
+            body += (
+                f"\n<details><summary style='cursor:pointer;color:var(--pink);font-weight:600'>"
+                f"+ {len(rest)} more</summary>\n{rest_body}\n</details>"
+            )
+        return header + "\n" + body
 
     # Single value column, no names
     if len(cols) == 1:
@@ -3163,7 +3255,7 @@ class MKChatEngine:
             has_phone = bool(re.search(r"(?:\+?1[\s\-\.]?)?(?:\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4})", t))
             has_email = bool(re.search(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", t))
             has_birthday_word = any(x in t.lower() for x in ("birthday", "bday", "dob"))
-            has_month_name = bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b", t, re.IGNORECASE))
+            has_month_name = bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b", t, re.IGNORECASE))
             has_address_word = any(x in t.lower() for x in ("address", "street", "st ", "road", "rd ", "avenue", "ave ", "drive", "dr ", "lane", "ln ", "court", "ct ", "circle", "cir ", "way", "blvd", "boulevard", "unit", "apt", "apartment", "lot"))
             has_referred_by = bool(re.search(r'\breferred\s+by\b', t, re.IGNORECASE))
 
@@ -3867,7 +3959,8 @@ class MKChatEngine:
                 if _looks_like_full_customer_entry(msg):
                     pass
                 else:
-                    m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
+                    _msg_norm = msg.replace('’', "'").replace('‘', "'")
+                    m_clean = re.sub(r"[^\w\s']", " ", _msg_norm).strip()
         
 
                     stop_words = {

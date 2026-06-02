@@ -64,6 +64,7 @@ def should_use_openai_intent_fallback(message: str) -> bool:
 
 def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     msg = (message or "").strip()
+    msg = msg.replace('’', "'").replace('‘', "'")  # normalize iOS curly apostrophes
     lowered = msg.lower()
 
     if not msg:

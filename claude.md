@@ -9,8 +9,7 @@ orders via natural language chat, and sync data with Mary Kay's InTouch portal.
 ## Who Uses It
 Independent Mary Kay beauty consultants. Each consultant is a separate tenant.
 Data isolation between consultants is critical — every customer, order, and 
-job is scoped to a consultant_id. Currently in beta with real consultants,
-targeting official launch in ~2 weeks.
+job is scoped to a consultant_id. Live in production as of March 2026.
 
 ## Product Philosophy
 **Keep it simple.** The target user is a Mary Kay consultant running a small 
@@ -32,13 +31,22 @@ conversation. That friction reduction is the core value proposition.
 - Customer sync: on account creation, existing MyCustomers data is imported 
   automatically so consultants can start entering orders on day one
 - Smart customer name matching (fuzzy search) so typos don't break lookups
+- Full order history imported automatically via InTouch Apex/LWC intercept;
+  runs nightly and at onboarding
+- Personal inventory auto-import: Playwright script (inventory_import.py) pulls
+  consultant's personal MK orders into inventory tracking automatically
+- Director/team features (REPORT_SYNC): unit member list, Great Start bundle
+  tracking, Star Consultant tracking — chat answers any team question via
+  text-to-SQL (unit_query intent). Consultant cards with clickable names.
 
 ## Pricing & Business Model
-- **Current tier: $5.99/month** — all current features, land grab pricing
-- **Planned premium tier: ~$14.99/month** — intelligence features (see roadmap)
-- Strategy: get consultants in the system accumulating order history data now,
-  build intelligence features on top of that data at the 6 month mark
-- Mary Kay has hundreds of thousands of active US consultants — TAM is large
+- **$5.99/month — all features, no tiers**
+- Strategy: undercut competitors (QT Office is $9.99/mo) and capture market
+  share fast; technology gap vs competitors is large enough to win on value
+- Goal: 5,000 subscribers — Mary Kay has hundreds of thousands of active US
+  consultants, TAM is large
+- Andrea (Brian's wife, a MK director) is the primary power user and real-world
+  test case; her 130-consultant unit is the basis for director feature development
 
 ## Competitive Moat
 Order history data accumulates over time and powers increasingly smart 
@@ -47,28 +55,27 @@ but cannot replicate months of real order history across hundreds of consultants
 The longer a consultant uses the app, the smarter it gets for them specifically.
 
 ## Planned Features (do not build unless explicitly asked)
-### Near term (next 60-90 days)
-- **Inventory management** — new Playwright script to auto-import consultant 
-  orders into personal inventory tracking. Will follow same worker/job queue 
-  pattern as existing automation.
-- **Birthday reminders** — low hanging fruit, consultants love this, 
-  data already stored
+### Near term
+- **Unit member birthdays** — customer birthdays already work ("who has birthdays
+  this month" → list with tap-to-text button); same feature for unit_members not
+  yet built ("Consultant birthdays this month")
+- **Invoices** — both QT Office and Boulevard have this; gap vs competitors
+- **Tax report / expense tracking** — high value for consultants filing Schedule C
+- **Follow-up reminders** — "remind me to follow up with Jane in 2 weeks"
+- **Additional director reports** — more FOReports endpoints (car award, PCP
+  participation, recruiting); confirmed API pattern in project_director_apis.md
 
-### Premium tier unlock (~6 months, once order data accumulates)
-- **"What should I do today?"** — AI surfaces top 3-5 follow-up suggestions
-  based on order history and reorder patterns. Pull model (consultant asks),
-  not push (no notifications yet).
-- **Reorder predictions** — identify customers overdue for reorder based on 
-  their purchase patterns and product reorder windows
-- **Customer value scoring** — top customers by revenue, customers who've 
-  gone quiet
+### Medium term (once order data accumulates)
+- **Reorder predictions** — customers overdue based on purchase patterns;
+  use_up_rate_months already in catalog CSV for 149 products
+- **"What should I do today?"** — AI surfaces top follow-up suggestions
+- **Customer value scoring / gone quiet alerts** — top customers by revenue
 - **Low inventory alerts** — cross-reference inventory with predicted reorders
-- **Order history summaries** — "what does Jane usually order?" 
 
 ### Future / longer term
 - Proactive push notifications for reorder reminders
-- "What should I do today?" tab/dashboard (only if chat model proves 
-  insufficient — keep chat first)
+- Tag picker / customer groups in chat
+- Text-to-SQL for customer/order data (data_query intent — not just team data)
 
 ## Tech Stack
 - **Backend:** Python, FastAPI
@@ -98,19 +105,26 @@ Do NOT suggest migrating away from SQLite locally — quick local iteration
 matters more than perfect parity.
 
 ## Key Files
-- `app.py` — FastAPI routes, auth, session management, admin panel (~1300 lines)
+- `app.py` — FastAPI routes, auth, session management, admin panel
 - `auth_core.py` — Password hashing, Fernet encryption, consultant CRUD
-- `mk_chat_core.py` — AI chat engine, intent routing, CRM operations (~2500 lines)
-- `crm_store.py` — Customer/order DB queries, fuzzy name search
+- `mk_chat_core.py` — AI chat engine, intent routing, CRM operations (large file)
+- `intent_router.py` — Intent classification (keyword fast-path + OpenAI fallback)
+- `crm_store.py` — Customer/order/unit_member DB queries, fuzzy name search,
+  format_consultant_card(), format_customer_card()
 - `billing_routes.py` — Stripe checkout, webhooks, portal
 - `worker.py` — Background job runner (Playwright automation)
 - `worker_queue.py` — Job claiming, locking, retry logic
-- `db.py` — DB connection, tx() context manager, utilities
+- `db.py` — DB connection, tx() context manager, is_postgres(), PH placeholder
+- `db_setup.py` — All table CREATE statements (SQLite + Postgres compatible)
 - `playwright_automation/` — InTouch portal automation scripts
   - `login.py` — InTouch authentication
-  - `orders.py` — Order placement automation ⚠️ FRAGILE — test carefully
-  - `new_customer.py` — Customer creation automation ⚠️ FRAGILE — test carefully
+  - `orders.py` — Order placement ⚠️ FRAGILE — test carefully
+  - `new_customer.py` — Customer creation ⚠️ FRAGILE — test carefully
   - `customer_export.py` — Customer list export/sync ⚠️ FRAGILE — test carefully
+  - `inventory_import.py` — Personal inventory order import ⚠️ FRAGILE
+  - `report_sync.py` — Director/team data sync (unit_members, great_start,
+    star_tracking) via Aura intercept + FOReports API
+- `run_report_sync.py` — One-shot local test runner for REPORT_SYNC (headed browser)
 
 ## ⚠️ Playwright Scripts — Handle With Extreme Care
 The Playwright scripts are the most fragile and most valuable part of the 
@@ -132,11 +146,12 @@ filter on jobs with status='done' to ensure confirmed orders only.
 
 ## MyCustomers as Source of Truth
 - InTouch/MyCustomers is the official Mary Kay database and source of truth
-- Our mk.db mirrors customer and order data but does not replace InTouch
+- Our DB mirrors customer, order, and team data but does not replace InTouch
 - Customer import runs at account creation automatically
-- Historical order data IS imported automatically — the system intercepts the
-  InTouch Apex/LWC response to pull order history. Runs nightly via Render cron
-  and also at onboarding. New consultants get their full order history on day one.
+- Historical order data imported automatically via InTouch Apex/LWC intercept;
+  runs nightly via Render cron and at onboarding
+- Team/unit data synced via REPORT_SYNC job (report_sync.py) using Aura
+  intercept + FOReports REST API; requires one Playwright login then plain HTTP
 
 ## Environment Variables Required
 ```
@@ -161,32 +176,48 @@ PB_CONTACT_ID          # ProjectBroadcast contact for alerts
 - Run worker: `python worker.py`
 - `.env` file holds local secrets (gitignored)
 
-## Security Fixes — COMPLETED (2026-03-27)
-All five security fixes have been implemented and verified:
-1. ✅ XSS in render_page() — _esc() helper added, all user values escaped
-2. ✅ Rate limiting on /login, /forgot, /onboard — slowapi added
-3. ✅ Exception details leaked to clients — logging added, generic messages returned
-4. ✅ requirements-web.txt duplicates — cleaned and consolidated
-5. ✅ Order deletion scoped to consultant_id — consultant_id join added
-
-### Lower Priority (after launch)
-- Consolidate `_row_get()` utility (reimplemented in 3 files — app.py, 
-  auth_core.py, crm_store.py)
+## Known Technical Debt (low priority, do not tackle unless asked)
+- Consolidate `_row_get()` utility (reimplemented in 3 files)
 - Use `tx()` context manager consistently throughout app.py
 - Replace `print()` statements with proper logging module
 - Split mk_chat_core.py into smaller modules (long-term refactor)
 
 ## Conventions & Patterns To Follow
+
+### Before building anything new
+**Check if there is an established pattern first.** This codebase has solved
+many problems already (DB compat, job queuing, card formatting, intent routing,
+fuzzy search, Playwright auth, etc.). Read the relevant existing code before
+creating something new — the pattern is almost certainly already there.
+
+### Testing workflow
+- **Always test locally (SQLite) before pushing to production (Postgres)**
+- Local: `uvicorn app:app --reload` + `python worker.py`
+- For Playwright/sync jobs: use the one-shot test runners (e.g. `run_report_sync.py`)
+- Only push to Render after local testing passes
+
+### Production debugging & ops
+Claude may be asked to help debug production issues, including:
+- **Render logs** — checking deploy logs, service logs, or worker output on Render dashboard
+- **Jobs table** — querying stuck/failed/stale jobs, investigating retry patterns, clearing bad state
+- **Production DB queries** — running read queries against production Postgres to diagnose issues
+  (connection info in memory: reference_production_db.md)
+
+**Always confirm with the user before making any changes to production data or manually
+modifying job state.** Read-only queries are fine to run; writes require explicit approval.
+Deploy workflow: pause job queue → push → wait for Render → unpause queue.
+
+### Code patterns
 - All DB queries MUST include `consultant_id` in WHERE clause (tenant isolation)
 - New routes need: login check → billing check → then logic (in that order)
 - Playwright scripts go in `playwright_automation/`, registered as job types 
   in worker.py
-- Keep SQLite/Postgres compatibility — use PH placeholder and paramify() 
-  for all new queries
+- All new DB tables go in `db_setup.py` — must work for both SQLite and Postgres
+- Keep SQLite/Postgres compatibility — use `PH` placeholder (`%s` or `?`) and
+  `paramify()` for all new queries; use `tx()` context manager for connections
 - Fernet encrypt any third-party credentials before storing
 - Never return raw exception messages to the client — log server-side, 
   return generic friendly message
-- Use `_row_get()` for DB row access (works for both sqlite3.Row and 
-  psycopg dict_row)
 - New features follow chat-first design — if it can't be expressed as a 
   chat prompt, question whether it belongs in the product
+- Emergency banner shows on /app (chat) page only — not on login/settings/etc.
