@@ -2394,6 +2394,35 @@ def _parse_inventory_threshold(msg: str) -> tuple[int | None, str]:
 # App install help
 # -------------------------
 
+def _build_chat_help_html(has_team: bool) -> str:
+    lines = [
+        "<strong>Here are some things you can do in chat:</strong>\n",
+        "<strong>Customers</strong>",
+        "• Look up a customer — just type their name: <em>Jane Doe</em>",
+        "• Add a customer — <em>New customer Jane Doe, 555-1234, jane@gmail.com</em>",
+        "• What someone ordered — <em>What did Jane order</em>\n",
+        "<strong>Orders</strong>",
+        "• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>\n",
+        "<strong>Your customers</strong>",
+        "• By city — <em>Customers in Huntsville</em>",
+        "• Lapsed — <em>Who hasn't ordered in 3 months</em>",
+        "• Top spenders — <em>Who are my top customers</em>",
+        "• Birthdays — <em>Who has birthdays this month</em>\n",
+        "<strong>Inventory</strong>",
+        "• Check stock — <em>How many TimeWise moisturizers do I have</em>",
+        "• Set a par — <em>Set charcoal mask par to 3</em>",
+    ]
+    if has_team:
+        lines += [
+            "\n<strong>Your team</strong>",
+            "• <em>Who is on my team</em>",
+            "• <em>Who hasn't set up MyShop</em>",
+            "• <em>Who is close to a Great Start bundle</em>",
+            "• <em>Who is on Sarah's team</em>",
+        ]
+    return "\n".join(lines)
+
+
 _APP_HELP_HTML = (
     "<strong>Add MPA to your home screen</strong>\n\n"
     "<strong>iPhone / iPad (Safari):</strong>\n"
@@ -2617,8 +2646,12 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
             sql = _re.sub(r'(?i)\bFROM\b', f', {", ".join(_inject)} FROM', sql, count=1)
             print(f"[UnitQuery] Injected {_inject} into SELECT")
 
-    # Normalize SQLite date('now') to CURRENT_DATE for Postgres compatibility
-    sql = _re.sub(r"date\s*\(\s*'now'\s*\)", "CURRENT_DATE", sql, flags=_re.IGNORECASE)
+    # Replace any date-today reference with a plain ISO string literal — works in both
+    # SQLite (text comparison) and Postgres (avoids text vs date type mismatch)
+    from datetime import date as _date
+    _today = _date.today().isoformat()
+    sql = _re.sub(r"CURRENT_DATE", f"'{_today}'", sql, flags=_re.IGNORECASE)
+    sql = _re.sub(r"date\s*\(\s*'now'\s*\)", f"'{_today}'", sql, flags=_re.IGNORECASE)
 
     print(f"[UnitQuery] Executing: {sql[:400]}")
 
@@ -3943,6 +3976,16 @@ class MKChatEngine:
         # App install help
         if intent_result.intent == "app_help":
             return ChatReply(_APP_HELP_HTML)
+
+        # Chat help — what can I do
+        if intent_result.intent == "chat_help":
+            with tx() as (conn, cur):
+                cur.execute(
+                    f"SELECT 1 FROM unit_members WHERE consultant_id = {PH} LIMIT 1",
+                    (consultant_id,),
+                )
+                has_team = cur.fetchone() is not None
+            return ChatReply(_build_chat_help_html(has_team))
 
         # -------------------------
         # Unit query (team/unit member text-to-SQL)

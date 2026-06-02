@@ -16,6 +16,7 @@ class IntentResult:
 
 SUPPORTED_INTENTS = {
     "app_help",
+    "chat_help",
     "cancel",
     "customer_info",
     "customers_by_city",
@@ -69,6 +70,13 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
 
     if not msg:
         return IntentResult(intent="unknown", confidence=0.0, raw_text=msg)
+
+    # chat help — what can I do / commands list
+    if lowered in ("help", "commands", "what can you do", "what can i do") or any(t in lowered for t in (
+        "what can you do", "what can i ask", "what can i say", "how do i use",
+        "show me what you can do", "list of commands", "what do you do",
+    )):
+        return IntentResult(intent="chat_help", confidence=1.0, raw_text=msg)
 
     # app installation help
     if lowered in ("app", "install app", "install", "the app", "app help", "help app") or any(t in lowered for t in (
