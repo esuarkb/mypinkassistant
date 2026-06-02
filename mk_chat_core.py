@@ -2437,7 +2437,7 @@ _UNIT_SCHEMA = {
         "promotion_end_date (when the Great Start window closes), total_production, rsks_bundles, rsks_production_left, "
         "production_month_key, synced_at. "
         "Join to unit_members via consultant_number. "
-        "IMPORTANT: always filter WHERE promotion_end_date >= date('now') to exclude consultants whose window has already closed, "
+        "IMPORTANT: always filter WHERE promotion_end_date >= CURRENT_DATE to exclude consultants whose window has already closed, "
         "unless the user specifically asks about expired or past consultants. "
         "Always include promotion_end_date in the SELECT when querying this table so the window end date is visible. "
         "When the query is about who is close to or working toward a bundle, ORDER BY needed_next_bundle ASC (lowest need first)."
@@ -2460,7 +2460,7 @@ _UNIT_SCHEMA = {
     ),
 }
 
-_UNIT_SQL_SYSTEM = """You generate SQLite SELECT queries for a Mary Kay consultant's team data.
+_UNIT_SQL_SYSTEM = """You generate SQL SELECT queries for a Mary Kay consultant's team data. Use standard SQL compatible with both SQLite and PostgreSQL — use CURRENT_DATE (not date('now')) for today's date.
 
 {schema}
 
@@ -2617,6 +2617,9 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
             sql = _re.sub(r'(?i)\bFROM\b', f', {", ".join(_inject)} FROM', sql, count=1)
             print(f"[UnitQuery] Injected {_inject} into SELECT")
 
+    # Normalize SQLite date('now') to CURRENT_DATE for Postgres compatibility
+    sql = _re.sub(r"date\s*\(\s*'now'\s*\)", "CURRENT_DATE", sql, flags=_re.IGNORECASE)
+
     print(f"[UnitQuery] Executing: {sql[:400]}")
 
     try:
@@ -2655,7 +2658,7 @@ def _handle_unit_query(msg: str, consultant_id: int) -> "ChatReply":
                     rows = enriched
     except Exception as e:
         print(f"[UnitQuery] DB error: {e}")
-        return ChatReply("I ran into a problem executing that query. Try a simpler question, like 'who doesn't have MyShop set up'.")
+        return ChatReply("I wasn't able to pull that report right now. Try rephrasing, or ask something like 'who doesn't have MyShop set up' or 'who is close to a Great Start bundle'.")
 
     return ChatReply(_format_unit_results(rows, msg))
 
