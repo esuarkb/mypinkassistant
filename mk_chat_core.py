@@ -3823,6 +3823,34 @@ class MKChatEngine:
                     f'<button class="fdp-copy copy-link-btn" data-copy="{lb_url}">Copy Link</button>'
                 )
 
+        # -------------------------
+        # Customer edit requests — not supported, redirect to InTouch
+        # -------------------------
+        _EDIT_FIELD_RE = r"\b(address|phone|email|birthday|city|state|zip|postal)\b"
+        _edit_not_supported = (
+            not pending
+            and (
+                # "update/change/edit/modify [name] [field] ..."
+                (
+                    any(lowered.startswith(p) for p in ("update ", "change ", "edit ", "modify "))
+                    and re.search(_EDIT_FIELD_RE, lowered)
+                    and "order" not in lowered
+                    and "inventor" not in lowered
+                )
+                # "add [field] for/to [name]" — e.g. "add address for Jane"
+                or bool(re.match(
+                    r"^add\s+(an?\s+)?(address|phone|email|birthday|phone\s+number|email\s+address)\b",
+                    lowered,
+                ))
+            )
+        )
+        if _edit_not_supported:
+            return ChatReply(
+                "To update a customer's info you'll need to edit them directly in MyCustomers on InTouch — "
+                "the change will be applied in MyPinkAssistant on the next sync. "
+                "I can still add new customers and place orders for you."
+            )
+
         # PCP enrolled list (no LLM call)
         # -------------------------
         if not pending:
