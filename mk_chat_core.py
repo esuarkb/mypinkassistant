@@ -2509,6 +2509,8 @@ _UNIT_SCHEMA = {
         "recruiter_info (text containing the recruiter's name in format 'First Name: X, Last Name: Y, Email: ...' — "
         "to find members recruited by a specific person use: "
         "recruiter_info LIKE '%First Name: Jamila%' AND recruiter_info LIKE '%Last Name: Saqqa%'), "
+        "sync_status ('active' = currently on team in InTouch; 'removed' = no longer appears in InTouch, terminated). "
+        "ALWAYS filter WHERE sync_status = 'active' unless the user specifically asks about former or terminated consultants. "
         "synced_at"
     ),
     "unit_great_start": (

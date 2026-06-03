@@ -43,6 +43,12 @@ if "welcome_email_sent" not in cols:
 if "email_opted_out" not in cols:
     cur.execute("ALTER TABLE consultants ADD COLUMN email_opted_out INTEGER DEFAULT 0")
 
+# Add sync_status to unit_members if missing (tracks terminated/removed consultants)
+cur.execute("PRAGMA table_info(unit_members)")
+um_cols = {r[1] for r in cur.fetchall()}
+if "sync_status" not in um_cols:
+    cur.execute("ALTER TABLE unit_members ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'active'")
+
 # ---- password reset table ----
 cur.execute("""
 CREATE TABLE IF NOT EXISTS password_resets (

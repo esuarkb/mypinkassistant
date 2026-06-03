@@ -260,8 +260,8 @@ def _upsert_unit_members(cur, members: list[dict], ph: str) -> int:
            career_level_code, career_level_desc, activity_status,
            language, myshop_active, birthday, start_date,
            last_order_date, last_order_wholesale, last_order_retail,
-           unit_number, segments, recruiter_info, synced_at)
-        VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+           unit_number, segments, recruiter_info, sync_status, synced_at)
+        VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},'active',{ph})
         ON CONFLICT (consultant_id, intouch_contact_id) DO UPDATE SET
           consultant_number    = excluded.consultant_number,
           first_name           = excluded.first_name,
@@ -285,8 +285,10 @@ def _upsert_unit_members(cur, members: list[dict], ph: str) -> int:
           unit_number          = excluded.unit_number,
           segments             = excluded.segments,
           recruiter_info       = excluded.recruiter_info,
+          sync_status          = 'active',
           synced_at            = excluded.synced_at
     """
+    consultant_id = members[0]["consultant_id"]
     for m in members:
         cur.execute(sql, (
             m["consultant_id"], m["intouch_contact_id"], m["consultant_number"],
@@ -297,6 +299,21 @@ def _upsert_unit_members(cur, members: list[dict], ph: str) -> int:
             m["last_order_date"], m["last_order_wholesale"], m["last_order_retail"],
             m["unit_number"], m["segments"], m["recruiter_info"], m["synced_at"],
         ))
+
+    # Mark anyone not in this sync as removed — they're no longer on InTouch
+    current_numbers = [m["consultant_number"] for m in members if m["consultant_number"]]
+    if current_numbers:
+        placeholders = ",".join([ph] * len(current_numbers))
+        cur.execute(
+            f"UPDATE unit_members SET sync_status = 'removed' "
+            f"WHERE consultant_id = {ph} AND sync_status = 'active' "
+            f"AND consultant_number NOT IN ({placeholders})",
+            [consultant_id] + current_numbers,
+        )
+        removed = cur.rowcount
+        if removed:
+            print(f"[ReportSync] Marked {removed} consultant(s) as removed (no longer in InTouch)")
+
     return len(members)
 
 
