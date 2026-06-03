@@ -1,6 +1,6 @@
 {
   "name": "MyPinkAssistant",
-  "short_name": "MPA",
+  "short_name": "MyPinkAssistant",
   "start_url": "/app",
   "display": "standalone",
   "background_color": "#ffffff",

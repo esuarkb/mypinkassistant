@@ -1131,6 +1131,33 @@ def reset_password_post(
 
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+
+@app.get("/unsubscribe", response_class=HTMLResponse)
+def unsubscribe(email: str = Query(""), token: str = Query("")):
+    import hmac, hashlib
+    email = (email or "").strip().lower()
+    if not email or not token:
+        return HTMLResponse("Invalid unsubscribe link.", status_code=400)
+    secret = (os.environ.get("MK_SESSION_SECRET") or "").encode()
+    expected = hmac.new(secret, email.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, token):
+        return HTMLResponse("Invalid unsubscribe link.", status_code=400)
+    with tx() as (conn, cur):
+        cur.execute(
+            f"UPDATE consultants SET email_opted_out = 1 WHERE LOWER(email) = {PH}",
+            (email,),
+        )
+    return HTMLResponse("""
+        <html><head><title>Unsubscribed</title></head>
+        <body style="font-family:Georgia,serif;max-width:480px;margin:60px auto;text-align:center;color:#333">
+          <h2 style="color:#b5006b">You've been unsubscribed.</h2>
+          <p>You won't receive feature update emails from MyPinkAssistant.<br>
+          You'll still receive account and billing emails.</p>
+          <p><a href="https://mypinkassistant.com" style="color:#b5006b">Back to MyPinkAssistant</a></p>
+        </body></html>
+    """)
+
+
 @app.post("/onboard")
 @limiter.limit("10/minute")
 def onboard_post(

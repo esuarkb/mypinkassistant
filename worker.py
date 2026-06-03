@@ -652,19 +652,9 @@ def main():
                                 conn.commit()
                             finally:
                                 conn.close()
-                            # Inventory (skipped for accounts sharing InTouch creds)
-                            if not payload.get("skip_inventory"):
-                                date_range = payload.get("date_range", "days90")
-                                seed_only = bool(payload.get("seed_only", False))
-                                import_inventory_orders(
-                                    page,
-                                    consultant_id=cid,
-                                    username=username,
-                                    password=password,
-                                    date_range=date_range,
-                                    seed_only=seed_only,
-                                )
                             # Reports (team data, challenge tracking, registrations)
+                            # Runs before inventory — inventory visits applications.marykayintouch.com
+                            # via a different auth path which would contaminate the FOReports session
                             try:
                                 from playwright_automation.report_sync import run_report_sync as _run_reports
                                 from db import is_postgres as _isp
@@ -679,6 +669,18 @@ def main():
                                 print(f"[FullSync] Report sync: {_rs}")
                             except Exception as _re:
                                 print(f"[FullSync] Report sync failed (non-fatal): {_re}")
+                            # Inventory last (skipped for accounts sharing InTouch creds)
+                            if not payload.get("skip_inventory"):
+                                date_range = payload.get("date_range", "days90")
+                                seed_only = bool(payload.get("seed_only", False))
+                                import_inventory_orders(
+                                    page,
+                                    consultant_id=cid,
+                                    username=username,
+                                    password=password,
+                                    date_range=date_range,
+                                    seed_only=seed_only,
+                                )
                             mark_job_done(job_id, "Nightly sync complete.")
 
                         # -------------------------

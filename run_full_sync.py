@@ -76,7 +76,21 @@ with sync_playwright() as p:
         conn.close()
     print(f"Orders: {ord_summary}")
 
-    # Inventory
+    # Reports (before inventory — inventory contaminates the FOReports session)
+    print("\n--- Report Sync ---")
+    try:
+        conn = connect()
+        try:
+            cur = conn.cursor()
+            rs = run_report_sync(page, cur, cid, ph=PH)
+            conn.commit()
+        finally:
+            conn.close()
+        print(f"Reports: {rs}")
+    except Exception as e:
+        print(f"Report sync failed (non-fatal): {e}")
+
+    # Inventory last
     print("\n--- Inventory ---")
     try:
         import_inventory_orders(
@@ -90,20 +104,6 @@ with sync_playwright() as p:
         print("Inventory import complete.")
     except Exception as e:
         print(f"Inventory import failed (non-fatal): {e}")
-
-    # Reports
-    print("\n--- Report Sync ---")
-    try:
-        conn = connect()
-        try:
-            cur = conn.cursor()
-            rs = run_report_sync(page, cur, cid, ph=PH)
-            conn.commit()
-        finally:
-            conn.close()
-        print(f"Reports: {rs}")
-    except Exception as e:
-        print(f"Report sync failed (non-fatal): {e}")
 
     browser.close()
 

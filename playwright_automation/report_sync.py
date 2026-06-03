@@ -516,16 +516,9 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
                              if _owner_email.lower() in (m.get("recruiter_info") or "").lower())
         print(f"[ReportSync] Marked {personal_count} personal recruits (owner={_owner_email})")
 
-    # Step 2: navigate directly to a FOReports page so the browser handles the SSO
-    # redirect and sets fresh applications.marykayintouch.com auth cookies.
-    # The inventory import uses a different auth path on that domain which can break
-    # the FOReports session — this forces a clean re-auth before any API calls.
-    print("[ReportSync] Refreshing FOReports auth cookies via direct navigation...")
-    page.goto(
-        "https://applications.marykayintouch.com/FOReports/Report?id=default&noHeader=true",
-        wait_until="domcontentloaded",
-    )
-    page.wait_for_timeout(4000)
+    # Step 2: extract session cookies for FOReports calls
+    # Domain-filtered to only cookies valid for applications.marykayintouch.com,
+    # preventing host-specific cookies from other subdomains clobbering the right values
     cookies = _get_cookies_dict(page)
 
     # Step 3: great start (new-consultant-promotion-unit)
