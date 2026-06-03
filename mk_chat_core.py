@@ -2094,7 +2094,7 @@ def _parse_product_price_query_text(msg: str) -> str:
 
 def _looks_like_inventory_count(msg: str) -> bool:
     s = (msg or "").strip().lower()
-    if "how many" in s and " do i have" in s:
+    if "how many" in s and " do i have" in s and not any(w in s for w in ("order", "customer", "followup", "client", "people")):
         return True
     if s.endswith(" in inventory"):
         return True
@@ -4118,7 +4118,10 @@ class MKChatEngine:
                 if not rows:
                     # No city match — try as a product search (e.g. "timewise customers", "repair customers")
                     from crm_store import find_customers_by_product, format_customers_by_product
-                    _ptokens = [w for w in _city_part.lower().split() if len(w) > 1]
+                    _city_filler = {"who", "are", "my", "show", "list", "find", "get", "all",
+                                    "any", "have", "has", "which", "what", "the", "a", "i",
+                                    "is", "of", "new", "other", "please", "give", "me"}
+                    _ptokens = [w for w in _city_part.lower().split() if len(w) > 1 and w not in _city_filler]
                     if _ptokens:
                         with tx() as (conn, cur):
                             _prod_rows = find_customers_by_product(cur, consultant_id=consultant_id, terms=_ptokens)
@@ -4183,7 +4186,8 @@ class MKChatEngine:
 
             _prefix_filler = {"who", "are", "my", "show", "list", "which", "what", "any",
                               "the", "a", "all", "give", "me", "find", "get", "have", "do",
-                              "i", "is", "of", "new", "other", "please"}
+                              "i", "is", "of", "new", "other", "please",
+                              "how", "many", "much", "more", "most"}
 
             if _m2:
                 _product_term = _m2.group(1).strip()
@@ -4200,11 +4204,21 @@ class MKChatEngine:
             if _product_term:
                 from crm_store import find_customers_by_product, find_customers_by_category, format_customers_by_product
                 from db import tx
+                # Strip trailing time qualifiers so "repair the last 6 months" → "repair"
+                _product_term = _re2.sub(
+                    r'\s+(?:in\s+)?(?:the\s+)?(?:(?:last|past|this|next)\s+\d*\s*(?:day|week|month|year|quarter)s?'
+                    r'|(?:january|february|march|april|may|june|july|august|september|october|november|december)'
+                    r'|\d{4})$',
+                    '',
+                    _product_term,
+                    flags=_re2.IGNORECASE,
+                ).strip()
                 _filler = {"on", "the", "a", "an", "use", "using", "with", "for", "in", "of"}
                 terms = [w for w in _product_term.lower().split() if len(w) > 1 and w not in _filler]
 
                 # Skip for time-period queries ("this quarter", "last month", etc.) — let data_query handle those
                 _TIME_WORDS = {
+                    # Time periods
                     "this", "last", "next", "today", "yesterday",
                     "week", "weeks", "month", "months", "year", "years",
                     "quarter", "quarters",
@@ -4212,6 +4226,11 @@ class MKChatEngine:
                     "july", "august", "september", "october", "november", "december",
                     "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
                     "q1", "q2", "q3", "q4",
+                    # Quantity/frequency words (not product names)
+                    "more", "than", "once", "twice", "times", "over", "under",
+                    "least", "most", "many", "much", "few", "several",
+                    # Order source/channel words (not product names)
+                    "online", "myshop", "cds", "store", "person",
                 }
                 if terms and all(t in _TIME_WORDS or (len(t) == 4 and t.isdigit()) for t in terms):
                     _product_term = None
