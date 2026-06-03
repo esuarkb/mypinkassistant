@@ -20,6 +20,7 @@ SUPPORTED_INTENTS = {
     "cancel",
     "customer_info",
     "customers_by_city",
+    "data_query",
     "recent_orders",
     "customer_spend",
     "leaderboard",
@@ -143,6 +144,31 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     ):
         return IntentResult(intent="leaderboard", confidence=0.95, raw_text=msg)
 
+    # data_query — cross-customer/aggregate queries; must run before recent_orders
+    # so "who ordered in May" doesn't get stolen by the broad recent_orders keyword match
+    _data_query_triggers = (
+        "who ordered in",
+        "who ordered the",
+        "who ordered a ",
+        "who has ordered",
+        "how many orders",
+        "total orders",
+        "total revenue",
+        "total sales",
+        "how many customers",
+        "how much revenue",
+        "how much did i make",
+        "how much have i made",
+        "orders in ",
+        "orders last ",
+        "orders this ",
+    )
+    if any(t in lowered for t in _data_query_triggers):
+        return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
+    # "who ordered X" — cross-customer product query (always asking about multiple people)
+    if re.search(r'\bwho\s+ordered\b', lowered):
+        return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
+
     # recent orders
     if (
         ("order" in lowered or "orders" in lowered or "ordered" in lowered)
@@ -260,6 +286,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- cancel\n"
         "- customer_info\n"
         "- customers_by_city\n"
+        "- data_query\n"
         "- recent_orders\n"
         "- customer_spend\n"
         "- leaderboard\n"
@@ -269,6 +296,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- order_add\n"
         "- order_remove\n"
         "- product_lookup\n"
+        "- top_sellers\n"
         "- unit_query\n"
         "- unknown\n\n"
         "Return JSON like:\n"
@@ -278,8 +306,8 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- If unsure, return unknown.\n"
         "- If the user is asking about customer details, use customer_info.\n"
         "- If the user is asking for customers in or from a specific city or location, use customers_by_city.\n"
-        "- If the user is asking what someone ordered, use recent_orders.\n"
-        "- If the user is asking how much someone spent, use customer_spend.\n"
+        "- If the user is asking what someone (a specific named person) ordered, use recent_orders.\n"
+        "- If the user is asking how much a specific person spent, use customer_spend.\n"
         "- If the user is asking for top customers / PCP / who spent the most, use leaderboard.\n"
         "- If the user is asking who hasn't ordered recently or in a given timeframe, use lapsed_customers.\n"
         "- If the user is creating a customer, use new_customer.\n"
@@ -289,6 +317,10 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- If the user is asking for the price or cost of a Mary Kay product (with no customer or order context), use product_lookup.\n"
         "- If the user is asking what products they sell the most, their top sellers, or best selling items, use top_sellers.\n"
         "- If the user is asking about their team members, unit consultants, who has MyShop set up, Great Start bundles, Star Consultant progress, or any question about their downline, use unit_query.\n"
+        "- If the user is asking an aggregate or cross-customer question about orders or customers "
+        "(e.g., who ordered in a given month or year, how many orders in a timeframe, "
+        "total revenue or sales, who ordered a specific product, customers in a specific state, "
+        "how many customers they have), use data_query.\n"
     )
 
     user = f"Message: {msg}\nLast referenced customer: {last_ref_name or '(none)'}"

@@ -322,7 +322,7 @@ cur.execute("""
 CREATE TABLE IF NOT EXISTS unit_rise_radiate (
   id                      INTEGER PRIMARY KEY AUTOINCREMENT,
   consultant_id           INTEGER NOT NULL,
-  intouch_contact_id      INTEGER,
+  intouch_contact_id      TEXT,
   consultant_number       TEXT    NOT NULL,
   contest_goal            REAL,
   amount_needed           REAL,
@@ -349,7 +349,7 @@ cur.execute("""
 CREATE TABLE IF NOT EXISTS unit_registrations (
   id                          INTEGER PRIMARY KEY AUTOINCREMENT,
   consultant_id               INTEGER NOT NULL,
-  intouch_contact_id          INTEGER,
+  intouch_contact_id          TEXT,
   consultant_number           TEXT    NOT NULL,
   event_key                   INTEGER NOT NULL,
   event_name                  TEXT,
