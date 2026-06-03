@@ -569,15 +569,14 @@ def render_followup_cards(followups: list[dict], consultant_first: str) -> str:
     return "\n".join(parts)
 
 
-def render_birthday_search_cards(customers: list[dict], consultant_first: str, limit: int = 5, period_label: str = "") -> str:
+def render_birthday_search_cards(customers: list[dict], consultant_first: str, limit: int = 5, period_label: str = "", scope: str = "both") -> str:
     """
-    Render birthday search results as followup-card HTML so the existing circle
-    click handler and /followup/complete endpoint work without any JS changes.
-
-    customers: list of dicts from crm_store.get_customers_by_birthday_period()
+    Render birthday search results as followup-card HTML.
+    Accepts a mixed list of customers and unit members (is_consultant=True).
+    When scope="both", consultant cards show a muted "- consultant" label.
     """
     if not customers:
-        return "No customers with birthdays found for that period."
+        return "No birthdays found for that period."
 
     import html as _html
     from urllib.parse import quote
@@ -590,14 +589,15 @@ def render_birthday_search_cards(customers: list[dict], consultant_first: str, l
     remaining = len(pending) - len(show_pending)
 
     def _card(c, is_done=False):
-        first       = c["first_name"]
-        last        = c["last_name"]
-        phone       = c["phone"]
-        customer_id = c["customer_id"]
-        bday_day    = c["bday_day"]
+        first           = c["first_name"]
+        last            = c["last_name"]
+        phone           = c["phone"]
+        customer_id     = c["customer_id"]
+        bday_day        = c["bday_day"]
         bday_month_name = c["bday_month_name"]
-        days_until  = c["days_until"]
-        is_first    = c["is_first_contact"]
+        days_until      = c["days_until"]
+        is_first        = c["is_first_contact"]
+        is_cons         = c.get("is_consultant", False)
 
         clean_phone = "".join(ch for ch in phone if ch.isdigit() or ch == "+")
         sms_text    = _birthday_message(first, consultant_first, is_first)
@@ -613,8 +613,23 @@ def render_birthday_search_cards(customers: list[dict], consultant_first: str, l
         else:
             days_label = f"in {days_until} days"
 
+        name_html = f'{_html.escape(first)} {_html.escape(last)}'
+        if is_cons and scope == "both":
+            name_html += ' <span style="font-weight:400;color:#999;font-size:12px;">- consultant</span>'
+
         circle     = '✓' if is_done else '○'
         circle_cls = 'followup-circle done' if is_done else 'followup-circle'
+
+        if is_cons:
+            return (
+                f'<div class="followup-card" data-card-type="birthday" data-phone="{clean_phone}" data-msg="{msg_attr}" data-sms="{sms_uri}">'
+                f'<button class="{circle_cls}" data-card-type="birthday" aria-label="Send birthday text">{circle}</button>'
+                f'<div class="followup-info">'
+                f'<span class="followup-name">{name_html}</span>'
+                f'<span class="followup-meta">🎂 {bday_month_name} {bday_day} &bull; {days_label}</span>'
+                f'</div>'
+                f'</div>'
+            )
         return (
             f'<div class="followup-card" data-card-type="birthday" data-customer-id="{customer_id}" data-phone="{clean_phone}" data-msg="{msg_attr}" data-sms="{sms_uri}">'
             f'<button class="{circle_cls}" data-card-type="birthday" data-customer-id="{customer_id}" aria-label="Send birthday text">{circle}</button>'

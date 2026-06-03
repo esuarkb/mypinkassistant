@@ -302,6 +302,7 @@ chat.addEventListener("click", function(e) {
     var orderId = parseInt(btn.dataset.orderId, 10);
     var followupWindow = parseInt(btn.dataset.windowId, 10);
     var customerId = parseInt(btn.dataset.customerId, 10);
+    var canComplete = !isNaN(customerId);
     var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     if (isMobile) {
@@ -309,16 +310,18 @@ chat.addEventListener("click", function(e) {
         if (!btn.classList.contains("done")) {
             btn.classList.add("done");
             btn.textContent = "✓";
-            var mPayload = cardType === "birthday"
-                ? { card_type: "birthday", customer_id: customerId }
-                : cardType === "pcp"
-                ? { card_type: "pcp", customer_id: customerId, quarter: card.dataset.quarter || "" }
-                : { card_type: "order", order_id: orderId, followup_window: followupWindow };
-            fetch("/followup/complete", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(mPayload)
-            }).catch(function() {});
+            if (canComplete) {
+                var mPayload = cardType === "birthday"
+                    ? { card_type: "birthday", customer_id: customerId }
+                    : cardType === "pcp"
+                    ? { card_type: "pcp", customer_id: customerId, quarter: card.dataset.quarter || "" }
+                    : { card_type: "order", order_id: orderId, followup_window: followupWindow };
+                fetch("/followup/complete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(mPayload)
+                }).catch(function() {});
+            }
         }
         window.location.href = card.dataset.sms;
         return;
@@ -372,16 +375,18 @@ chat.addEventListener("click", function(e) {
     if (!btn.classList.contains("done")) {
         btn.classList.add("done");
         btn.textContent = "✓";
-        var payload = cardType === "birthday"
-            ? { card_type: "birthday", customer_id: customerId }
-            : cardType === "pcp"
-            ? { card_type: "pcp", customer_id: customerId, quarter: card.dataset.quarter || "" }
-            : { card_type: "order", order_id: orderId, followup_window: followupWindow };
-        fetch("/followup/complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        }).catch(function() {});
+        if (canComplete) {
+            var payload = cardType === "birthday"
+                ? { card_type: "birthday", customer_id: customerId }
+                : cardType === "pcp"
+                ? { card_type: "pcp", customer_id: customerId, quarter: card.dataset.quarter || "" }
+                : { card_type: "order", order_id: orderId, followup_window: followupWindow };
+            fetch("/followup/complete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            }).catch(function() {});
+        }
     }
 });
 

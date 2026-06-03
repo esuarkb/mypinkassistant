@@ -1655,6 +1655,119 @@ def get_customers_by_birthday_period(consultant_id: int, period: str, cur) -> li
     return results
 
 
+def get_unit_members_by_birthday_period(consultant_id: int, period: str, cur) -> list[dict]:
+    """
+    Return active unit members whose birthday falls within the requested period.
+    Same period values as get_customers_by_birthday_period.
+    Returns same dict shape with is_consultant=True; no contacted_this_year tracking.
+    """
+    import datetime, calendar as _cal
+
+    is_sqlite = "sqlite" in type(cur).__module__.lower()
+    PH = "?" if is_sqlite else "%s"
+
+    cur.execute(
+        f"SELECT id, first_name, last_name, phone, birthday FROM unit_members "
+        f"WHERE consultant_id = {PH} AND sync_status = 'active' "
+        f"AND birthday IS NOT NULL AND birthday <> '' "
+        f"AND phone IS NOT NULL AND phone <> ''",
+        (consultant_id,),
+    )
+    rows = cur.fetchall()
+
+    def _g(row, key, idx):
+        try:
+            return row[key] if isinstance(row, dict) else row[idx]
+        except Exception:
+            return None
+
+    try:
+        from zoneinfo import ZoneInfo as _ZI
+        today = datetime.datetime.now(_ZI("America/Chicago")).date()
+    except Exception:
+        today = datetime.date.today()
+
+    if period == "today":
+        def _in_window(d): return d == today
+    elif period == "tomorrow":
+        tomorrow = today + datetime.timedelta(days=1)
+        def _in_window(d): return d == tomorrow
+    elif period == "month":
+        month_start = today.replace(day=1)
+        last_day = _cal.monthrange(today.year, today.month)[1]
+        month_end = today.replace(day=last_day)
+        def _in_window(d): return month_start <= d <= month_end
+    elif period == "week":
+        window_end = today + datetime.timedelta(days=6)
+        def _in_window(d):
+            if window_end.month >= today.month:
+                return today <= d <= window_end
+            return today <= d or d <= window_end
+    elif period == "next_week":
+        window_start = today + datetime.timedelta(days=7)
+        window_end   = today + datetime.timedelta(days=13)
+        def _in_window(d): return window_start <= d <= window_end
+    elif period == "next_month":
+        nm = today.month % 12 + 1
+        def _in_window(d): return d.month == nm
+    elif period == "quarter":
+        q_month  = ((today.month - 1) // 3) * 3 + 1
+        q_months = {q_month, q_month + 1, q_month + 2}
+        def _in_window(d): return d.month in q_months
+    else:  # upcoming — next 30 days
+        window_end = today + datetime.timedelta(days=29)
+        def _in_window(d): return today <= d <= window_end
+
+    results = []
+    for row in rows:
+        raw_bday = _g(row, "birthday", 4) or ""
+        if not raw_bday or len(raw_bday) < 5:
+            continue
+        try:
+            parts = raw_bday.split("-")
+            if len(parts) == 3:
+                bday_month = int(parts[1])
+                bday_day   = int(parts[2])
+            elif len(parts) == 2:
+                bday_month = int(parts[0])
+                bday_day   = int(parts[1])
+            else:
+                continue
+        except Exception:
+            continue
+
+        try:
+            bday_this_year = datetime.date(today.year, bday_month, bday_day)
+        except ValueError:
+            continue
+
+        bday_next_year = datetime.date(today.year + 1, bday_month, bday_day)
+
+        if _in_window(bday_this_year):
+            ref_date = bday_this_year
+        elif period in ("week", "next_week", "upcoming", "next_month", "tomorrow") and _in_window(bday_next_year):
+            ref_date = bday_next_year
+        else:
+            continue
+
+        results.append({
+            "customer_id":         _g(row, "id", 0),
+            "first_name":          _g(row, "first_name", 1) or "",
+            "last_name":           _g(row, "last_name", 2) or "",
+            "phone":               _g(row, "phone", 3) or "",
+            "bday_month":          bday_month,
+            "bday_day":            bday_day,
+            "bday_month_name":     _cal.month_name[bday_month],
+            "days_until":          (ref_date - today).days,
+            "is_first_contact":    False,
+            "contacted_this_year": False,
+            "is_consultant":       True,
+        })
+
+    results.sort(key=lambda r: r["days_until"])
+    return results
+
+
 def get_top_sellers(cur, consultant_id: int, limit: int = 5, since=None) -> list:
     from db import is_postgres
     PH = "%s" if is_postgres() else "?"

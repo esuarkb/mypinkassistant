@@ -3676,24 +3676,44 @@ class MKChatEngine:
 
             if _bday_period:
                 from crm_store import get_customers_by_birthday_period as _gbp
+                from crm_store import get_unit_members_by_birthday_period as _gbp_unit
                 from followup_store import render_birthday_search_cards as _rbsc
                 from auth_core import get_consultant_full as _gcf2
                 from db import tx
                 _consultant_first = ((_gcf2(consultant_id) or {}).get("first_name") or "").strip()
+
+                # Scope: customers-only, consultants-only, or both (default)
+                if "consultant" in lowered or "team" in lowered:
+                    _bday_scope = "consultants"
+                elif "customer" in lowered:
+                    _bday_scope = "customers"
+                else:
+                    _bday_scope = "both"
+
                 with tx() as (conn, cur):
-                    _bday_customers = _gbp(consultant_id, _bday_period, cur)
+                    _bday_results = []
+                    if _bday_scope in ("customers", "both"):
+                        _bday_results += _gbp(consultant_id, _bday_period, cur)
+                    if _bday_scope in ("consultants", "both"):
+                        _bday_results += _gbp_unit(consultant_id, _bday_period, cur)
+                _bday_results.sort(key=lambda r: r["days_until"])
+
                 _period_labels = {
                     "today": "today", "tomorrow": "tomorrow",
                     "month": "this month", "week": "this week", "next_week": "next week",
                     "quarter": "this quarter", "upcoming": "the next 30 days", "next_month": "next month",
                 }
-                if not _bday_customers:
-                    return ChatReply(f"No customers with birthdays {_period_labels.get(_bday_period, _bday_period)}.")
                 _period_label = _period_labels.get(_bday_period, _bday_period)
-                _header = f"<strong>Birthdays {_period_label.title()}</strong>"
+
+                if not _bday_results:
+                    _empty_who = {"customers": "customers", "consultants": "consultants", "both": "customers or consultants"}[_bday_scope]
+                    return ChatReply(f"No {_empty_who} with birthdays {_period_label}.")
+
+                _scope_label = {"customers": "Customer ", "consultants": "Consultant ", "both": ""}[_bday_scope]
+                _header = f"<strong>{_scope_label}Birthdays {_period_label.title()}</strong>"
                 _show_all = lowered.startswith("show all birthdays")
                 _limit = None if _show_all else 5
-                return ChatReply(_header + "\n" + _rbsc(_bday_customers, _consultant_first, limit=_limit, period_label=_period_label))
+                return ChatReply(_header + "\n" + _rbsc(_bday_results, _consultant_first, limit=_limit, period_label=_period_label, scope=_bday_scope))
 
         # -------------------------
         # Guard: "who are my retinol customers" type messages get misclassified as

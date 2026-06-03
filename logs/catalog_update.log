@@ -1973,3 +1973,32 @@ Logged in.
 
 Sending change summary email...
   Email sent to briankrause@gmail.com
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Expand All not ready, retrying (1/3)...
+  Expand All not ready, retrying (2/3)...
+  Warning: could not click Expand All after 3 attempts: Locator.wait_for: Timeout 15000ms exceeded.
+Call log:
+  - waiting for get_by_text("Expand All") to be visible
+
+  Extracting products...
+  Found 0 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 566 products.
+
+[EN] No products found — skipping.
+
+[ES] Done.
+  Catalog before : 506 SKUs
+  Scraped        : 566 products
+  Total now      : 506 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
