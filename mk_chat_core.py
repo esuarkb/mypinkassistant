@@ -4569,14 +4569,25 @@ class MKChatEngine:
                                 # Different people matched the query — show as neutral picker
                                 state["pending"] = {"kind": "pick_customer", "candidates": [c], "action": "info"}
                                 save_session_state(state, session_id=sid)
+                                _cons_rows = []
+                                for _i, _um in enumerate(_unit_matches[:3], start=2):
+                                    _su = _html.escape(f"{_um.get('first_name','')} {_um.get('last_name','')}".strip())
+                                    _ul = _html.escape(_um.get("career_level_desc") or "")
+                                    _us = _html.escape(_um.get("activity_status") or "")
+                                    _up = [p for p in (_ul, _us) if p]
+                                    _cd = f' <span class="select-detail">• {" • ".join(_up)}</span>' if _up else ""
+                                    _cons_rows.append(
+                                        f'<div class="select-row" data-send="team member {_su}"><span class="select-num">{_i}</span>'
+                                        f'<span class="select-text">{_su} — Consultant{_cd}</span></div>'
+                                    )
+                                _total = 1 + len(_cons_rows)
                                 return ChatReply(
-                                    f'<div class="select-intro">I found multiple matches — reply with 1 or 2:</div>'
+                                    f'<div class="select-intro">I found multiple matches — reply with 1 or {_total}:</div>'
                                     f'<div class="select-list">'
                                     f'<div class="select-row" data-send="1"><span class="select-num">1</span>'
                                     f'<span class="select-text">{safe_c} — Customer{cust_detail}</span></div>'
-                                    f'<div class="select-row" data-send="team member {safe_u}"><span class="select-num">2</span>'
-                                    f'<span class="select-text">{safe_u} — Consultant{cons_detail}</span></div>'
-                                    f'</div>'
+                                    + "".join(_cons_rows)
+                                    + f'</div>'
                                 )
                         state["last_ref_customer_id"] = None
                         state["last_ref_customer_name"] = None
@@ -4594,20 +4605,21 @@ class MKChatEngine:
                         if _unit_matches else ""
                     )
                     if _unit_matches:
-                        um = _unit_matches[0]
-                        safe_u = _html.escape(f"{um.get('first_name','')} {um.get('last_name','')}".strip())
-                        um_level = _html.escape(um.get("career_level_desc") or "")
-                        um_status = _html.escape(um.get("activity_status") or "")
-                        um_parts = [p for p in (um_level, um_status) if p]
-                        cons_detail = f' <span class="select-detail">• {" • ".join(um_parts)}</span>' if um_parts else ""
-                        cons_row = (
-                            f'<div class="select-row" data-send="team member {safe_u}">'
-                            f'<span class="select-num">{len(top) + 1}</span>'
-                            f'<span class="select-text">{safe_u} — Consultant{cons_detail}</span></div>'
-                        )
-                        # Append consultant row at the end of the select-list (before last </div>)
-                        last = picker_html.rfind("</div>")
-                        picker_html = picker_html[:last] + cons_row + picker_html[last:]
+                        _extra_rows = []
+                        for _i, _um in enumerate(_unit_matches[:3], start=len(top) + 1):
+                            _su = _html.escape(f"{_um.get('first_name','')} {_um.get('last_name','')}".strip())
+                            _ul = _html.escape(_um.get("career_level_desc") or "")
+                            _us = _html.escape(_um.get("activity_status") or "")
+                            _up = [p for p in (_ul, _us) if p]
+                            _cd = f' <span class="select-detail">• {" • ".join(_up)}</span>' if _up else ""
+                            _extra_rows.append(
+                                f'<div class="select-row" data-send="team member {_su}">'
+                                f'<span class="select-num">{_i}</span>'
+                                f'<span class="select-text">{_su} — Consultant{_cd}</span></div>'
+                            )
+                        # Append all consultant rows before the closing </div>
+                        _insert = picker_html.rfind("</div>")
+                        picker_html = picker_html[:_insert] + "".join(_extra_rows) + picker_html[_insert:]
                     return ChatReply(picker_html)
 
         # -------------------------
