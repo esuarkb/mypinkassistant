@@ -4115,6 +4115,15 @@ class MKChatEngine:
                 # Pure city
                 with tx() as (conn, cur):
                     rows = get_customers_by_city(cur, consultant_id=consultant_id, city=_city_part)
+                if not rows:
+                    # No city match — try as a product search (e.g. "timewise customers", "repair customers")
+                    from crm_store import find_customers_by_product, format_customers_by_product
+                    _ptokens = [w for w in _city_part.lower().split() if len(w) > 1]
+                    if _ptokens:
+                        with tx() as (conn, cur):
+                            _prod_rows = find_customers_by_product(cur, consultant_id=consultant_id, terms=_ptokens)
+                        if _prod_rows:
+                            return ChatReply(format_customers_by_product(_prod_rows, _city_part))
                 return ChatReply(format_city_customers(rows, _city_part, show_all=_show_all_city))
 
         # -------------------------
@@ -4161,7 +4170,7 @@ class MKChatEngine:
         # -------------------------
         # Customer search by product
         # -------------------------
-        if not pending and intent_result.intent != "data_query" and not _looks_like_full_customer_entry(msg) and not re.match(r'^\s*tags?\s*:', msg, re.IGNORECASE) and not re.match(r'^\s*(new|add|create)\s+customer\b', msg, re.IGNORECASE):
+        if not pending and not _looks_like_full_customer_entry(msg) and not re.match(r'^\s*tags?\s*:', msg, re.IGNORECASE) and not re.match(r'^\s*(new|add|create)\s+customer\b', msg, re.IGNORECASE):
             import re as _re2
             _product_term = None
 
@@ -4194,18 +4203,32 @@ class MKChatEngine:
                 _filler = {"on", "the", "a", "an", "use", "using", "with", "for", "in", "of"}
                 terms = [w for w in _product_term.lower().split() if len(w) > 1 and w not in _filler]
 
-                # Category aliases: map common words to OR-matched product name fragments
-                _FRAGRANCE_TERMS = ["eau de parfum", "eau de toilette", "cologne spray", "body mist"]
-                _CATEGORY_MAP = {
-                    "perfume":   _FRAGRANCE_TERMS,
-                    "fragrance": _FRAGRANCE_TERMS,
-                    "cologne":   _FRAGRANCE_TERMS,
-                    "parfum":    _FRAGRANCE_TERMS,
+                # Skip for time-period queries ("this quarter", "last month", etc.) — let data_query handle those
+                _TIME_WORDS = {
+                    "this", "last", "next", "today", "yesterday",
+                    "week", "weeks", "month", "months", "year", "years",
+                    "quarter", "quarters",
+                    "january", "february", "march", "april", "may", "june",
+                    "july", "august", "september", "october", "november", "december",
+                    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+                    "q1", "q2", "q3", "q4",
                 }
-                _category_key = _product_term.lower().strip()
-                _or_terms = _CATEGORY_MAP.get(_category_key) or _CATEGORY_MAP.get(_category_key.rstrip("s"))
+                if terms and all(t in _TIME_WORDS or (len(t) == 4 and t.isdigit()) for t in terms):
+                    _product_term = None
 
-                if terms:
+                if _product_term:
+                # Category aliases: map common words to OR-matched product name fragments
+                    _FRAGRANCE_TERMS = ["eau de parfum", "eau de toilette", "cologne spray", "body mist"]
+                    _CATEGORY_MAP = {
+                        "perfume":   _FRAGRANCE_TERMS,
+                        "fragrance": _FRAGRANCE_TERMS,
+                        "cologne":   _FRAGRANCE_TERMS,
+                        "parfum":    _FRAGRANCE_TERMS,
+                    }
+                    _category_key = _product_term.lower().strip()
+                    _or_terms = _CATEGORY_MAP.get(_category_key) or _CATEGORY_MAP.get(_category_key.rstrip("s"))
+
+                if _product_term and terms:
                     with tx() as (conn, cur):
                         if _or_terms:
                             results = find_customers_by_category(cur, consultant_id=consultant_id, or_terms=_or_terms)

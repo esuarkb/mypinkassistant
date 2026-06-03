@@ -237,7 +237,8 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # Pattern 2: "[city] customers" reverse order — require plural, exclude state-adjectives
     # Allow multi-word cities starting with "new" (New York, New Orleans, etc.)
     _CITY_ADJECTIVES = {"active", "inactive", "lapsed", "top", "best", "recent", "other",
-                        "show", "find", "list", "get", "all", "any", "some"}
+                        "show", "find", "list", "get", "all", "any", "some",
+                        "who", "are", "have", "has", "which"}
     _city_m2 = re.match(r"^(?:my\s+)?([A-Za-z][A-Za-z\s.'-]+?)\s+customers\b", lowered)
     if _city_m2:
         _city = _city_m2.group(1).strip()
