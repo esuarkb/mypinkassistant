@@ -4173,20 +4173,67 @@ class MKChatEngine:
                             return ChatReply(cards)
                         return ChatReply(ui["no_customer_found_yet"].format(name=guess))
 
+                    # Check if name also matches a unit_member — show disambiguation if so
+                    _unit_matches = []
+                    from crm_store import find_unit_member_by_name as _find_um
+                    with tx() as (_uc, _ucur):
+                        _unit_matches = _find_um(_ucur, consultant_id, guess)
+
                     if len(matches) == 1:
                         c = matches[0]
+                        if _unit_matches:
+                            # Same name is both a customer and a consultant — let director choose
+                            um = _unit_matches[0]
+                            safe_c = _html.escape(f"{c.get('first_name','')} {c.get('last_name','')}".strip())
+                            safe_u = _html.escape(f"{um.get('first_name','')} {um.get('last_name','')}".strip())
+                            phone_hint = _html.escape(format_phone_display(c.get("phone") or ""))
+                            cust_detail = f' <span class="select-detail">• {phone_hint}</span>' if phone_hint else ""
+                            um_level = _html.escape(um.get("career_level_desc") or "")
+                            um_status = _html.escape(um.get("activity_status") or "")
+                            um_parts = [p for p in (um_level, um_status) if p]
+                            cons_detail = f' <span class="select-detail">• {" • ".join(um_parts)}</span>' if um_parts else ""
+                            state["pending"] = {"kind": "pick_customer", "candidates": [c], "action": "info"}
+                            save_session_state(state, session_id=sid)
+                            return ChatReply(
+                                f'<div class="select-intro">I found {safe_c} as both a customer and a consultant — which did you mean?</div>'
+                                f'<div class="select-list">'
+                                f'<div class="select-row" data-send="1"><span class="select-num">1</span>'
+                                f'<span class="select-text">{safe_c} — Customer{cust_detail}</span></div>'
+                                f'<div class="select-row" data-send="team member {safe_u}"><span class="select-num">2</span>'
+                                f'<span class="select-text">{safe_u} — Consultant{cons_detail}</span></div>'
+                                f'</div>'
+                            )
                         state["last_ref_customer_id"] = None
                         state["last_ref_customer_name"] = None
                         state["last_customer"] = None
                         save_session_state(state, session_id=sid)
                         return ChatReply(format_customer_card(c, last_order=last_order, pcp_enrolled=pcp_enrolled))
 
-                    # Multiple matches → trigger picker
+                    # Multiple customer matches — append consultant row if name also matches a unit_member
                     top = matches[:3]
                     state["pending"] = {"kind": "pick_customer", "candidates": top, "action": "info"}
                     save_session_state(state, session_id=sid)
-
-                    return ChatReply(render_customer_picker(top))
+                    picker_html = render_customer_picker(
+                        top,
+                        intro=f"I found multiple matches — reply with 1-{len(top) + 1}:"
+                        if _unit_matches else ""
+                    )
+                    if _unit_matches:
+                        um = _unit_matches[0]
+                        safe_u = _html.escape(f"{um.get('first_name','')} {um.get('last_name','')}".strip())
+                        um_level = _html.escape(um.get("career_level_desc") or "")
+                        um_status = _html.escape(um.get("activity_status") or "")
+                        um_parts = [p for p in (um_level, um_status) if p]
+                        cons_detail = f' <span class="select-detail">• {" • ".join(um_parts)}</span>' if um_parts else ""
+                        cons_row = (
+                            f'<div class="select-row" data-send="team member {safe_u}">'
+                            f'<span class="select-num">{len(top) + 1}</span>'
+                            f'<span class="select-text">{safe_u} — Consultant{cons_detail}</span></div>'
+                        )
+                        # Append consultant row at the end of the select-list (before last </div>)
+                        last = picker_html.rfind("</div>")
+                        picker_html = picker_html[:last] + cons_row + picker_html[last:]
+                    return ChatReply(picker_html)
 
         # -------------------------
         # Pending flows
@@ -4199,6 +4246,13 @@ class MKChatEngine:
             if kind == "pick_customer":
                 # user should reply 1/2/3
                 choice = (msg or "").strip()
+
+                # "team member …" means the user tapped the consultant option in a
+                # customer/consultant disambiguation picker — clear pending and re-route
+                if choice.lower().startswith("team member "):
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
 
                 if not choice.isdigit():
                     return ChatReply(ui["multiple_matches"])

@@ -64,30 +64,31 @@ def build_html(first_name: str, email: str) -> str:
 
       <div style="border-top:1px solid #e6e6e6;padding-top:16px;margin-top:10px;"></div>
 
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📇 Consultant Lookup</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Your entire team is at your fingertips. Look up any consultant by name and instantly see their contact info, career level, activity status, MyShop status, and more — all in one place.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Examples:</strong><br>
+        Show me Suzie Sunshine<br>
+        What is Sarah's phone number?<br>
+        Who is on Heidi's team?
+      </p>
+
       <h3 style="margin:16px 0 8px 0;font-size:16px;">👥 Team Activity</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        Get instant answers about who's active, inactive, or going quiet.
+        Get instant answers about who's active, who's going quiet, and where everyone stands.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Examples:</strong><br>
         Who on my team is inactive?<br>
         Who hasn't placed an order in the last 6 months?<br>
-        Who is on Heidi's team?
-      </p>
-
-      <h3 style="margin:16px 0 8px 0;font-size:16px;">✨ Rise + Radiate Challenge</h3>
-      <p style="margin:0 0 10px 0;color:#111;">
-        Track who's earned it and who's close — no more digging through InTouch reports.
-      </p>
-      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
-        <strong>Examples:</strong><br>
-        Who has earned Rise and Radiate?<br>
-        Who is close to qualifying this month?
+        Show me all T6 consultants
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🎀 Great Start Bundles</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        Know exactly where each new consultant stands on their Great Start window.
+        Know exactly where each new consultant stands on their Great Start window — right at your fingertips.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Examples:</strong><br>
@@ -97,7 +98,7 @@ def build_html(first_name: str, email: str) -> str:
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">⭐ Star Consultant</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        See who's on track, who's close, and who's already hit a level this quarter.
+        See who's on track, who's close, and who's already hit a level this quarter — all accessible in seconds.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Examples:</strong><br>
@@ -107,7 +108,7 @@ def build_html(first_name: str, email: str) -> str:
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🎟 Seminar Registration</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        As registration opens, you can check who's in and who still needs a nudge.
+        As registration opens, see who's in and who still needs a nudge.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Examples:</strong><br>
@@ -115,8 +116,22 @@ def build_html(first_name: str, email: str) -> str:
         Who hasn't registered yet?
       </p>
 
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">✨ Rise + Radiate Challenge</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Track your team's progress on the challenge — who's earned it, who's close, and who could use some encouragement this month.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Examples:</strong><br>
+        Who has earned Rise and Radiate?<br>
+        Who is close to qualifying this month?
+      </p>
+
       <p style="margin:0 0 16px 0;color:#111;">
         Your team data syncs every night automatically — so the answers are always up to date when you ask.
+      </p>
+
+      <p style="margin:0 0 16px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;font-style:italic;color:#444;">
+        💡 <strong>And this is just the beginning.</strong> We have a lot more on the way — more reports, more insights, and more ways to coach and grow your team, all from the same simple chat. Stay tuned!
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📣 Follow Us for Tips & Updates</h3>

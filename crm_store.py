@@ -738,7 +738,7 @@ def get_recent_orders_for_customer(cur, customer_id: int, limit: int = 3):
             SELECT id, order_date, total, source
             FROM orders
             WHERE customer_id = ?
-            ORDER BY id DESC
+            ORDER BY order_date DESC, id DESC
             LIMIT ?
         """, (customer_id, limit))
     else:
@@ -746,7 +746,7 @@ def get_recent_orders_for_customer(cur, customer_id: int, limit: int = 3):
             SELECT id, order_date, total, source
             FROM orders
             WHERE customer_id = %s
-            ORDER BY id DESC
+            ORDER BY order_date DESC, id DESC
             LIMIT %s
         """, (customer_id, limit))
 
