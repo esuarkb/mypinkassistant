@@ -68,7 +68,12 @@ def login_intouch(page: Page, username: str, password: str) -> None:
     if MYCUSTOMERS_URL not in page.url:
         page.goto(MYCUSTOMERS_URL, wait_until="domcontentloaded")
 
-    _wait_for_mycustomers_ready(page, timeout_ms=45000)
+    try:
+        _wait_for_mycustomers_ready(page, timeout_ms=15000)
+    except PlaywrightTimeoutError:
+        # A popup may be blocking the page — reload and try once more
+        page.reload(wait_until="domcontentloaded")
+        _wait_for_mycustomers_ready(page, timeout_ms=45000)
     
     # Basic sanity check: we should no longer be on the login page
     #if "login" in page.url.lower():

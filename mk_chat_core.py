@@ -2065,6 +2065,8 @@ _PRODUCT_QUERY_SYNONYMS: dict = {
     "lip colour": "lipstick",
     "lip colors": "lipstick",
     "lip colours": "lipstick",
+    "deluxe mini": "Unlimited Lip Gloss Set Deluxe Mini",
+    "deluxe minis": "Unlimited Lip Gloss Set Deluxe Mini",
 }
 
 def _looks_like_product_price_query(msg: str) -> bool:
@@ -4162,6 +4164,8 @@ class MKChatEngine:
         # -------------------------
         if not pending and intent_result.intent == "product_lookup":
             product_text = _parse_product_price_query_text(msg)
+            if re.search(r',', product_text):
+                return ChatReply("I can look up one product at a time — try searching for each one separately.")
             matches = best_matches(catalog, product_text, limit=3, min_score=50)
             if not matches:
                 return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
@@ -5300,14 +5304,28 @@ class MKChatEngine:
                             + self._format_order_confirm(order, ui) + "\n\n"
                             + ui["order_adjust_hint"]
                         )
-                    if re.search(r'\band\b|,', target, re.IGNORECASE):
+                    # Strip leading count: "2 apple and almond lotion" → count=2, target="apple and almond lotion"
+                    _remove_count = 1
+                    _count_m = re.match(r'^(\d+)\s+(.+)$', target)
+                    if _count_m:
+                        _remove_count = max(1, int(_count_m.group(1)))
+                        target = _count_m.group(2).strip()
+                    # Only reject "and"/"," if the name itself doesn't match an order line
+                    # (product names like "apple and almond" contain "and" legitimately)
+                    _has_conjunction = bool(re.search(r'\band\b|,', target, re.IGNORECASE))
+                    if _has_conjunction and not self._remove_line_peek(order, target):
                         return ChatReply(
                             "I can only remove one item at a time. Which one would you like to remove first?\n\n"
                             + self._format_order_confirm(order, ui) + "\n\n"
                             + ui["order_adjust_hint"]
                         )
-                    removed = self._remove_line(order, target)
-                    if not removed:
+                    _removed_count = 0
+                    for _ in range(_remove_count):
+                        if self._remove_line(order, target):
+                            _removed_count += 1
+                        else:
+                            break
+                    if not _removed_count:
                         return ChatReply(
                             ui["remove_not_found"] + "\n\n"
                             + self._format_order_confirm(order, ui) + "\n\n"
@@ -6124,6 +6142,32 @@ class MKChatEngine:
             return {"sku": "", "product_name": "No close matches found", "price": None, "score": 0}, [], text
         return matches[0], matches, text
 
+    @staticmethod
+    def _name_matches(target: str, name: str) -> bool:
+        """
+        Flexible name match for remove: normalize & → and, then check
+        substring first, then all-words fallback for cases where the
+        catalog name has extra words (e.g. 'Scented', 'Mary Kay').
+        """
+        t = target.lower().replace(' & ', ' and ').replace('&', 'and').strip()
+        n = (name or "").lower().replace(' & ', ' and ').replace('&', 'and')
+        if t in n:
+            return True
+        # All-words fallback: every word in the target appears in the name
+        words = [w for w in t.split() if len(w) > 2]
+        return bool(words) and all(w in n for w in words)
+
+    def _remove_line_peek(self, order: dict, target: str) -> bool:
+        """Return True if target matches any line — without removing it."""
+        if not (target or "").strip():
+            return False
+        for line in order["lines"]:
+            chosen = line.get("chosen")
+            name = chosen.get("product_name") if chosen else (line.get("text") or "")
+            if self._name_matches(target, name):
+                return True
+        return False
+
     def _remove_line(self, order: dict, target: str) -> bool:
         t = (target or "").strip()
         if not t:
@@ -6136,11 +6180,10 @@ class MKChatEngine:
                 return True
             return False
 
-        low = t.lower()
         for i, line in enumerate(order["lines"]):
             chosen = line.get("chosen")
             name = chosen.get("product_name") if chosen else (line.get("text") or "")
-            if low in (name or "").lower():
+            if self._name_matches(t, name):
                 order["lines"].pop(i)
                 return True
 
