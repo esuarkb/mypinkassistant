@@ -5607,25 +5607,12 @@ class MKChatEngine:
                 cust_first = hinted_parts[0].strip() if len(hinted_parts) >= 1 else ""
                 cust_last = hinted_parts[1].strip() if len(hinted_parts) >= 2 else ""
 
-            has_explicit_name = bool(cust_first or cust_last or explicit_customer_hint)
+            _PRONOUNS = {"she", "he", "they", "her", "him", "them"}
 
-            bad_pronoun_parse = (
-                cust_first.lower() in ("she", "he", "they", "her", "him", "them")
-                or cust_last.lower() == "ordered"
-            )
-
-            # ONLY fallback if NO real name was provided,
-            # and this is NOT an explicit "new order for ..." style message.
-            if (not has_explicit_name or bad_pronoun_parse) and last_customer and not starts_explicit_order:
-                cust_first = (last_customer.get("First Name") or "").strip()
-                cust_last = (last_customer.get("Last Name") or "").strip()
+            if cust_first.lower() in _PRONOUNS or cust_last.lower() in _PRONOUNS or cust_last.lower() == "ordered":
+                return ChatReply(ui["need_customer_for_order"])
 
             customer_name_for_lookup = " ".join([p for p in [cust_first, cust_last] if p]).strip()
-
-            # If the user explicitly started a new order for someone,
-            # do not fall back to the previous customer.
-            if starts_explicit_order and not customer_name_for_lookup:
-                return ChatReply(ui["need_customer_for_order"])
 
             if not customer_name_for_lookup:
                 return ChatReply(ui["need_customer_for_order"])
