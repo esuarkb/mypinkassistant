@@ -162,6 +162,20 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "orders in ",
         "orders last ",
         "orders this ",
+        # customers who have never placed any order
+        "never ordered",
+        "never actually ordered",
+        "never purchased",
+        "never bought",
+        "never placed an order",
+        # customers who have placed exactly one order
+        "only ordered once",
+        "ordered only once",
+        "ordered just once",
+        "ordered exactly once",
+        "only bought once",
+        "only purchased once",
+        "only placed one order",
     )
     if any(t in lowered for t in _data_query_triggers):
         return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
