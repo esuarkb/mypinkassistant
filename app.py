@@ -2218,7 +2218,7 @@ def admin_diagnostics(request: Request):
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Admin • Diagnostics</title>
   <style>
-    body{{font-family:system-ui,-apple-system,Segoe UI,Roboto;background:#fff;color:#111;margin:0}}
+    body{{font-family:system-ui,-apple-system,Segoe UI,Roboto;background:#fff;color:#111;margin:0;-webkit-text-size-adjust:100%;text-size-adjust:100%}}
     .wrap{{max-width:1100px;margin:0 auto;padding:22px 18px}}
     h1{{margin:0 0 6px;font-size:20px}}
     .muted{{color:#666;font-size:13px}}

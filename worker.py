@@ -363,10 +363,13 @@ def main():
                 except Exception as e:
                     err = str(e)
 
-                    friendly = (
-                        "InTouch login failed. Please check your InTouch username/password in Settings "
-                        "and try again."
-                    )
+                    if "invalid username or password" in err.lower() or "missing intouch credentials" in err.lower():
+                        friendly = (
+                            "InTouch login failed. Please check your InTouch username/password in Settings "
+                            "and try again."
+                        )
+                    else:
+                        friendly = "Something unexpected happened. Please try again."
 
                     _record_login_failure(cid)
 
