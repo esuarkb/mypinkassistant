@@ -101,7 +101,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     _unit_triggers = (
         "my team", "my unit", "my consultants", "my downline",
         "team member", "unit member",
-        "great start", "star consultant", "star tracking",
+        "great start", "star consultant", "star tracking", "star status",
         "myshop", "my shop",
         "who is inactive", "who are inactive", "inactive consultant",
         "who is active", "who are active", "active consultant",
@@ -116,9 +116,18 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "rise and radiate", "rise + radiate", "rise radiate", "radiate",
         "seminar", "registered for", "registration", "who is registered",
         "who has registered", "who signed up",
+        "hasn't hit star", "haven't hit star", "hasn't made star", "haven't made star",
     )
     if any(t in lowered for t in _unit_triggers):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
+
+    # Star Consultant level names (Ruby, Diamond, Emerald, Pearl) in a unit context
+    _STAR_LEVELS = ("ruby", "diamond", "emerald", "pearl")
+    if any(level in lowered for level in _STAR_LEVELS):
+        _star_context = ("consultant", "star", "who", "show", "made", "hit",
+                         "at", "is", "are", "earned", "reached", "level", "status", "close")
+        if any(t in lowered for t in _star_context):
+            return IntentResult(intent="unit_query", confidence=0.9, raw_text=msg)
 
     # lapsed customers
     _lapsed_triggers = (
@@ -342,7 +351,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- If the user is removing an item from an existing order, use order_remove.\n"
         "- If the user is asking for the price or cost of a Mary Kay product (with no customer or order context), use product_lookup.\n"
         "- If the user is asking what products they sell the most, their top sellers, or best selling items, use top_sellers.\n"
-        "- If the user is asking about their team members, unit consultants, who has MyShop set up, Great Start bundles, Star Consultant progress, or any question about their downline, use unit_query.\n"
+        "- If the user is asking about their team members, unit consultants, who has MyShop set up, Great Start bundles, Star Consultant progress, star levels (Ruby, Diamond, Emerald, Pearl), or any question about their downline, use unit_query.\n"
         "- If the user is asking an aggregate or cross-customer question about orders or customers "
         "(e.g., who ordered in a given month or year, how many orders in a timeframe, "
         "total revenue or sales, who ordered a specific product, customers in a specific state, "

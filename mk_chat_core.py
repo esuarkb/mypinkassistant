@@ -2799,6 +2799,18 @@ def _handle_unit_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
         print(f"[UnitQuery] DB error: {e}")
         return ChatReply(ui["unit_query_error"])
 
+    # Deduplicate by consultant_number (or first+last name as fallback) — JOIN queries
+    # can produce duplicate rows when the LLM generates a non-DISTINCT query
+    _seen = set()
+    _deduped = []
+    for _r in rows:
+        _d = dict(_r) if hasattr(_r, "keys") else _r
+        _key = _d.get("consultant_number") or f"{_d.get('first_name','')}|{_d.get('last_name','')}"
+        if _key not in _seen:
+            _seen.add(_key)
+            _deduped.append(_d)
+    rows = _deduped
+
     return ChatReply(_format_unit_results(rows, msg, ui=ui))
 
 
@@ -2876,10 +2888,14 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
                        "rsks_bundles", "rsks_production_left", "total_production",
                        "promotion_end_date", "amount_needed", "challenge_count",
                        "registered_count", "wait_list_count", "event_name"}
+    # Always suppress internal FOReports fields — never meaningful to consultants
+    _ALWAYS_SUPPRESS = {"rsks_bundles", "rsks_production_left", "total_production"}
+    value_cols = [c for c in value_cols if c not in _ALWAYS_SUPPRESS]
+
     if any(c in _FINANCIAL_COLS for c in value_cols):
         value_cols = [c for c in value_cols if c not in {"career_level_desc", "activity_status", "consultant_number"}]
 
-    if has_name and len(value_cols) <= 5:
+    if has_name and len(value_cols) <= 8:
         # Drop columns where every row has the same value — but keep identity columns
         # (consultant_number, career_level_desc, activity_status) always visible per row
         _ALWAYS_SHOW = {"consultant_number", "career_level_desc", "activity_status"}
