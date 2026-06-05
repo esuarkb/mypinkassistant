@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Help — MyPinkAssistant</title>
+    <meta name="format-detection" content="telephone=no">
+    <style>
+        :root {
+            --bg: #ffffff;
+            --text: #111111;
+            --muted: #5a5a5a;
+            --card: #f7f7f8;
+            --border: #e6e6e6;
+            --pink: #e91e63;
+            --pinkDark: #c2185b;
+            --pinkLight: #fdf0f4;
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 22px 18px 40px;
+        }
+
+        .top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            letter-spacing: .2px;
+            text-decoration: none;
+            color: var(--text);
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--pink);
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            text-decoration: none;
+            color: var(--text);
+            font-weight: 600;
+            background: #fff;
+        }
+
+        .btnPrimary {
+            background: var(--pink);
+            border-color: var(--pink);
+            color: #fff;
+        }
+
+        .btnPrimary:hover {
+            background: var(--pinkDark);
+            border-color: var(--pinkDark);
+        }
+
+        h1 {
+            font-size: 32px;
+            margin: 36px 0 6px;
+        }
+
+        .intro {
+            color: var(--muted);
+            font-size: 16px;
+            margin: 0 0 36px;
+        }
+
+        .section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: var(--pink);
+            margin: 0 0 12px;
+        }
+
+        .phrase-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .phrase-list li {
+            background: var(--pinkLight);
+            border: 1px solid #f5c6d8;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 15px;
+            color: var(--text);
+        }
+
+        .phrase-list li span {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 3px;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .footer a {
+            text-decoration: none;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footerLinks {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .footerCopy {
+            margin-top: 8px;
+        }
+    </style>
+    <link rel="icon" type="image/svg+xml" href="/web/icon.svg">
+    <link rel="apple-touch-icon" href="/web/apple-touch-icon.png">
+    <link rel="manifest" href="/web/site.webmanifest">
+    <meta name="apple-mobile-web-app-title" content="MyPinkAssistant">
+    <meta name="theme-color" content="#e91e63">
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="top">
+            <a class="brand" href="/"><span class="dot"></span> MyPinkAssistant</a>
+            <div class="nav">{{NAV_BUTTONS}}</div>
+        </div>
+
+        <h1>What can I say in chat?</h1>
+        <p class="intro">Just type it like you'd text it. Here are some examples to get you started.</p>
+
+        <div class="section">
+            <div class="section-title">Customers</div>
+            <ul class="phrase-list">
+                <li>"Look up Jane Smith"<span>Pulls up her contact info, birthday, and recent orders</span></li>
+                <li>"Who has birthdays this month?"<span>Also try "this week" or a specific month</span></li>
+                <li>"Who should I follow up with?"<span>Surfaces customers due for a check-in based on order history. Click the pink button to send a follow-up text right from your phone.</span></li>
+                <li>"New customer Jane Smith, 555-123-4567, jane@email.com"<span>The app confirms details before sending to MyCustomers</span></li>
+                <li>"Who are my customers in Huntsville?"<span>Look up customers by city</span></li>
+                <li>"Who buys Timewise?"<span>Find customers by product</span></li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Orders</div>
+            <ul class="phrase-list">
+                <li>"What did Sarah order last time?"</li>
+                <li>"Show me Jane's last 3 orders"</li>
+                <li>"Jane wants the Timewise Repair serum and the CC cream"<span>Plain English — no SKU numbers needed. The app confirms before sending the order directly to MyCustomers.</span></li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Inventory</div>
+            <ul class="phrase-list">
+                <li>"How many Timewise sets do I have on hand?"</li>
+                <li>"Set my [product] quantity to 3"</li>
+                <li>"Set my par level for [product] to 2"<span>MyPinkAssistant will alert you when stock falls below your par level</span></li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Business Stats</div>
+            <ul class="phrase-list">
+                <li>"How many customers do I have?"</li>
+                <li>"Who ordered last month?"<span>Also try "in April", "this quarter", or a date range</span></li>
+                <li>"What's my total sales this year?"</li>
+                <li>"Who has ordered more than 3 times?"</li>
+                <li>"Who has never ordered?" / "Who has ordered only once?"</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Team &amp; Unit</div>
+            <ul class="phrase-list">
+                <li>"Show me my team"</li>
+                <li>"Who's working on Great Start?"</li>
+                <li>"What's everyone's Star Consultant status?"</li>
+                <li>"Who's registered for Seminar?"</li>
+                <li>"Any consultant birthdays this month?"</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <div class="section-title">App &amp; Setup</div>
+            <ul class="phrase-list">
+                <li>"app"<span>Get step-by-step instructions for adding MyPinkAssistant to your iPhone or Android home screen</span></li>
+            </ul>
+        </div>
+
+        <footer class="footer">
+            <div class="footerLinks">
+                <a href="/">Home</a>
+                <a href="/faq">FAQ</a>
+                <a href="/legal">Legal</a>
+                <a href="/legal#privacy">Privacy</a>
+                <a href="/legal#support">Support</a>
+            </div>
+            <div class="footerCopy">© 2026 MyPinkAssistant</div>
+        </footer>
+    </div>
+</body>
+
+</html>

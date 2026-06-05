@@ -1012,6 +1012,16 @@ def faq_get(request: Request):
     return render_page("faq.html", replaces={"{{NAV_BUTTONS}}": nav, "{{CTA_SECTION}}": cta})
 
 
+@app.get("/help", response_class=HTMLResponse)
+def help_get(request: Request):
+    try:
+        require_login(request)
+        nav = '<a class="btn" href="/app">Back to chat</a>'
+    except PermissionError:
+        nav = '<a class="btn" href="/login">Log in</a><a class="btn btnPrimary" href="/">Get started</a>'
+    return render_page("help.html", replaces={"{{NAV_BUTTONS}}": nav})
+
+
 # -------------------------
 # Reset password
 # -------------------------

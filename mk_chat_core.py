@@ -3041,12 +3041,13 @@ Rules:
 - Do not use LIMIT unless the user asks for a specific number
 - Always SELECT first_name, last_name from customers when returning individual customers
 - Use table aliases: customers AS c, orders AS o, order_items AS oi
-- order_date is stored as ISO text ('YYYY-MM-DD HH:MM:SS') — use SUBSTR for date filtering:
-  - Specific month: SUBSTR(o.order_date, 1, 7) = '2025-05'
-  - Specific year:  SUBSTR(o.order_date, 1, 4) = '2025'
-  - This month:     SUBSTR(o.order_date, 1, 7) = '{this_month}'
-  - Last month:     SUBSTR(o.order_date, 1, 7) = '{last_month}'
-  - This year:      SUBSTR(o.order_date, 1, 4) = '{this_year}'
+- order_date is a timestamp column — use date range comparisons for filtering (works on both SQLite and PostgreSQL). Always use >= start AND < exclusive_end:
+  - This month:  o.order_date >= '{this_month}-01' AND o.order_date < '{next_month}-01'
+  - Last month:  o.order_date >= '{last_month}-01' AND o.order_date < '{this_month}-01'
+  - This year:   o.order_date >= '{this_year}-01-01' AND o.order_date < '{next_year}-01-01'
+  - Specific month (e.g. May 2025): o.order_date >= '2025-05-01' AND o.order_date < '2025-06-01'
+  - Specific year (e.g. 2025): o.order_date >= '2025-01-01' AND o.order_date < '2026-01-01'
+  - Do NOT use SUBSTR, EXTRACT, or DATE_PART on order_date
 - For aggregate queries (COUNT, SUM), use clear aliases: order_count, total_spent, customer_count
 - For product name searches, use a separate LIKE condition for each meaningful search term rather than one combined phrase — e.g., to find 'ivory 2 pressed powder' use LOWER(oi.product_name) LIKE '%ivory 2%' AND LOWER(oi.product_name) LIKE '%pressed powder%' rather than LIKE '%ivory 2 pressed powder%'. This correctly handles products where the shade or color code appears at the end of the name (e.g. 'Mineral Pressed Powder - Ivory 2').
 - When the user asks who ordered a product, return distinct customers (use DISTINCT or GROUP BY)
@@ -3070,6 +3071,11 @@ def _handle_data_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
     _last_month_date = _first_of_month - datetime.timedelta(days=1)
     _last_month = _last_month_date.strftime("%Y-%m")
     _this_year = str(_today.year)
+    _next_year = str(_today.year + 1)
+    _next_month_date = (_first_of_month.replace(month=_first_of_month.month % 12 + 1)
+                        if _first_of_month.month < 12
+                        else _first_of_month.replace(year=_first_of_month.year + 1, month=1))
+    _next_month = _next_month_date.strftime("%Y-%m")
 
     schema_lines = []
     for tbl, desc in _CRM_SCHEMA.items():
@@ -3083,6 +3089,8 @@ def _handle_data_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
         this_month=_this_month,
         last_month=_last_month,
         this_year=_this_year,
+        next_year=_next_year,
+        next_month=_next_month,
     )
 
     client = OpenAI()
