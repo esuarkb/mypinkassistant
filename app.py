@@ -1002,7 +1002,14 @@ def legal_get(request: Request):
 
 @app.get("/faq", response_class=HTMLResponse)
 def faq_get(request: Request):
-    return render_page("faq.html")
+    try:
+        require_login(request)
+        nav = '<a class="btn" href="/app">Back to chat</a>'
+        cta = ''
+    except PermissionError:
+        nav = '<a class="btn" href="/login">Log in</a><a class="btn btnPrimary" href="/">Get started</a>'
+        cta = '<div class="cta"><p>Ready to try it? First 7 days are free.</p><a class="btn btnPrimary" href="/">Get started — $5.99/month</a></div>'
+    return render_page("faq.html", replaces={"{{NAV_BUTTONS}}": nav, "{{CTA_SECTION}}": cta})
 
 
 # -------------------------
@@ -1321,7 +1328,7 @@ def app_page(request: Request):
     except Exception:
         is_admin = False
 
-    admin_btn = '<a class="btn" href="/admin">Admin</a>' if is_admin else ""
+    admin_btn = '<a class="menu-item menu-item-admin" href="/admin">Admin</a>' if is_admin else ""
 
     html = html.replace("{{ADMIN_BUTTON}}", admin_btn)
 

@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>MyPinkAssistant</title>
-    <link rel="stylesheet" href="/web/styles.css?v=16" />
+    <link rel="stylesheet" href="/web/styles.css?v=20" />
     <meta name="format-detection" content="telephone=no">
     <link rel="icon" type="image/svg+xml" href="/web/icon.svg">
     <link rel="apple-touch-icon" href="/web/apple-touch-icon.png">
@@ -23,13 +23,20 @@
             <div class="brand"><span>MyPink</span>Assistant</div>
 
             <div class="top-actions">
-                {{ADMIN_BUTTON}}
-
-                <a class="btn" href="/settings">Settings</a>
-
-                <form method="post" action="/logout" class="logout-form">
-                    <button class="btn btn-link" type="submit">Log out</button>
-                </form>
+                <div class="menu-wrap" id="menuWrap">
+                    <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false">
+                        <span></span><span></span><span></span>
+                    </button>
+                    <div class="menu-dropdown" id="menuDropdown" hidden>
+                        {{ADMIN_BUTTON}}
+                        <a class="menu-item" href="/inventory/print">Manage Inventory</a>
+                        <a class="menu-item" href="/settings">Settings</a>
+                        <a class="menu-item" href="/faq">Help</a>
+                        <form method="post" action="/logout" style="margin:0">
+                            <button class="menu-item menu-item-logout" type="submit">Log out</button>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -70,7 +77,7 @@
 
     <div id="jobToast" class="toast hidden" role="status" aria-live="polite"></div>
 
-    <script src="/web/app.js?v=27"></script>
+    <script src="/web/app.js?v=28"></script>
 </body>
 
 </html>

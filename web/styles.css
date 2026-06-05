@@ -82,6 +82,79 @@ body {
     margin: 0;
 }
 
+/* -------- Hamburger menu -------- */
+.menu-wrap {
+    position: relative;
+}
+
+.menu-btn {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    padding: 0;
+}
+
+.menu-btn span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 2px;
+    transition: opacity .15s;
+}
+
+
+.menu-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 200px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.10);
+    overflow: hidden;
+    z-index: 200;
+}
+
+.menu-item {
+    display: block;
+    width: 100%;
+    padding: 13px 18px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.menu-item:hover {
+    background: var(--bubble);
+}
+
+.menu-item-logout {
+    color: var(--muted);
+    border-bottom: none;
+}
+
+.menu-item-admin {
+    color: var(--pink);
+}
+
+
 .btn {
     border: 1px solid var(--border);
     background: #fff;

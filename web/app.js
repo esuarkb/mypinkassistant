@@ -549,3 +549,24 @@ document.addEventListener("click", function(e) {
     resetToInitialState();
     await loadUiMessages();
 })();
+
+// Hamburger menu
+(function () {
+    const btn = document.getElementById("menuBtn");
+    const dropdown = document.getElementById("menuDropdown");
+    if (!btn || !dropdown) return;
+
+    btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        const open = !dropdown.hidden;
+        dropdown.hidden = open;
+        btn.setAttribute("aria-expanded", String(!open));
+    });
+
+    document.addEventListener("click", function (e) {
+        if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== btn) {
+            dropdown.hidden = true;
+            btn.setAttribute("aria-expanded", "false");
+        }
+    });
+})();

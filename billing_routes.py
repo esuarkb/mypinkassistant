@@ -884,11 +884,17 @@ async def stripe_webhook(request: Request):
             customer_id = (obj.get("customer") or "").strip()
             subscription_id = (obj.get("id") or "").strip()
 
+            # Only cancel if the deleted sub matches what's in the DB.
+            # If the consultant already resubscribed (different sub ID in DB), ignore this event.
+            existing = _get_consultant_by_customer_id(customer_id)
+            existing_sub_id = (existing[2] or "").strip() if existing else ""
+            is_current_sub = (existing_sub_id == subscription_id)
+
             updated = _update_consultant_by_customer_id(
                 customer_id,
-                stripe_subscription_id=subscription_id or None,
-                billing_status="canceled",
-                cancel_at_period_end=0,
+                stripe_subscription_id=subscription_id if is_current_sub else None,
+                billing_status="canceled" if is_current_sub else None,
+                cancel_at_period_end=0 if is_current_sub else None,
             )
 
             # Clear inventory watermark so if they resubscribe, they're treated as new
