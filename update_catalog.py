@@ -18,7 +18,7 @@ from datetime import date
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-OWNER_EMAIL = "briankrause@gmail.com"
+OWNER_EMAIL = "support@mypinkassistant.com"
 
 CATALOG_DIR = Path(__file__).parent / "catalog"
 ORDER_URL   = "https://order.marykayintouch.com/orders?lang=en_US"

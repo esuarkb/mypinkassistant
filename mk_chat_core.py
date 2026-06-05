@@ -3048,7 +3048,7 @@ Rules:
   - Last month:     SUBSTR(o.order_date, 1, 7) = '{last_month}'
   - This year:      SUBSTR(o.order_date, 1, 4) = '{this_year}'
 - For aggregate queries (COUNT, SUM), use clear aliases: order_count, total_spent, customer_count
-- For product name searches, use LOWER(oi.product_name) LIKE LOWER('%keyword%')
+- For product name searches, use a separate LIKE condition for each meaningful search term rather than one combined phrase — e.g., to find 'ivory 2 pressed powder' use LOWER(oi.product_name) LIKE '%ivory 2%' AND LOWER(oi.product_name) LIKE '%pressed powder%' rather than LIKE '%ivory 2 pressed powder%'. This correctly handles products where the shade or color code appears at the end of the name (e.g. 'Mineral Pressed Powder - Ivory 2').
 - When the user asks who ordered a product, return distinct customers (use DISTINCT or GROUP BY)
 - When counting or summing, return a single row with a descriptive column alias
 - Keep queries simple and readable"""

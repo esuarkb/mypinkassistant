@@ -379,9 +379,8 @@ def main():
                             _last_outage_alert_time = time.time()
                     else:
                         try:
-                            admin_email = (os.getenv("MK_ADMIN_EMAILS") or "").split(",")[0].strip()
-                            if admin_email:
-                                send_login_failure_alert_email(admin_email, cid, _c_name, _c_email, err)
+                            admin_email = "support@mypinkassistant.com"
+                            send_login_failure_alert_email(admin_email, cid, _c_name, _c_email, err)
                         except Exception as alert_err:
                             print(f"[Worker] Failed to send login failure email: {alert_err}")
 
@@ -703,8 +702,12 @@ def main():
                             except RuntimeError:
                                 _pcp_msg = "PCP complete — T&C not yet accepted"
                             except Exception as _pcp_err:
-                                _pcp_msg = f"PCP sync failed — {_pcp_err}"
-                                print(f"[PcpSync] {_pcp_msg}")
+                                _err_str = str(_pcp_err)
+                                if "TermsAndConditions" in _err_str or "Alerts.aspx" in _err_str:
+                                    _pcp_msg = "PCP complete — T&C not yet accepted"
+                                else:
+                                    _pcp_msg = f"PCP sync failed — {_pcp_err}"
+                                    print(f"[PcpSync] {_pcp_msg}")
                             # Reports (team data, challenge tracking, registrations) — same login session
                             _report_msg = ""
                             try:
@@ -858,7 +861,7 @@ def main():
                                                     pass
                                                 # Email admin
                                                 try:
-                                                    _admin_email = (os.getenv("MK_ADMIN_EMAILS") or "").split(",")[0].strip()
+                                                    _admin_email = "support@mypinkassistant.com"
                                                     if _admin_email:
                                                         _cust_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
                                                         send_sku_not_found_email(

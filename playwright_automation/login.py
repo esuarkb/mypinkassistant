@@ -73,6 +73,7 @@ def login_intouch(page: Page, username: str, password: str) -> None:
     except PlaywrightTimeoutError:
         # A popup may be blocking the page — reload and try once more
         page.reload(wait_until="domcontentloaded")
+        page.wait_for_timeout(2000)
         _wait_for_mycustomers_ready(page, timeout_ms=45000)
     
     # Basic sanity check: we should no longer be on the login page

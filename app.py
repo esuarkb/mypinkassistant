@@ -112,7 +112,7 @@ def _check_stale_jobs() -> None:
                 headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
                 json={
                     "from": MAIL_FROM,
-                    "to": ["briankrause@gmail.com"],
+                    "to": ["support@mypinkassistant.com"],
                     "subject": f"⚠ MPA Watchdog: {len(stale)} stale job(s) auto-failed",
                     "html": body,
                 },
