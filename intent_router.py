@@ -190,8 +190,8 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     )
     if any(t in lowered for t in _data_query_triggers):
         return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
-    # "who ordered X" — cross-customer product query (always asking about multiple people)
-    if re.search(r'\bwho\s+ordered\b', lowered):
+    # "who ordered/buys/purchases X" — cross-customer product query
+    if re.search(r'\bwho\s+(ordered|buys|buy|purchases|purchase|gets|orders)\b', lowered):
         return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
 
     # recent orders

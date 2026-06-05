@@ -3060,8 +3060,11 @@ Rules:
 - For aggregate queries (COUNT, SUM), use clear aliases: order_count, total_sales, customer_count
 - When counting or listing customers, always filter c.source_status = 'active' unless the user explicitly asks about removed or former customers
 - For product name searches, use a separate LIKE condition for each meaningful search term rather than one combined phrase — e.g., to find 'ivory 2 pressed powder' use LOWER(oi.product_name) LIKE '%ivory 2%' AND LOWER(oi.product_name) LIKE '%pressed powder%' rather than LIKE '%ivory 2 pressed powder%'. This correctly handles products where the shade or color code appears at the end of the name (e.g. 'Mineral Pressed Powder - Ivory 2').
+- For product name searches, always use singular forms: 'set' not 'sets', 'kit' not 'kits', 'cream' not 'creams'. Plural user input should be singularized before matching.
 - When the user asks who ordered a product, return distinct customers (use DISTINCT or GROUP BY)
 - When counting or summing, return a single row with a descriptive column alias
+- To count how many times a customer has ordered, count rows in the orders table (each order = one row). Do NOT join order_items to determine order frequency — that counts line items, not orders.
+- When grouping customers, always include c.id in the GROUP BY clause (e.g. GROUP BY c.id, c.first_name, c.last_name) to correctly handle customers with the same name.
 - Keep queries simple and readable"""
 
 
@@ -3103,13 +3106,18 @@ def _handle_data_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
         next_month=_next_month,
     )
 
+    # Normalize plural product category words so LIKE clauses use singular forms
+    _msg_for_query = _re.sub(r'\bsets\b', 'set', msg, flags=_re.IGNORECASE)
+    _msg_for_query = _re.sub(r'\bkits\b', 'kit', _msg_for_query, flags=_re.IGNORECASE)
+    _msg_for_query = _re.sub(r'\bcreams\b', 'cream', _msg_for_query, flags=_re.IGNORECASE)
+
     client = OpenAI()
     try:
         resp = client.responses.create(
             model=MODEL,
             input=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": f"Question: {msg}"},
+                {"role": "user", "content": f"Question: {_msg_for_query}"},
             ],
             timeout=30,
         )
@@ -4264,7 +4272,11 @@ class MKChatEngine:
                     flags=_re2.IGNORECASE,
                 ).strip()
                 _filler = {"on", "the", "a", "an", "use", "using", "with", "for", "in", "of"}
-                terms = [w for w in _product_term.lower().split() if len(w) > 1 and w not in _filler]
+                _singular = {"sets": "set", "kits": "kit", "creams": "cream", "serums": "serum",
+                             "masks": "mask", "sticks": "stick", "glosses": "gloss", "liners": "liner",
+                             "primers": "primer", "powders": "powder", "products": "product"}
+                terms = [_singular.get(w, w) for w in
+                         (_product_term.lower().split()) if len(w) > 1 and w not in _filler]
 
                 # Skip for time-period queries ("this quarter", "last month", etc.) — let data_query handle those
                 _TIME_WORDS = {
