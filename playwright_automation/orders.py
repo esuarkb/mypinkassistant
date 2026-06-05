@@ -171,8 +171,8 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         return
 
     # Process order: confirm delivery status change
-    page.get_by_role("button", name="Change Delivery Status Icon").wait_for(state="visible", timeout=15000)
-    page.get_by_role("button", name="Change Delivery Status Icon").click()
+    page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
+    page.get_by_role("button", name="Change To Processed").click()
     page.get_by_role("button", name="Yes, Confirm").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Yes, Confirm").click()
     try:

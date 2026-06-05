@@ -2055,8 +2055,9 @@ def admin_diagnostics(request: Request):
         if not dt:
             return ""
         # Cross-platform: avoid %-I (not supported everywhere)
-        s = dt.strftime("%Y-%m-%d %I:%M:%S %p CT")
-        return s.replace(" 0", " ")  # remove leading zero in hour
+        date_part = dt.strftime("%b %d, %Y").replace(" 0", " ")
+        time_part = dt.strftime("%I:%M %p CT").replace(" 0", " ").lstrip("0")
+        return f"{date_part}<br>{time_part}"
 
     conn = _conn()
     cur = conn.cursor()
