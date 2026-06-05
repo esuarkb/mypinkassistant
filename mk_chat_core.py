@@ -2170,15 +2170,23 @@ def _looks_like_bare_inventory_write(msg: str) -> bool:
 def _parse_inventory_lookup_text(msg: str) -> str:
     s = (msg or "").strip()
 
+    m = re.match(r"^\s*how\s+many\s+(.+?)\s+do\s+i\s+have\s+on\s+hand\s*\??$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    m = re.match(r"^\s*how\s+many\s+(.+?)\s+on\s+hand\s*\??$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
     m = re.match(r"^\s*how\s+many\s+(.+?)\s+do\s+i\s+have\s*$", s, re.IGNORECASE)
     if m:
         return m.group(1).strip()
 
-    m = re.match(r"^\s*(.+?)\s+in\s+inventory\s*$", s, re.IGNORECASE)
+    m = re.match(r"^\s*how\s+many\s+(.+?)\s+(?:in\s+)?inventory\s*\??\s*$", s, re.IGNORECASE)
     if m:
         return m.group(1).strip()
 
-    m = re.match(r"^\s*how\s+many\s+(.+?)\s+(?:in\s+)?inventory\s*$", s, re.IGNORECASE)
+    m = re.match(r"^\s*(.+?)\s+in\s+inventory\s*\??\s*$", s, re.IGNORECASE)
     if m:
         return m.group(1).strip()
 
@@ -3000,6 +3008,7 @@ _CRM_SCHEMA = {
         "Columns: id, consultant_id, first_name, last_name, email, phone, "
         "street, city, state (2-letter code, e.g. 'AL', 'TN'), postal_code, "
         "birthday (TEXT, YYYY-MM-DD), notes, tags (comma-separated text), "
+        "source_status (TEXT: 'active' or 'removed' — removed means no longer in MyCustomers), "
         "created_at (ISO timestamp)."
     ),
     "orders": (
@@ -3048,7 +3057,8 @@ Rules:
   - Specific month (e.g. May 2025): o.order_date >= '2025-05-01' AND o.order_date < '2025-06-01'
   - Specific year (e.g. 2025): o.order_date >= '2025-01-01' AND o.order_date < '2026-01-01'
   - Do NOT use SUBSTR, EXTRACT, or DATE_PART on order_date
-- For aggregate queries (COUNT, SUM), use clear aliases: order_count, total_spent, customer_count
+- For aggregate queries (COUNT, SUM), use clear aliases: order_count, total_sales, customer_count
+- When counting or listing customers, always filter c.source_status = 'active' unless the user explicitly asks about removed or former customers
 - For product name searches, use a separate LIKE condition for each meaningful search term rather than one combined phrase — e.g., to find 'ivory 2 pressed powder' use LOWER(oi.product_name) LIKE '%ivory 2%' AND LOWER(oi.product_name) LIKE '%pressed powder%' rather than LIKE '%ivory 2 pressed powder%'. This correctly handles products where the shade or color code appears at the end of the name (e.g. 'Mineral Pressed Powder - Ivory 2').
 - When the user asks who ordered a product, return distinct customers (use DISTINCT or GROUP BY)
 - When counting or summing, return a single row with a descriptive column alias
@@ -3177,7 +3187,7 @@ def _format_data_query_results(rows: list, original_msg: str, ui: dict = None) -
     _SUPPRESS = {"consultant_id", "created_at", "updated_at", "customer_id", "order_id",
                  "street", "street2", "email", "phone", "postal_code", "notes", "tags",
                  "birthday", "id", "intouch_account_ids"}
-    _MONEY_COLS = {"total", "total_spent", "unit_price", "revenue", "amount", "subtotal"}
+    _MONEY_COLS = {"total", "total_spent", "total_sales", "unit_price", "revenue", "amount", "subtotal"}
     _SHOW_DETAIL = 20
 
     def _fmt_val(col: str, val) -> str:
@@ -3206,7 +3216,7 @@ def _format_data_query_results(rows: list, original_msg: str, ui: dict = None) -
         return f'<a href="#" data-send="{safe}">{safe}</a>'
 
     # Pure aggregate: single row, no name/id columns, only numeric summary cols
-    _AGG_HINTS = {"count", "total", "order_count", "customer_count", "total_spent",
+    _AGG_HINTS = {"count", "total", "order_count", "customer_count", "total_spent", "total_sales",
                   "revenue", "sum", "avg", "average", "num_orders"}
     is_single_agg = (
         len(dicts) == 1

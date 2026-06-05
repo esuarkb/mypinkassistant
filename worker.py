@@ -687,7 +687,8 @@ def main():
                         # -------------------------
                         elif job_type == "PCP_SYNC":
                             from scrape_pcp import scrape_enrolled as _pcp_scrape, save_to_db as _pcp_save, current_quarter as _pcp_quarter
-                            _pcp_msg = "PCP sync complete — no enrolled customers found."
+                            _pcp_enrolled = 0
+                            _pcp_msg = "0 enrolled customers."
                             try:
                                 enrolled = _pcp_scrape(page, username, password, skip_login=True)
                                 if enrolled:
@@ -698,13 +699,14 @@ def main():
                                         conn.commit()
                                     finally:
                                         conn.close()
-                                    _pcp_msg = f"PCP sync complete — {len(enrolled)} enrolled customers saved."
+                                    _pcp_enrolled = len(enrolled)
+                                    _pcp_msg = f"{_pcp_enrolled} enrolled customers."
                             except RuntimeError:
-                                _pcp_msg = "PCP complete — T&C not yet accepted"
+                                _pcp_msg = "T&C not yet accepted."
                             except Exception as _pcp_err:
                                 _err_str = str(_pcp_err)
                                 if "TermsAndConditions" in _err_str or "Alerts.aspx" in _err_str:
-                                    _pcp_msg = "PCP complete — T&C not yet accepted"
+                                    _pcp_msg = "T&C not yet accepted."
                                 else:
                                     _pcp_msg = f"PCP sync failed — {_pcp_err}"
                                     print(f"[PcpSync] {_pcp_msg}")
@@ -722,9 +724,7 @@ def main():
                                 finally:
                                     conn.close()
                                 if _rs["members"] > 0:
-                                    _report_msg = (f" | Reports: {_rs['members']} members, "
-                                                   f"{_rs['rise_radiate']} rise+radiate, "
-                                                   f"{_rs['registrations']} registrations synced.")
+                                    _report_msg = f" {_rs['members']} unit members."
                             except Exception as _re:
                                 print(f"[PcpSync] Report sync failed (non-fatal): {_re}")
                             mark_job_done(job_id, _pcp_msg + _report_msg)
