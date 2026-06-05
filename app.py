@@ -2205,7 +2205,7 @@ def admin_diagnostics(request: Request):
             "<td>" + str(c["name"]) + "</td>"
             "<td style='font-size:12px;color:#666'>" + str(c["email"]) + "</td>"
             "<td>" + ref + "</td>"
-            "<td>" + (_fmt_ct(c["created_at"]) or "") + "</td>"
+            "<td class='nowrap'>" + (_fmt_ct(c["created_at"]) or "") + "</td>"
             "</tr>"
         )
     if not consultant_rows_html:
@@ -2239,6 +2239,7 @@ def admin_diagnostics(request: Request):
     /* Consultant cell */
     .consultant-name{{font-weight:700}}
     .consultant-email{{color:#666;font-size:12px}}
+    .nowrap{{white-space:nowrap}}
 
     /* Admin buttons */
     .adminBtn{{
@@ -2351,23 +2352,23 @@ def admin_diagnostics(request: Request):
     <h2 style="margin:16px 0 6px;font-size:16px">Completed (last 15)</h2>
     <table>
       <tr>
-        <th>id</th><th>consultant</th><th>type</th><th>message</th><th>finished (CT)</th>
+        <th>id</th><th>consultant</th><th>type</th><th>message</th><th class="nowrap">finished (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td>{(r['status_msg'] or '')}</td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in done_rows]) or "<tr><td colspan='5' class='muted'>No completed jobs.</td></tr>"}
+      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td>{(r['status_msg'] or '')}</td><td class=\"nowrap\">{_fmt_ct(r['finished_at'])}</td></tr>" for r in done_rows]) or "<tr><td colspan='5' class='muted'>No completed jobs.</td></tr>"}
     </table>
 
     <h2 style="margin:16px 0 6px;font-size:16px">Recent failed (last 15)</h2>
     <table>
       <tr>
-        <th>id</th><th>consultant</th><th>type</th><th>error</th><th>finished (CT)</th>
+        <th>id</th><th>consultant</th><th>type</th><th>error</th><th class="nowrap">finished (CT)</th>
       </tr>
-      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td><details><summary><code>{((r['error'] or '').splitlines() or [''])[0][:80]}</code></summary><code>{(r['error'] or '')[:500]}</code></details></td><td>{_fmt_ct(r['finished_at'])}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
+      {''.join([f"<tr><td>{r['id']}</td><td>{consultant_cell(r['consultant_id'])}</td><td>{r['type']}</td><td><details><summary><code>{((r['error'] or '').splitlines() or [''])[0][:80]}</code></summary><code>{(r['error'] or '')[:500]}</code></details></td><td class=\"nowrap\">{_fmt_ct(r['finished_at'])}</td></tr>" for r in failed_rows]) or "<tr><td colspan='5' class='muted'>No failed jobs.</td></tr>"}
     </table>
 
     <h2 style=”margin:16px 0 6px;font-size:16px”>Referred Consultants (last 15)</h2>
     <table>
       <tr>
-        <th>name</th><th>email</th><th>referred by</th><th>joined (CT)</th>
+        <th>name</th><th>email</th><th>referred by</th><th class="nowrap">joined (CT)</th>
       </tr>
       {consultant_rows_html}
     </table>
