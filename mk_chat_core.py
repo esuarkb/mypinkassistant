@@ -1580,14 +1580,32 @@ _QR_YN = _qr([
     {"cls": "no",  "send": "no",  "label": "No"},
 ])
 
+_QR_YN_SKIP = _qr([
+    {"cls": "yes",  "send": "yes",  "label": "Yes"},
+    {"cls": "no",   "send": "no",   "label": "No"},
+    {"cls": "skip", "send": "skip", "label": "Skip"},
+])
 
-def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None) -> str:
+def _wants_to_skip(msg: str) -> bool:
+    s = (msg or "").strip().lower()
+    return s in (
+        "skip", "skip it", "skip that", "skip that one",
+        "none", "none of those", "none of them",
+        "delete that", "delete that one", "remove that", "remove that one",
+        "move on", "next", "forget it", "forget that", "never mind",
+    )
+
+
+def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None, skip_hint: bool = False) -> str:
     if ui is None:
         ui = UI_EN
     top = matches[:TOP5]
     n = len(top)
     reply_range = "1" if n == 1 else f"1-{n}"
-    intro = _html.escape(ui["render_top5_intro"].format(range=reply_range))
+    if skip_hint:
+        intro = _html.escape(f"Got it — select the best match, try different search words, or say 'skip' to move on.")
+    else:
+        intro = _html.escape(ui["render_top5_intro"].format(range=reply_range))
     rows = ""
     for i, m in enumerate(top, start=1):
         name = _html.escape(m["product_name"])
@@ -2027,13 +2045,11 @@ def _normalize_inventory_command_text(msg: str) -> str:
     return s
 
 def _looks_like_inventory_show(msg: str) -> bool:
+    from rapidfuzz.distance import Levenshtein
     s = (msg or "").strip().lower()
-    return s in (
-        "show my inventory",
-        "show inventory",
-        "my inventory",
-        "inventory",
-    )
+    if s in ("show my inventory", "show inventory", "my inventory", "inventory"):
+        return True
+    return any(Levenshtein.distance(w, "inventory") <= 2 for w in s.split())
 
 def _inventory_help_text() -> str:
     return (
@@ -5237,7 +5253,12 @@ class MKChatEngine:
                         "matches": matches[:MATCH_LIMIT],
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_top5(matches, show_scores=show_scores, ui=ui))
+                    return ChatReply(render_top5(matches, show_scores=show_scores, ui=ui, skip_hint=True))
+
+                if _wants_to_skip(msg):
+                    order["lines"][line_index]["chosen"] = {"sku": "", "_skipped": True}
+                    state["pending"] = None
+                    return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
 
                 if looks_like_command(msg):
                     return ChatReply(
@@ -5261,9 +5282,16 @@ class MKChatEngine:
                         state["pending"] = None
                         return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
 
+                if _wants_to_skip(msg):
+                    order["lines"][line_index]["chosen"] = {"sku": "", "_skipped": True}
+                    state["pending"] = None
+                    return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
+
                 new_matches = best_matches(catalog, msg, limit=MATCH_LIMIT)
                 if not new_matches:
-                    return ChatReply(ui["no_matches"])
+                    return ChatReply(
+                        "No close matches. Try different search words, or say 'skip' to move on."
+                    )
 
                 state["pending"] = {
                     "kind": "order_line_pick_top5_or_search",
@@ -5272,7 +5300,7 @@ class MKChatEngine:
                     "matches": new_matches[:MATCH_LIMIT],
                 }
                 save_session_state(state, session_id=sid)
-                return ChatReply(render_top5(new_matches, show_scores=show_scores, ui=ui))
+                return ChatReply(render_top5(new_matches, show_scores=show_scores, ui=ui, skip_hint=True))
 
             if kind == "awaiting_order_items":
                 cust_first = pending["customer_first"]
@@ -5499,7 +5527,9 @@ class MKChatEngine:
                     _order_date = (order.get("order_date") or "").strip() or None
                     _first_job = True
                     for line in order["lines"]:
-                        sku = line["chosen"]["sku"]
+                        sku = (line["chosen"].get("sku") or "").strip()
+                        if not sku:
+                            continue
                         qty = int(line["qty"])
                         for _ in range(max(1, qty)):
                             payload = {
@@ -5524,7 +5554,9 @@ class MKChatEngine:
                     if _fulfillment != "cds":
                         with tx() as (conn, cur):
                             for line in order["lines"]:
-                                sku = line["chosen"]["sku"]
+                                sku = (line["chosen"].get("sku") or "").strip()
+                                if not sku:
+                                    continue
                                 qty = int(line["qty"])
                                 upsert_inventory_quantity(
                                     cur,
@@ -5972,11 +6004,14 @@ class MKChatEngine:
         groups: Dict[str, dict] = {}
 
         for line in (order.get("lines") or []):
+            chosen = line.get("chosen") or {}
+            if chosen.get("_skipped"):
+                continue
+
             qty = int(line.get("qty") or 1)
             if qty < 1:
                 qty = 1
 
-            chosen = line.get("chosen") or {}
             sku = (chosen.get("sku") or "").strip()
             name = (chosen.get("product_name") or "").strip() or (line.get("text") or "").strip()
             price = chosen.get("price")

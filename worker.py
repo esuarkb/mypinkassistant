@@ -973,12 +973,14 @@ def main():
 
                             err_text = raw_err
 
-                        elif "Change Delivery Status Icon" in raw_err or "Add to Bag" in raw_err:
+                        elif "Change To Processed" in raw_err:
                             err_text = (
-                                "MyPinkAssistant could not submit this order because Mary Kay needs the customer's "
-                                "address to be confirmed in MyCustomers. Please open that customer in MyCustomers, "
-                                "verify or re-save the address, and then try the order again."
+                                "Your order was saved in MyCustomers but couldn't be confirmed as processed. "
+                                "Please check MyCustomers to verify the order is there before trying again."
                             )
+
+                        elif "Add to Bag" in raw_err:
+                            err_text = "Something went wrong adding an item to the bag. Please verify the order in MyCustomers."
 
                         elif "Invalid payload_json" in raw_err or "Unknown job type" in raw_err:
                             err_text = "Something unexpected happened. Please try again."
