@@ -164,6 +164,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
     # save and review order
     page.get_by_role("button", name="Save and Review").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Save and Review").click()
+    print(f"[Orders] Save and Review clicked")
 
     if leave_pending:
         # Leave order in pending state — do not change delivery status
@@ -173,6 +174,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
     # Process order: confirm delivery status change
     page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Change To Processed").click()
+    print(f"[Orders] Change To Processed clicked")
     page.get_by_role("button", name="Yes, Confirm").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Yes, Confirm").click()
     try:
@@ -181,6 +183,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         if "Timeout" in str(e):
             raise RuntimeError("Timeout: Post-confirm — order was already placed")
         raise
+    print(f"[Orders] Order complete")
 
 def process_order_batch(page: Page, rows: list[dict]) -> None:
     """
@@ -199,13 +202,16 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
     discount_amount = float(rows[0].get("discount_amount") or 0)
     tax_amount = float(rows[0].get("tax_amount") or 0)
 
+    print(f"[Orders] Starting batch: {first} {last} — {len(rows)} SKU(s)")
     open_customer_and_start_order(page, first, last, fulfillment_method, order_date=order_date)
+    print(f"[Orders] Order page open: {first} {last}")
 
     skipped_skus = []
     for row in rows:
         sku = row["SKU"].strip()
         try:
             add_sku_to_bag(page, sku, fulfillment_method=fulfillment_method)
+            print(f"[Orders] SKU added: {sku}")
         except SkuNotCdsEligible as e:
             skipped_skus.append(str(e))
 

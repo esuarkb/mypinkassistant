@@ -124,6 +124,8 @@ def add_address_on_detail_page(page: Page, customer: dict) -> None:
 
 def create_customer_basic(page: Page, customer: dict) -> None:
     # Create a new customer with basic info (name, email, phone, birthday) and optionally address if provided.
+    _name = f"{customer.get('First Name', '')} {customer.get('Last Name', '')}".strip()
+    print(f"[NewCustomer] Starting: {_name}")
 
     # Click "New Customer" to start
     page.get_by_role("button", name="New Customer").click()
@@ -157,14 +159,18 @@ def create_customer_basic(page: Page, customer: dict) -> None:
 
     page.get_by_role("button", name="Save New Customer").click()
     page.wait_for_timeout(1000)
-    
+    print(f"[NewCustomer] Basic info saved: {_name}")
+
     # If we have address info, fill that in too
     if has_address(customer):
+        print(f"[NewCustomer] Adding address")
         add_address_on_detail_page(page, customer)
+        print(f"[NewCustomer] Address saved")
 
     # Enable subscriptions if customer has email
     subscription_ok = True
     if str(customer.get("Email") or "").strip():
+        print(f"[NewCustomer] Starting subscription toggles")
         try:
             subscriptions = page.locator("c-cmt-my-customer-details-subscriptions")
             subscriptions.wait_for(state="visible", timeout=20000)
@@ -188,6 +194,7 @@ def create_customer_basic(page: Page, customer: dict) -> None:
             if not dialog_opened:
                 raise Exception("Subscription dialog failed to open after 3 attempts.")
 
+            print(f"[NewCustomer] Subscription dialog opened")
             dialog = page.get_by_role("dialog")
             for nth in (0, 1):
                 label = dialog.locator("c-cmt-custom-toggle").nth(nth).locator("label")
@@ -202,6 +209,7 @@ def create_customer_basic(page: Page, customer: dict) -> None:
                 page.wait_for_timeout(300)
             dialog.get_by_role("button", name="Save & Exit").click()
             dialog.wait_for(state="hidden", timeout=8000)
+            print(f"[NewCustomer] Subscriptions saved")
         except Exception as e:
             logger.warning(f"Subscription toggle failed (non-fatal): {e}")
             subscription_ok = False
@@ -214,4 +222,5 @@ def create_customer_basic(page: Page, customer: dict) -> None:
         if "Timeout" in str(e):
             raise RuntimeError("Timeout: Post-save confirmation — customer was already saved")
         raise
+    print(f"[NewCustomer] Complete: {_name} subscription_ok={subscription_ok}")
     return subscription_ok
