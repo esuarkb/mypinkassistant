@@ -438,8 +438,18 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
             if re.search(rf"\b(?:{pattern})\b", c["search_string"], re.IGNORECASE)
         ]
 
+    # Normalize conjunctions/symbols to a space so "berry and vanilla" scores the
+    # same as "berry & vanilla", and "serum c plus e" matches "Serum C+E".
+    def _norm_plus(s: str) -> str:
+        s = re.sub(r"\bplus\b", " ", s, flags=re.IGNORECASE)
+        s = re.sub(r"\band\b", " ", s, flags=re.IGNORECASE)
+        s = re.sub(r"[+&]", " ", s)
+        return re.sub(r"\s+", " ", s).strip()
+
     names = [c["search_string"] for c in candidates]
-    results = process.extract(q, names, scorer=fuzz.WRatio, limit=limit)
+    names_for_score = [_norm_plus(n) for n in names]
+    q_for_score = _norm_plus(q)
+    results = process.extract(q_for_score, names_for_score, scorer=fuzz.WRatio, limit=limit)
 
     q_words = {w for w in re.split(r"\s+", q) if len(w) >= 3}
 
@@ -1151,11 +1161,11 @@ UI_EN = {
     "estimated_total": "Estimated retail total: {total}",
     "order_confirm_q": "Does that sound right? (yes/no)",
 
-    "need_customer_for_order": "Who is this order for? Please tell me the customer name and paste the order again.",
+    "need_customer_for_order": "Who is this order for? Please tell me the customer name and the products they ordered.",
     "need_items": "What items should I add to the order?",
     "got_it_ordering_for": "Got it — order for {name}.",
     "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
-    "reply_yes_no_qty": "Reply yes or no — or add a quantity like 'x2'",
+    "reply_yes_no_qty": "Reply yes, no, skip, or cancel — or add a quantity like 'x2'",
     "order_adjust_hint": "You can also say `add` or `remove`, or `cancel` to start over.",
 
     # ✅ Missing keys your code uses:
@@ -1232,7 +1242,7 @@ UI_ES = {
     "estimated_total": "Total estimado (precio): {total}",
     "order_confirm_q": "¿Suena bien? (sí/no)",
 
-    "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y vuelve a pegar el pedido.",
+    "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y los productos que ordenó.",
     "need_items": "¿Qué artículos debo agregar al pedido?",
     "got_it_ordering_for": "Listo — pedido para {name}.",
     "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
@@ -1863,8 +1873,8 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             continue
 
         # birthday:
-        if low.startswith("birthday") or low.startswith("bday") or low.startswith("dob"):
-            b_raw = re.sub(r"^(birthday|bday|dob)\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
+        if low.startswith("birthday") or low.startswith("birthdate") or low.startswith("bday") or low.startswith("dob"):
+            b_raw = re.sub(r"^(birthday|birthdate|bday|dob)\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
             b = normalize_birthday(b_raw)
             if b:
                 c["Birthday"] = b
@@ -2083,6 +2093,8 @@ _PRODUCT_QUERY_SYNONYMS: dict = {
     "lip colours": "lipstick",
     "deluxe mini": "Unlimited Lip Gloss Set Deluxe Mini",
     "deluxe minis": "Unlimited Lip Gloss Set Deluxe Mini",
+    "c+e": "serum c+e",
+    "c + e": "serum c+e",
 }
 
 def _looks_like_product_price_query(msg: str) -> bool:
@@ -3502,7 +3514,7 @@ class MKChatEngine:
         _is_bare_msg = (
             not pending
             and len(msg.split()) <= 4
-            and _re.match(r"^[\w\s\-]+$", msg)
+            and _re.match(r"^[\w\s\+\-]+$", msg)
             and intent_result.intent not in _BARE_MSG_BLOCKING_INTENTS
         )
         _is_top_n_customers = bool(_re.search(r"\btop\s+\d+\s+customers?\b", lowered))
@@ -3869,6 +3881,24 @@ class MKChatEngine:
         # Look book (no LLM call)
         # -------------------------
         if not pending:
+            if any(t in lowered for t in ("referral code", "referral link", "my referral", "refer a friend", "refer someone", "referral")):
+                import os as _os
+                _ref_base = (_os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
+                from db import tx as _rtx
+                with _rtx() as (_rc, _rcur):
+                    from db import is_postgres as _risp
+                    _RPH = "%s" if _risp() else "?"
+                    _rcur.execute(f"SELECT referral_code FROM consultants WHERE id={_RPH}", (consultant_id,))
+                    _rrow = _rcur.fetchone()
+                    _rcode = ((_rrow[0] if _rrow else None) or "").strip()
+                if _rcode and _ref_base:
+                    _ref_link = f"{_ref_base}/r/{_rcode}"
+                    return ChatReply(
+                        f'Your referral link: <a href="{_ref_link}" target="_blank">{_ref_link}</a>&nbsp; '
+                        f'<button class="fdp-copy copy-link-btn" data-copy="{_ref_link}">Copy Link</button>'
+                    )
+                return ChatReply('Find your referral link in <a href="/settings">Settings</a>.')
+
             if "look book" in lowered or "lookbook" in lowered:
                 _force_es = "spanish" in lowered or "español" in lowered or "espanol" in lowered
                 _force_en = "english" in lowered or "inglés" in lowered or "ingles" in lowered
@@ -3886,7 +3916,7 @@ class MKChatEngine:
         # -------------------------
         # Customer edit requests — not supported, redirect to InTouch
         # -------------------------
-        _EDIT_FIELD_RE = r"\b(address|phone|email|birthday|city|state|zip|postal)\b"
+        _EDIT_FIELD_RE = r"\b(address|phone|email|birthday|birthdate|city|state|zip|postal)\b"
         _edit_not_supported = (
             not pending
             and (
@@ -3899,7 +3929,7 @@ class MKChatEngine:
                 )
                 # "add [field] for/to [name]" — e.g. "add address for Jane"
                 or bool(re.match(
-                    r"^add\s+(an?\s+)?(address|phone|email|birthday|phone\s+number|email\s+address)\b",
+                    r"^add\s+(an?\s+)?(address|phone|email|birthday|birthdate|phone\s+number|email\s+address)\b",
                     lowered,
                 ))
             )
@@ -4779,6 +4809,10 @@ class MKChatEngine:
                     with tx() as (conn, cur):
                         limit = int(pending.get("orders_limit") or 3)
                         orders = get_recent_orders_for_customer(cur, customer_id=customer_id, limit=limit)
+                    state["last_ref_customer_id"] = None
+                    state["last_ref_customer_name"] = None
+                    state["last_customer"] = None
+                    save_session_state(state, session_id=sid)
                     return ChatReply(format_recent_orders(customer_name, orders))
 
                 if action == "delete":
@@ -5623,11 +5657,11 @@ class MKChatEngine:
         if parsed.get("type") == "customer":
             customer = parsed.get("customer") or {}
 
-            # If no name was parsed, ask for it before showing the card
+            # If no name was parsed, prompt them to provide full info.
             _first = (customer.get("First Name") or "").strip()
             _last = (customer.get("Last Name") or "").strip()
             if not _first and not _last:
-                return ChatReply("What's the customer's name?")
+                return ChatReply("Okay, tell me the customer's name and information.")
 
             # Tags: always use our pre-extracted value (authoritative).
             # If we found tag: keyword → use that. If no tag: keyword → clear

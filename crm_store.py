@@ -257,6 +257,13 @@ def find_customers_by_name(
         if q_low and q_low in full.lower():
             score += 5
 
+        # Last-initial pattern: "Kim Z" — boost if first_name contains p1 and
+        # last_name starts with the initial, so it clears the 75 threshold
+        # even when raw WRatio undershoots on short queries.
+        if last_initial and last.lower().startswith(last_initial):
+            if p1.lower() in first.lower():
+                score = max(score, 80)
+
         scored.append((score, r))
 
     scored.sort(key=lambda x: x[0], reverse=True)
