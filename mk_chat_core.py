@@ -373,6 +373,7 @@ _SEARCH_STOP_WORDS = {"mary", "kay"}
 
 def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int = 30) -> List[dict]:
     q = (query or "").lower().strip()
+    q = re.sub(r"\+", " ", q)  # treat + as a space so "ha+ceramide" splits correctly before pre-filter
     q_compact = re.sub(r"\s+", " ", q)
 
     # Strip noise words that appear in most product names and hurt WRatio scoring
@@ -1162,6 +1163,7 @@ UI_EN = {
     "order_confirm_q": "Does that sound right? (yes/no)",
 
     "need_customer_for_order": "Who is this order for? Please tell me the customer name and the products they ordered.",
+    "need_customer_info": "Okay, tell me the customer's name and information.",
     "need_items": "What items should I add to the order?",
     "got_it_ordering_for": "Got it — order for {name}.",
     "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
@@ -1243,6 +1245,7 @@ UI_ES = {
     "order_confirm_q": "¿Suena bien? (sí/no)",
 
     "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y los productos que ordenó.",
+    "need_customer_info": "Perfecto, dime el nombre del cliente y su información.",
     "need_items": "¿Qué artículos debo agregar al pedido?",
     "got_it_ordering_for": "Listo — pedido para {name}.",
     "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
@@ -1649,7 +1652,7 @@ def render_customer_picker(matches: List[dict], intro: str = "") -> str:
         )
 
     if not intro:
-        intro = f"I found multiple matches — reply with 1-{n}:"
+        intro = f"I found multiple customer matches — reply with 1-{n}:"
     rows = ""
     for i, c in enumerate(top, start=1):
         full = _html.escape(f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip())
@@ -4677,17 +4680,30 @@ class MKChatEngine:
                             cons_detail = f' <span class="select-detail">• {" • ".join(um_parts)}</span>' if um_parts else ""
 
                             if same_person:
-                                # Same person appears as both customer and consultant
+                                # Same person appears as both customer and consultant;
+                                # also append any other unit members with the same first name
+                                _extra_cons_rows = []
+                                for _i, _um2 in enumerate(_unit_matches[1:], start=3):
+                                    _su2 = _html.escape(f"{_um2.get('first_name','')} {_um2.get('last_name','')}".strip())
+                                    _ul2 = _html.escape(_um2.get("career_level_desc") or "")
+                                    _us2 = _html.escape(_um2.get("activity_status") or "")
+                                    _up2 = [p for p in (_ul2, _us2) if p]
+                                    _cd2 = f' <span class="select-detail">• {" • ".join(_up2)}</span>' if _up2 else ""
+                                    _extra_cons_rows.append(
+                                        f'<div class="select-row" data-send="team member {_su2}"><span class="select-num">{_i}</span>'
+                                        f'<span class="select-text">{_su2} — Consultant{_cd2}</span></div>'
+                                    )
                                 state["pending"] = {"kind": "pick_customer", "candidates": [c], "action": "info"}
                                 save_session_state(state, session_id=sid)
                                 return ChatReply(
-                                    f'<div class="select-intro">I found {safe_c} as both a customer and a consultant — which did you mean?</div>'
+                                    f'<div class="select-intro">I found these options — which did you mean?</div>'
                                     f'<div class="select-list">'
                                     f'<div class="select-row" data-send="1"><span class="select-num">1</span>'
                                     f'<span class="select-text">{safe_c} — Customer{cust_detail}</span></div>'
                                     f'<div class="select-row" data-send="team member {safe_u}"><span class="select-num">2</span>'
                                     f'<span class="select-text">{safe_u} — Consultant{cons_detail}</span></div>'
-                                    f'</div>'
+                                    + "".join(_extra_cons_rows)
+                                    + f'</div>'
                                 )
                             else:
                                 # Different people matched the query — show as neutral picker
@@ -4725,7 +4741,7 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     picker_html = render_customer_picker(
                         top,
-                        intro=f"I found multiple matches — reply with 1-{len(top) + 1}:"
+                        intro=f"I found multiple customer matches — reply with 1-{len(top) + 1}:"
                         if _unit_matches else ""
                     )
                     if _unit_matches:
@@ -5661,7 +5677,7 @@ class MKChatEngine:
             _first = (customer.get("First Name") or "").strip()
             _last = (customer.get("Last Name") or "").strip()
             if not _first and not _last:
-                return ChatReply("Okay, tell me the customer's name and information.")
+                return ChatReply(ui["need_customer_info"])
 
             # Tags: always use our pre-extracted value (authoritative).
             # If we found tag: keyword → use that. If no tag: keyword → clear

@@ -37,8 +37,9 @@ def run():
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
 
-    now_utc = datetime.now(timezone.utc)
-    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    CENTRAL = timezone(timedelta(hours=-5))  # CDT; captures full evening even in CST overlap
+    now_central = datetime.now(CENTRAL)
+    today_start = now_central.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today_start - timedelta(days=1)
     yesterday_label = yesterday_start.strftime("%B %-d, %Y")
 
@@ -110,7 +111,7 @@ def run():
       </table>
 
       <hr style="margin-top:32px;border:none;border-top:1px solid #eee">
-      <p style="color:#999;font-size:11px">Highlighted rows = unknown intent or low confidence · {now_utc.strftime("%Y-%m-%d %H:%M UTC")}</p>
+      <p style="color:#999;font-size:11px">Highlighted rows = unknown intent or low confidence · {now_central.strftime("%Y-%m-%d %H:%M CDT")}</p>
     </div>
     """
 
