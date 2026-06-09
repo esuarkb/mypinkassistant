@@ -985,6 +985,22 @@ def main():
                         elif "Invalid payload_json" in raw_err or "Unknown job type" in raw_err:
                             err_text = "Something unexpected happened. Please try again."
 
+                        # Auto-retry transient InTouch network errors on FULL_SYNC (one extra attempt)
+                        if job_type == "FULL_SYNC" and any(s in raw_err for s in ("ERR_ABORTED", "net::", "ERR_CONNECTION", "ERR_TIMED_OUT", "ERR_NAME_NOT_RESOLVED")):
+                            try:
+                                _fs_conn = connect()
+                                _fs_cur = _fs_conn.cursor()
+                                _fs_cur.execute(f"SELECT attempts FROM jobs WHERE id={PH_W}", (job_id,))
+                                _fs_row = _fs_cur.fetchone()
+                                _fs_attempts = int(_fs_row[0]) if _fs_row else 99
+                                _fs_conn.close()
+                            except Exception:
+                                _fs_attempts = 99
+                            if _fs_attempts <= 1:
+                                print(f"[Worker] FULL_SYNC job {job_id} transient network error (attempt {_fs_attempts}) — requeueing for retry.")
+                                requeue_job(job_id, "Queued")
+                                continue
+
                         customer_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
                         item_desc = payload.get("Item Description", "") or payload.get("Product", "") or ""
 
