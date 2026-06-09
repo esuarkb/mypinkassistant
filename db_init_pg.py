@@ -201,6 +201,24 @@ CREATE TABLE IF NOT EXISTS guest_orders (
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (consultant_id, intouch_order_id)
 );
+
+CREATE TABLE IF NOT EXISTS unit_member_activity_history (
+  id                    BIGSERIAL PRIMARY KEY,
+  consultant_id         INTEGER       NOT NULL,
+  consultant_number     TEXT          NOT NULL,
+  period_month          TEXT          NOT NULL,
+  activity_status       TEXT,
+  last_order_retail     NUMERIC(10,2),
+  last_order_wholesale  NUMERIC(10,2),
+  career_level_code     TEXT,
+  career_level_desc     TEXT,
+  myshop_active         INTEGER,
+  last_activated_date   DATE,
+  synced_at             TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  UNIQUE (consultant_id, consultant_number, period_month)
+);
+CREATE INDEX IF NOT EXISTS idx_unit_activity_history_consultant ON unit_member_activity_history(consultant_id);
+CREATE INDEX IF NOT EXISTS idx_unit_activity_history_period ON unit_member_activity_history(consultant_id, period_month);
 """
 
 

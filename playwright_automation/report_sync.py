@@ -249,6 +249,65 @@ def _map_star_tracking(raw: dict, consultant_id: int) -> dict:
 # DB upserts (SQLite + Postgres compatible via placeholder swap)
 # ---------------------------------------------------------------------------
 
+def _snapshot_unit_member_activity(cur, members: list[dict], ph: str) -> None:
+    if not members:
+        return
+    from datetime import datetime
+    period_month = datetime.utcnow().strftime("%Y-%m")
+    consultant_id = members[0]["consultant_id"]
+
+    # Fetch the most recent prior-month snapshot for each unit member so we can
+    # detect non-A → A transitions and record the activation date.
+    cur.execute(f"""
+        SELECT DISTINCT ON (consultant_number)
+               consultant_number, activity_status, last_activated_date
+        FROM unit_member_activity_history
+        WHERE consultant_id = {ph} AND period_month < {ph}
+        ORDER BY consultant_number, period_month DESC
+    """, (consultant_id, period_month))
+    prior = {row[0]: {"status": row[1], "last_activated_date": row[2]} for row in cur.fetchall()}
+
+    sql = f"""
+        INSERT INTO unit_member_activity_history
+          (consultant_id, consultant_number, period_month,
+           activity_status, last_order_retail, last_order_wholesale,
+           career_level_code, career_level_desc, myshop_active,
+           last_activated_date, synced_at)
+        VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        ON CONFLICT (consultant_id, consultant_number, period_month) DO UPDATE SET
+          activity_status      = excluded.activity_status,
+          last_order_retail    = excluded.last_order_retail,
+          last_order_wholesale = excluded.last_order_wholesale,
+          career_level_code    = excluded.career_level_code,
+          career_level_desc    = excluded.career_level_desc,
+          myshop_active        = excluded.myshop_active,
+          last_activated_date  = COALESCE(excluded.last_activated_date,
+                                          unit_member_activity_history.last_activated_date),
+          synced_at            = excluded.synced_at
+    """
+    for m in members:
+        cnum = m.get("consultant_number")
+        current_status = m.get("activity_status") or ""
+        prior_info = prior.get(cnum, {})
+        prior_status = prior_info.get("status") or ""
+        prior_activated = prior_info.get("last_activated_date")
+
+        # Set last_activated_date whenever status becomes A1 from anything other than A1.
+        # This covers both fresh activations (I*/T* → A1) and reactivations (A2/A3 → A1).
+        if current_status == "A1" and prior_status != "A1":
+            last_activated_date = m.get("last_order_date")
+        else:
+            last_activated_date = prior_activated
+
+        cur.execute(sql, (
+            consultant_id, cnum, period_month,
+            current_status, m.get("last_order_retail"), m.get("last_order_wholesale"),
+            m.get("career_level_code"), m.get("career_level_desc"), m.get("myshop_active"),
+            last_activated_date, m.get("synced_at"),
+        ))
+    print(f"[ReportSync] Snapshotted {len(members)} activity records for {period_month}")
+
+
 def _upsert_unit_members(cur, members: list[dict], ph: str) -> int:
     if not members:
         return 0
@@ -505,6 +564,9 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
     mapped_members = [_map_unit_member(r, consultant_id) for r in raw_members]
     members_count = _upsert_unit_members(cur, mapped_members, ph)
     print(f"[ReportSync] Upserted {members_count} unit_members")
+
+    # Snapshot current-month activity for historical tracking
+    _snapshot_unit_member_activity(cur, mapped_members, ph)
 
     # Mark personal recruits: look up the consultant's own email, then flag anyone
     # whose recruiter_info contains that email address (reliable structured match).

@@ -2474,7 +2474,8 @@ def _build_chat_help_html(has_team: bool, lang: str = "en") -> str:
             "• Agregar un cliente — <em>Nuevo cliente Jane Doe, 555-1234, jane@gmail.com</em>",
             "• Qué ordenó alguien — <em>¿Qué ordenó Jane?</em>\n",
             "<strong>Pedidos</strong>",
-            "• Hacer un pedido — <em>Pedido para Jane: 2 labiales y una base</em>\n",
+            "• Hacer un pedido — <em>Pedido para Jane: 2 labiales y una base</em>",
+            "• Buscar un producto y precio — <em>Satin hands</em> o <em>¿Cuánto cuesta la mascarilla de carbón?</em>\n",
             "<strong>Tus clientes</strong>",
             "• Por ciudad — <em>Clientes en Houston</em>",
             "• Sin pedidos recientes — <em>¿Quién no ha ordenado en 3 meses?</em>",
@@ -2482,7 +2483,10 @@ def _build_chat_help_html(has_team: bool, lang: str = "en") -> str:
             "• Cumpleaños — <em>¿Quién cumple años este mes?</em>\n",
             "<strong>Inventario</strong>",
             "• Verificar existencias — <em>¿Cuántas mascarillas de carbón tengo?</em>",
-            "• Establecer mínimo — <em>Set charcoal mask par to 3</em>",
+            "• Establecer mínimo — <em>Set charcoal mask par to 3</em>\n",
+            "<strong>Otro</strong>",
+            "• Look Book actual — <em>Look book</em>",
+            "• Tu enlace de referido — <em>Mi enlace de referido</em>",
         ]
         if has_team:
             lines += [
@@ -2500,7 +2504,8 @@ def _build_chat_help_html(has_team: bool, lang: str = "en") -> str:
             "• Add a customer — <em>New customer Jane Doe, 555-1234, jane@gmail.com</em>",
             "• What someone ordered — <em>What did Jane order</em>\n",
             "<strong>Orders</strong>",
-            "• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>\n",
+            "• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>",
+            "• Look up a product & price — <em>Satin hands</em> or <em>How much is the charcoal mask</em>\n",
             "<strong>Your customers</strong>",
             "• By city — <em>Customers in Huntsville</em>",
             "• Lapsed — <em>Who hasn't ordered in 3 months</em>",
@@ -2508,7 +2513,10 @@ def _build_chat_help_html(has_team: bool, lang: str = "en") -> str:
             "• Birthdays — <em>Who has birthdays this month</em>\n",
             "<strong>Inventory</strong>",
             "• Check stock — <em>How many TimeWise moisturizers do I have</em>",
-            "• Set a par — <em>Set charcoal mask par to 3</em>",
+            "• Set a par — <em>Set charcoal mask par to 3</em>\n",
+            "<strong>Other</strong>",
+            "• Current Look Book — <em>Look book</em>",
+            "• Your referral link — <em>My referral link</em>",
         ]
         if has_team:
             lines += [

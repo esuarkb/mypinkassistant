@@ -365,6 +365,26 @@ CREATE TABLE IF NOT EXISTS unit_registrations (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_registrations_consultant ON unit_registrations(consultant_id)")
 
+cur.execute("""
+CREATE TABLE IF NOT EXISTS unit_member_activity_history (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id           INTEGER NOT NULL,
+  consultant_number       TEXT    NOT NULL,
+  period_month            TEXT    NOT NULL,
+  activity_status         TEXT,
+  last_order_retail       REAL,
+  last_order_wholesale    REAL,
+  career_level_code       TEXT,
+  career_level_desc       TEXT,
+  myshop_active           INTEGER,
+  last_activated_date     TEXT,
+  synced_at               TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (consultant_id, consultant_number, period_month)
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_activity_history_consultant ON unit_member_activity_history(consultant_id)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_activity_history_period ON unit_member_activity_history(consultant_id, period_month)")
+
 conn.commit()
 conn.close()
 
