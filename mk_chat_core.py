@@ -3916,10 +3916,10 @@ class MKChatEngine:
                 _force_es = "spanish" in lowered or "español" in lowered or "espanol" in lowered
                 _force_en = "english" in lowered or "inglés" in lowered or "ingles" in lowered
                 if _force_es or (language == "es" and not _force_en):
-                    lb_url = "https://assets.mypinkassistant.com/lookbook-es.pdf"
+                    lb_url = "https://cdn.mypinkassistant.com/lookbook-es.pdf"
                     lb_label = "La Imagen actual"
                 else:
-                    lb_url = "https://assets.mypinkassistant.com/lookbook.pdf"
+                    lb_url = "https://cdn.mypinkassistant.com/lookbook.pdf"
                     lb_label = "current Look Book"
                 return ChatReply(
                     f'Here\'s the <a href="{lb_url}" class="inapp-overlay-link">{lb_label}</a>&nbsp; '
