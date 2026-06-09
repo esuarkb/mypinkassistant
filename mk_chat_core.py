@@ -2135,6 +2135,8 @@ def _looks_like_inventory_count(msg: str) -> bool:
         return True
     if s.startswith("how many ") and not any(w in s for w in ("order", "customer", "followup", "client", "people")):
         return True
+    if "on hand" in s and "do i have" in s:
+        return True
     return False
 
 

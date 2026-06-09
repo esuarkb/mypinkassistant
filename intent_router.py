@@ -268,6 +268,11 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if _city_m1:
         return IntentResult(intent="customers_by_city", confidence=0.95,
                             slots={"city": _city_m1.group(1).strip().title()}, raw_text=msg)
+    # Pattern 3: "customers who live/living/lives in [city]"
+    _city_m3 = re.search(r"\bliv(?:e|es|ing)\s+in\s+([A-Za-z][A-Za-z\s.',\-]+?)(?:\s*\??\s*$)", lowered) if "customer" in lowered and not _is_new_customer_entry else None
+    if _city_m3:
+        return IntentResult(intent="customers_by_city", confidence=0.95,
+                            slots={"city": _city_m3.group(1).strip().title()}, raw_text=msg)
     # Pattern 2: "[city] customers" reverse order — require plural, exclude state-adjectives
     # Allow multi-word cities starting with "new" (New York, New Orleans, etc.)
     _CITY_ADJECTIVES = {"active", "inactive", "lapsed", "top", "best", "recent", "other",

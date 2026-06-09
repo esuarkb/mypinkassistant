@@ -12,3 +12,4 @@ Traceback (most recent call last):
     <p style="color:#999;font-size:11px">Highlighted rows = unknown intent or low confidence · {now_utc.strftime("%Y-%m-%d %H:%M UTC")}</p>
                                                                                                 ^^^^^^^
 NameError: name 'now_utc' is not defined
+Digest sent for June 8, 2026 (42 messages, 9 consultants)
