@@ -20,21 +20,34 @@ def _looks_like_orders(records: list[dict]) -> bool:
     return bool(records) and bool(_ORDER_KEYS & set(records[0].keys()))
 
 
-def fetch_order_history(page: Page) -> list[dict]:
+def fetch_order_history(page: Page) -> tuple[list[dict], str]:
     """
     Navigates to the InTouch order-list page and captures the order-list
     API response. Matches any cacheable apex response whose returnValue
     looks like order records — robust to MK renaming the method.
+    Returns (orders, csrf_token). csrf_token is captured from the Apex
+    request headers and is needed for the order detail sync API calls.
     """
     # Deduplicate by Salesforce order Id so a reload doesn't double-count.
     captured: dict[str, dict] = {}
+    csrf_token: str = ""
 
     def _on_response(response):
+        nonlocal csrf_token
         url = response.url
         if _APEX_FRAGMENT not in url:
             return
         short = url[url.find(_APEX_FRAGMENT):][:130]
         print(f"[OrderHistoryImport] apex: {short}")
+        # Capture CSRF token from request headers for later detail API calls
+        if not csrf_token:
+            try:
+                token = response.request.headers.get("csrf-token") or ""
+                if token:
+                    csrf_token = token
+                    print(f"[OrderHistoryImport] captured csrf-token ({len(token)} chars)")
+            except Exception:
+                pass
         try:
             body = response.json()
             orders = _parse_orders(body)
@@ -61,7 +74,7 @@ def fetch_order_history(page: Page) -> list[dict]:
     if captured:
         print(f"[OrderHistoryImport] captured {len(captured)} orders via page-load listener")
         page.remove_listener("response", _on_response)
-        return list(captured.values())
+        return list(captured.values()), csrf_token
 
     print("[OrderHistoryImport] no orders on initial load — reloading to bust LWC cache")
     page.reload(wait_until="domcontentloaded")
@@ -74,7 +87,7 @@ def fetch_order_history(page: Page) -> list[dict]:
 
     if captured:
         print(f"[OrderHistoryImport] captured {len(captured)} orders via reload listener")
-        return list(captured.values())
+        return list(captured.values()), csrf_token
 
     print(f"[OrderHistoryImport] no orders found after page-load + reload — assuming zero orders. URL: {page.url}")
-    return []
+    return [], csrf_token

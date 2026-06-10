@@ -259,11 +259,13 @@ def _snapshot_unit_member_activity(cur, members: list[dict], ph: str) -> None:
     # Fetch the most recent prior-month snapshot for each unit member so we can
     # detect non-A → A transitions and record the activation date.
     cur.execute(f"""
-        SELECT DISTINCT ON (consultant_number)
-               consultant_number, activity_status, last_activated_date
-        FROM unit_member_activity_history
-        WHERE consultant_id = {ph} AND period_month < {ph}
-        ORDER BY consultant_number, period_month DESC
+        SELECT consultant_number, activity_status, last_activated_date
+        FROM (
+            SELECT consultant_number, activity_status, last_activated_date,
+                   ROW_NUMBER() OVER (PARTITION BY consultant_number ORDER BY period_month DESC) AS rn
+            FROM unit_member_activity_history
+            WHERE consultant_id = {ph} AND period_month < {ph}
+        ) t WHERE rn = 1
     """, (consultant_id, period_month))
     prior = {row[0]: {"status": row[1], "last_activated_date": row[2]} for row in cur.fetchall()}
 

@@ -86,7 +86,8 @@ from playwright_automation.orders import process_order_batch, SkuNotCdsEligible
 from playwright_automation.inventory_import import import_inventory_orders
 from inventory_import_store import ensure_import_table
 from playwright_automation.order_history_import import fetch_order_history
-from order_history_import_store import import_order_history
+from playwright_automation.order_detail_sync import fetch_order_details
+from order_history_import_store import import_order_history, update_order_item_quantities
 from playwright_automation.customer_api_import import fetch_customer_list
 from customer_api_import_store import import_customers_from_api
 for _startup_attempt in range(5):
@@ -371,6 +372,24 @@ def main():
                     else:
                         friendly = "Something unexpected happened. Please try again."
 
+                    # Silently retry transient network errors once before failing
+                    _transient = ("ERR_ABORTED", "net::", "ERR_CONNECTION", "ERR_TIMED_OUT",
+                                  "ERR_NAME_NOT_RESOLVED", "is interrupted")
+                    if any(s in err for s in _transient):
+                        try:
+                            _ln_conn = connect()
+                            _ln_cur = _ln_conn.cursor()
+                            _ln_cur.execute(f"SELECT attempts FROM jobs WHERE id={PH_W}", (job_id,))
+                            _ln_row = _ln_cur.fetchone()
+                            _ln_attempts = int(_ln_row[0]) if _ln_row else 99
+                            _ln_conn.close()
+                        except Exception:
+                            _ln_attempts = 99
+                        if _ln_attempts <= 1:
+                            print(f"[Worker] Login transient error on job {job_id} (attempt {_ln_attempts}) — requeueing for retry.")
+                            requeue_job(job_id, "Queued")
+                            raise _RequeueSilently()
+
                     _record_login_failure(cid)
 
                     if _is_intouch_outage():
@@ -564,7 +583,7 @@ def main():
                         # IMPORT_ORDER_HISTORY
                         # -------------------------
                         elif job_type == "IMPORT_ORDER_HISTORY":
-                            raw_orders = fetch_order_history(page)
+                            raw_orders, _csrf = fetch_order_history(page)
                             print(f"[ImportOrderHistory] fetch returned {len(raw_orders)} orders")
                             if raw_orders:
                                 print(f"[ImportOrderHistory] sample order keys: {list(raw_orders[0].keys())[:6]}")
@@ -607,7 +626,7 @@ def main():
                             finally:
                                 conn.close()
                             # Orders
-                            raw_orders = fetch_order_history(page)
+                            raw_orders, _ = fetch_order_history(page)
                             print(f"[InitialSync] fetch returned {len(raw_orders)} orders")
                             conn = connect()
                             try:
@@ -645,7 +664,7 @@ def main():
                             finally:
                                 conn.close()
                             # Orders
-                            raw_orders = fetch_order_history(page)
+                            raw_orders, _csrf_token = fetch_order_history(page)
                             print(f"[FullSync] fetch returned {len(raw_orders)} orders")
                             conn = connect()
                             try:
@@ -654,6 +673,21 @@ def main():
                                 conn.commit()
                             finally:
                                 conn.close()
+                            # Order detail sync — 7-day window to catch recent quantity changes
+                            _non_archived = [
+                                (o["Id"], (o.get("OrderedDate_f__c") or o.get("OrderedDate") or "")[:10])
+                                for o in raw_orders if o.get("Id") and not o.get("IsArchived_cb__c")
+                            ]
+                            if _non_archived and _csrf_token:
+                                _detail_map = fetch_order_details(page, _non_archived, _csrf_token, days=7)
+                                if _detail_map:
+                                    conn = connect()
+                                    try:
+                                        cur = conn.cursor()
+                                        update_order_item_quantities(cur, consultant_id=cid, order_details_map=_detail_map)
+                                        conn.commit()
+                                    finally:
+                                        conn.close()
                             # Reports (team data, challenge tracking, registrations)
                             # Runs before inventory — inventory visits applications.marykayintouch.com
                             # via a different auth path which would contaminate the FOReports session
@@ -713,6 +747,26 @@ def main():
                                 else:
                                     _pcp_msg = f"PCP sync failed — {_pcp_err}"
                                     print(f"[PcpSync] {_pcp_msg}")
+                            # Order detail sync — full backfill of all non-archived orders
+                            try:
+                                _od_orders, _od_csrf = fetch_order_history(page)
+                                _non_archived = [
+                                    (o["Id"], (o.get("OrderedDate_f__c") or o.get("OrderedDate") or "")[:10])
+                                    for o in _od_orders if o.get("Id") and not o.get("IsArchived_cb__c")
+                                ]
+                                if _non_archived and _od_csrf:
+                                    print(f"[PcpSync] starting order detail sync for {len(_non_archived)} orders")
+                                    _detail_map = fetch_order_details(page, _non_archived, _od_csrf)
+                                    if _detail_map:
+                                        conn = connect()
+                                        try:
+                                            cur = conn.cursor()
+                                            update_order_item_quantities(cur, consultant_id=cid, order_details_map=_detail_map)
+                                            conn.commit()
+                                        finally:
+                                            conn.close()
+                            except Exception as _od_err:
+                                print(f"[PcpSync] Order detail sync failed (non-fatal): {_od_err}")
                             # Reports (team data, challenge tracking, registrations) — same login session
                             _report_msg = ""
                             try:
@@ -737,7 +791,6 @@ def main():
                         # -------------------------
                         elif job_type == "REPORT_SYNC":
                             from playwright_automation.report_sync import run_report_sync
-                            from db import is_postgres
                             _ph = "%s" if is_postgres() else "?"
                             conn = connect()
                             try:

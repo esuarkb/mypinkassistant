@@ -200,6 +200,24 @@ def _insert_item(cur, order_id: int, sku: str, name: str, unit_price: float) -> 
         )
 
 
+def _insert_item_with_qty(cur, order_id: int, sku: str, name: str, unit_price: float, quantity: int) -> None:
+    is_sq = _is_sqlite(cur)
+    if is_sq:
+        cur.execute(
+            """INSERT INTO order_items
+               (order_id, sku, product_name, unit_price, quantity, discount_amount, created_at)
+               VALUES (?,?,?,?,?, 0, datetime('now'))""",
+            (order_id, sku, name, unit_price, quantity),
+        )
+    else:
+        cur.execute(
+            """INSERT INTO order_items
+               (order_id, sku, product_name, unit_price, quantity, discount_amount, created_at)
+               VALUES (%s,%s,%s,%s,%s, 0, NOW())""",
+            (order_id, sku, name, unit_price, quantity),
+        )
+
+
 def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dict:
     """
     Processes raw API orders and inserts into DB.
@@ -377,3 +395,87 @@ def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dic
         "skipped_no_items": skipped_no_items,
         "unmatched_products": list(set(unmatched_products)),
     }
+
+
+def update_order_item_quantities(
+    cur, consultant_id: int, order_details_map: dict[str, list[dict]],
+    catalog: list[dict] | None = None,
+) -> dict:
+    """
+    For each order in order_details_map: delete existing order_items,
+    re-insert with real quantities from the InTouch detail API.
+    Updates order total from productAmount sum.
+    Works for SQLite and Postgres (uses PH placeholder).
+    """
+    if catalog is None:
+        catalog = _load_catalog()
+
+    PH = "?" if _is_sqlite(cur) else "%s"
+    updated = 0
+    skipped_no_order = 0
+
+    for intouch_order_id, product_details in order_details_map.items():
+        if not product_details:
+            continue
+
+        cur.execute(
+            f"SELECT id FROM orders WHERE consultant_id = {PH} AND intouch_order_id = {PH} LIMIT 1",
+            (consultant_id, intouch_order_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            skipped_no_order += 1
+            continue
+
+        order_id = int(row[0] if not isinstance(row, dict) else row["id"])
+
+        cur.execute(f"DELETE FROM order_items WHERE order_id = {PH}", (order_id,))
+
+        new_total = 0.0
+        for item in product_details:
+            prod_name = (item.get("productName") or "").strip()
+            if not prod_name:
+                continue
+
+            try:
+                qty = max(1, int(item.get("productQuantity") or 1))
+            except Exception:
+                qty = 1
+
+            try:
+                unit_price = float(item.get("productUnitPrice") or 0)
+            except Exception:
+                unit_price = 0.0
+
+            try:
+                product_amount = float(item.get("productAmount") or 0)
+            except Exception:
+                product_amount = unit_price * qty
+
+            new_total += product_amount
+
+            catalog_row = _match_product(prod_name, catalog)
+            if catalog_row:
+                sku = catalog_row["sku"]
+                name = catalog_row["product_name"]
+                if unit_price == 0.0:
+                    try:
+                        unit_price = float(catalog_row.get("price") or 0)
+                    except Exception:
+                        pass
+            else:
+                sku = (item.get("productSKU") or "").strip()
+                name = prod_name
+
+            _insert_item_with_qty(cur, order_id, sku, name, unit_price, qty)
+
+        if new_total > 0:
+            cur.execute(
+                f"UPDATE orders SET total = {PH} WHERE id = {PH}",
+                (new_total, order_id),
+            )
+
+        updated += 1
+
+    print(f"[OrderDetailSync] quantity update: updated={updated} skipped_no_order={skipped_no_order}")
+    return {"updated": updated, "skipped_no_order": skipped_no_order}
