@@ -2137,6 +2137,10 @@ def _looks_like_inventory_count(msg: str) -> bool:
         return True
     if "on hand" in s and "do i have" in s:
         return True
+    if "do i have" in s and "inventory" in s:
+        return True
+    if "in my inventory" in s:
+        return True
     return False
 
 
@@ -2220,6 +2224,18 @@ def _parse_inventory_lookup_text(msg: str) -> str:
         return m.group(1).strip()
 
     m = re.match(r"^\s*(.+?)\s+in\s+inventory\s*\??\s*$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    m = re.match(r"^\s*do\s+i\s+have\s+(.+?)\s+on\s+hand\s*\??$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    m = re.match(r"^\s*do\s+i\s+have\s+(.+?)\s+in\s+(?:my\s+)?inventory\s*\??$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    m = re.match(r"^\s*is\s+(?:the\s+)?(.+?)\s+in\s+(?:my\s+)?inventory\s*\??$", s, re.IGNORECASE)
     if m:
         return m.group(1).strip()
 
