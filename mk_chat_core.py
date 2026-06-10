@@ -1728,7 +1728,7 @@ def _looks_like_new_order_entry(text: str) -> bool:
 
                 has_order_verb = any(x in t for x in ("order ", "ordered ", "wants ", "want ", "needs ", "need "))
                 has_item_connector = any(x in t for x in (" and ", ","))
-                has_quantity = bool(re.search(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b", t))
+                has_quantity = bool(re.search(r"\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten)\b", t))
                 has_product_hint = any(
                     x in t for x in (
                         "mask", "set", "cleanser", "cream", "lipstick", "foundation",
@@ -3482,6 +3482,23 @@ class MKChatEngine:
         lowered = msg.lower()
         
         # -------------------------
+        # Look Book — global early exit so it works even mid-order
+        # -------------------------
+        if "look book" in lowered or "lookbook" in lowered:
+            _force_es = "spanish" in lowered or "español" in lowered or "espanol" in lowered
+            _force_en = "english" in lowered or "inglés" in lowered or "ingles" in lowered
+            if _force_es or (language == "es" and not _force_en):
+                lb_url = "https://cdn.mypinkassistant.com/lookbook-es.pdf"
+                lb_label = "La Imagen actual"
+            else:
+                lb_url = "https://cdn.mypinkassistant.com/lookbook.pdf"
+                lb_label = "current Look Book"
+            return ChatReply(
+                f'Here\'s the <a href="{lb_url}" class="inapp-overlay-link">{lb_label}</a>&nbsp; '
+                f'<button class="fdp-copy copy-link-btn" data-copy="{lb_url}">Copy Link</button>'
+            )
+
+        # -------------------------
         # Bare inventory-style write guardrail
         # -------------------------
         if _looks_like_bare_inventory_write(msg):
@@ -3912,19 +3929,6 @@ class MKChatEngine:
                     )
                 return ChatReply('Find your referral link in <a href="/settings">Settings</a>.')
 
-            if "look book" in lowered or "lookbook" in lowered:
-                _force_es = "spanish" in lowered or "español" in lowered or "espanol" in lowered
-                _force_en = "english" in lowered or "inglés" in lowered or "ingles" in lowered
-                if _force_es or (language == "es" and not _force_en):
-                    lb_url = "https://cdn.mypinkassistant.com/lookbook-es.pdf"
-                    lb_label = "La Imagen actual"
-                else:
-                    lb_url = "https://cdn.mypinkassistant.com/lookbook.pdf"
-                    lb_label = "current Look Book"
-                return ChatReply(
-                    f'Here\'s the <a href="{lb_url}" class="inapp-overlay-link">{lb_label}</a>&nbsp; '
-                    f'<button class="fdp-copy copy-link-btn" data-copy="{lb_url}">Copy Link</button>'
-                )
 
         # -------------------------
         # Customer edit requests — not supported, redirect to InTouch
@@ -4399,17 +4403,88 @@ class MKChatEngine:
         # -------------------------
         if not pending:
             if intent_result.intent == "recent_orders":
-                    import re
+                    import re, calendar as _cal
+                    from datetime import date as _date
                     from crm_store import format_recent_orders
 
-                    m_clean = re.sub(r"[^\w\s']", " ", msg).strip()
+                    # --- 1. Date range parsing (runs first so matched text can be scrubbed
+                    #        from the message before name extraction) ---
+                    _start_date: str | None = None
+                    _end_date: str | None = None
+                    _period_label: str | None = None
+                    _date_scrub = ""  # exact matched text to remove before name extraction
+
+                    _MONTHS = {
+                        "jan": 1, "january": 1, "feb": 2, "february": 2,
+                        "mar": 3, "march": 3, "apr": 4, "april": 4,
+                        "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+                        "aug": 8, "august": 8, "sep": 9, "september": 9,
+                        "oct": 10, "october": 10, "nov": 11, "november": 11,
+                        "dec": 12, "december": 12,
+                    }
+                    _today = _date.today()
+                    _mp = "|".join(_MONTHS.keys())
+
+                    _m_my = re.search(rf"\b({_mp})\.?\s+(20\d{{2}})\b", lowered)
+                    _m_yr = re.search(r"\b(20\d{2})\b", lowered)
+
+                    if _m_my:
+                        _mo = _MONTHS[_m_my.group(1)]; _yr = int(_m_my.group(2))
+                        _last_day = _cal.monthrange(_yr, _mo)[1]
+                        _start_date = f"{_yr}-{_mo:02d}-01"
+                        _end_date   = f"{_yr}-{_mo:02d}-{_last_day}"
+                        _period_label = f"{_m_my.group(1).capitalize()} {_yr}"
+                        _date_scrub = _m_my.group(0)
+                    elif _m_yr:
+                        _yr = int(_m_yr.group(1))
+                        _start_date = f"{_yr}-01-01"
+                        _end_date   = f"{_yr}-12-31"
+                        _period_label = str(_yr)
+                        _date_scrub = _m_yr.group(0)
+                    elif "this month" in lowered:
+                        _start_date = _today.replace(day=1).isoformat()
+                        _end_date   = _today.isoformat()
+                        _period_label = _today.strftime("%B %Y")
+                        _date_scrub = "this month"
+                    elif "last month" in lowered:
+                        _ft = _today.replace(day=1)
+                        _lmo = (_ft.month - 2) % 12 + 1
+                        _lyr = _ft.year if _ft.month > 1 else _ft.year - 1
+                        _start_date = f"{_lyr}-{_lmo:02d}-01"
+                        _end_date   = f"{_lyr}-{_lmo:02d}-{_cal.monthrange(_lyr, _lmo)[1]}"
+                        _period_label = _date(_lyr, _lmo, 1).strftime("%B %Y")
+                        _date_scrub = "last month"
+                    elif "this year" in lowered:
+                        _start_date = f"{_today.year}-01-01"
+                        _end_date   = _today.isoformat()
+                        _period_label = str(_today.year)
+                        _date_scrub = "this year"
+                    elif "last year" in lowered:
+                        _start_date = f"{_today.year - 1}-01-01"
+                        _end_date   = f"{_today.year - 1}-12-31"
+                        _period_label = str(_today.year - 1)
+                        _date_scrub = "last year"
+
+                    # --- 2. Limit ---
+                    limit = 999 if _start_date else 3
+                    _m_lim = re.search(r"\blast\s+(\d+)\s+orders?\b", lowered)
+                    if _m_lim:
+                        limit = max(1, min(10, int(_m_lim.group(1))))
+                    elif "last order" in lowered or "latest order" in lowered:
+                        limit = 1
+                    elif "all" in lowered:
+                        limit = 999
+
+                    # --- 3. Name extraction — scrub matched date text first so month
+                    #        names belonging to the date don't pollute the name guess ---
+                    _msg_for_name = re.sub(re.escape(_date_scrub), " ", msg, flags=re.IGNORECASE).strip() if _date_scrub else msg
+                    m_clean = re.sub(r"[^\w\s']", " ", _msg_for_name).strip()
                     stop_words = {
                         "last", "recent", "show", "lookup", "order", "orders", "history",
-                        "for", "on", "info", "information", "what", "is", "whats", "what's",
-                        "me", "please", "customer","was", "did", "do", "does",
-                        "order", "orders", "ordered",
-                        "last", "recent", "latest",
-                        "buy", "bought", "purchase", "purchased"
+                        "for", "on", "in", "info", "information", "what", "is", "whats", "what's",
+                        "me", "please", "customer", "was", "did", "do", "does",
+                        "ordered", "latest", "all", "buy", "bought", "purchase", "purchased",
+                        "have", "has", "had", "this", "the", "a",
                     }
 
                     tokens = []
@@ -4417,31 +4492,17 @@ class MKChatEngine:
                         t = raw.strip()
                         if t.lower().endswith("'s"):
                             t = t[:-2]
-
                         if not t:
                             continue
-
-                        # ✅ ignore numbers like "3" in "last 3 orders"
                         if t.isdigit():
                             continue
-
-                        # ✅ ignore common time/count words
                         if t.lower() in ("day", "days", "week", "weeks", "month", "months", "year", "years"):
                             continue
-
                         if t.lower() not in stop_words:
                             tokens.append(t)
 
                     guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
                     guess = _resolve_pronoun_guess(guess, state) or (state.get("last_ref_customer_name") or "").strip() or msg
-
-                    import re
-                    limit = 3
-                    m = re.search(r"\blast\s+(\d+)\s+orders?\b", lowered)
-                    if m:
-                        limit = max(1, min(10, int(m.group(1))))
-                    elif "last order" in lowered or "latest order" in lowered:
-                        limit = 1
 
                     with tx() as (conn, cur):
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
@@ -4456,7 +4517,10 @@ class MKChatEngine:
                                 "kind": "pick_customer",
                                 "candidates": top,
                                 "action": "orders",
-                                "orders_limit": limit
+                                "orders_limit": limit,
+                                "orders_start_date": _start_date,
+                                "orders_end_date": _end_date,
+                                "orders_period_label": _period_label,
                             }
                             save_session_state(state, session_id=sid)
 
@@ -4466,9 +4530,12 @@ class MKChatEngine:
                         customer_id = int(c["id"])
                         customer_name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
 
-                        orders = get_recent_orders_for_customer(cur, customer_id=customer_id, limit=limit)
+                        orders = get_recent_orders_for_customer(
+                            cur, customer_id=customer_id, limit=limit,
+                            start_date=_start_date, end_date=_end_date,
+                        )
 
-                    return ChatReply(format_recent_orders(customer_name, orders))
+                    return ChatReply(format_recent_orders(customer_name, orders, period_label=_period_label))
         
         # -------------------------
         # CRM quick lookup: customer spending (no LLM call)
@@ -4834,12 +4901,18 @@ class MKChatEngine:
                 if action == "orders":
                     with tx() as (conn, cur):
                         limit = int(pending.get("orders_limit") or 3)
-                        orders = get_recent_orders_for_customer(cur, customer_id=customer_id, limit=limit)
+                        _sd = pending.get("orders_start_date")
+                        _ed = pending.get("orders_end_date")
+                        _pl = pending.get("orders_period_label")
+                        orders = get_recent_orders_for_customer(
+                            cur, customer_id=customer_id, limit=limit,
+                            start_date=_sd, end_date=_ed,
+                        )
                     state["last_ref_customer_id"] = None
                     state["last_ref_customer_name"] = None
                     state["last_customer"] = None
                     save_session_state(state, session_id=sid)
-                    return ChatReply(format_recent_orders(customer_name, orders))
+                    return ChatReply(format_recent_orders(customer_name, orders, period_label=_pl))
 
                 if action == "delete":
                     with tx() as (conn, cur):

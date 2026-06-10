@@ -153,6 +153,11 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     ):
         return IntentResult(intent="leaderboard", confidence=0.95, raw_text=msg)
 
+    # Per-customer possessive order history ("Jeannie's orders in 2024") must be caught
+    # before the broad "orders in " data_query trigger grabs it.
+    if re.search(r"\b\w+'s orders\b", lowered):
+        return IntentResult(intent="recent_orders", confidence=0.92, raw_text=msg)
+
     # data_query — cross-customer/aggregate queries; must run before recent_orders
     # so "who ordered in May" doesn't get stolen by the broad recent_orders keyword match
     _data_query_triggers = (

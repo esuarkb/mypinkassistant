@@ -743,25 +743,29 @@ def create_order_from_confirmed(
 
     return order_id
 
-def get_recent_orders_for_customer(cur, customer_id: int, limit: int = 3):
+def get_recent_orders_for_customer(cur, customer_id: int, limit: int = 3,
+                                   start_date: str | None = None,
+                                   end_date: str | None = None):
     is_sqlite = _is_sqlite_cursor(cur)
+    PH = "?" if is_sqlite else "%s"
 
-    if is_sqlite:
-        cur.execute("""
-            SELECT id, order_date, total, source
-            FROM orders
-            WHERE customer_id = ?
-            ORDER BY order_date DESC, id DESC
-            LIMIT ?
-        """, (customer_id, limit))
-    else:
-        cur.execute("""
-            SELECT id, order_date, total, source
-            FROM orders
-            WHERE customer_id = %s
-            ORDER BY order_date DESC, id DESC
-            LIMIT %s
-        """, (customer_id, limit))
+    date_filter = ""
+    params: list = [customer_id]
+    if start_date:
+        date_filter += f" AND order_date >= {PH}"
+        params.append(start_date)
+    if end_date:
+        date_filter += f" AND order_date < {PH}"
+        params.append(end_date)
+    params.append(limit)
+
+    cur.execute(f"""
+        SELECT id, order_date, total, source
+        FROM orders
+        WHERE customer_id = {PH}{date_filter}
+        ORDER BY order_date DESC, id DESC
+        LIMIT {PH}
+    """, params)
 
     orders = _rows_to_dicts(cur)
 
@@ -789,11 +793,13 @@ def get_recent_orders_for_customer(cur, customer_id: int, limit: int = 3):
 
 from datetime import datetime
 
-def format_recent_orders(customer_name: str, orders: list) -> str:
+def format_recent_orders(customer_name: str, orders: list, period_label: str | None = None) -> str:
     if not orders:
-        return f"I don't see any saved orders for {customer_name} yet."
+        period_str = f" in {period_label}" if period_label else ""
+        return f"I don't see any orders for {customer_name}{period_str}."
 
-    lines = [f"Recent orders for {customer_name}:"]
+    header = f"{customer_name}'s orders in {period_label}:" if period_label else f"Recent orders for {customer_name}:"
+    lines = [header]
 
     for o in orders:
         # Format date properly (works for sqlite string or postgres datetime)
