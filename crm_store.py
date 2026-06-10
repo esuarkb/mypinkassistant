@@ -252,7 +252,13 @@ def find_customers_by_name(
         score_first = fuzz.WRatio(q_low, first.lower()) if first else 0
         score_last = fuzz.WRatio(q_low, last.lower()) if last else 0
 
-        score = max(score_full, score_first, score_last)
+        # For multi-word queries (first + last name), score_full is primary.
+        # score_first/score_last alone can inflate matches on partial comparisons
+        # (e.g. "Jennifer Smith" scoring high against just "Jeannie").
+        if " " in q_low:
+            score = max(score_full, min(max(score_first, score_last), score_full + 5))
+        else:
+            score = max(score_full, score_first, score_last)
 
         if q_low and q_low in full.lower():
             score += 5

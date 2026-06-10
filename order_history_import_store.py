@@ -146,13 +146,15 @@ def _insert_guest_order(cur, consultant_id: int, intouch_order_id: str,
     )
 
 
-def _order_already_imported(cur, consultant_id: int, intouch_order_id: str) -> bool:
+def _order_already_imported(cur, consultant_id: int, intouch_order_id: str) -> int | None:
+    """Returns internal order_id if already imported, else None."""
     PH = "?" if _is_sqlite(cur) else "%s"
     cur.execute(
-        f"SELECT 1 FROM orders WHERE consultant_id = {PH} AND intouch_order_id = {PH} LIMIT 1",
+        f"SELECT id FROM orders WHERE consultant_id = {PH} AND intouch_order_id = {PH} LIMIT 1",
         (consultant_id, intouch_order_id),
     )
-    return cur.fetchone() is not None
+    row = cur.fetchone()
+    return int(row[0]) if row else None
 
 
 def _insert_order(cur, consultant_id: int, customer_id: int, order_date: str,
@@ -226,6 +228,8 @@ def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dic
     skipped_no_name = 0
     skipped_no_match = 0
     skipped_no_id = 0
+    recent_duplicates = 0
+    items_updated = 0
     unmatched_products: list[str] = []
 
     print(f"[ImportOrderHistory] processing {len(raw_orders)} raw orders for consultant {consultant_id}")
@@ -241,9 +245,54 @@ def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dic
             skipped_no_id += 1
             continue
 
-        # Skip already imported
-        if _order_already_imported(cur, consultant_id, intouch_order_id):
+        # Already imported — check if within 7 days and items changed
+        existing_order_id = _order_already_imported(cur, consultant_id, intouch_order_id)
+        if existing_order_id is not None:
             skipped_duplicate += 1
+            raw_date = (order.get("OrderedDate_f__c") or order.get("OrderedDate") or "")[:10]
+            if raw_date:
+                from datetime import date as _date, timedelta
+                try:
+                    if _date.fromisoformat(raw_date) >= _date.today() - timedelta(days=7):
+                        recent_duplicates += 1
+                        # Surgical item sync: compare incoming items to DB items
+                        incoming_items = order.get("OrderItemSummaries") or []
+                        incoming_names = sorted(
+                            (_match_product((item.get("Product2") or {}).get("Name", ""), catalog) or {}).get("product_name")
+                            or (item.get("Product2") or {}).get("Name", "").strip()
+                            for item in incoming_items
+                            if (item.get("Product2") or {}).get("Name", "").strip()
+                        )
+                        PH = "?" if _is_sqlite(cur) else "%s"
+                        cur.execute(
+                            f"SELECT product_name FROM order_items WHERE order_id = {PH} ORDER BY product_name",
+                            (existing_order_id,),
+                        )
+                        existing_names = sorted(r[0] for r in cur.fetchall())
+                        if incoming_names != existing_names:
+                            cur.execute(f"DELETE FROM order_items WHERE order_id = {PH}", (existing_order_id,))
+                            new_total = float(order.get("GrandTotalAmount") or 0)
+                            cur.execute(f"UPDATE orders SET total = {PH} WHERE id = {PH}", (new_total, existing_order_id))
+                            for item in incoming_items:
+                                prod = item.get("Product2") or {}
+                                prod_name = (prod.get("Name") or "").strip()
+                                if not prod_name:
+                                    continue
+                                catalog_row = _match_product(prod_name, catalog)
+                                if catalog_row:
+                                    sku = catalog_row["sku"]
+                                    name = catalog_row["product_name"]
+                                    unit_price = float(catalog_row.get("price") or 0)
+                                else:
+                                    sku = ""
+                                    name = prod_name
+                                    unit_price = 0.0
+                                _insert_item(cur, existing_order_id, sku, name, unit_price)
+                            items_updated += 1
+                            print(f"[ImportOrderHistory] surgical update: {raw_date} order_id={existing_order_id} "
+                                  f"was={existing_names} now={incoming_names}")
+                except Exception as _e:
+                    print(f"[ImportOrderHistory] surgical update error for {intouch_order_id}: {_e}")
             continue
 
         # Customer
@@ -318,8 +367,8 @@ def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dic
         inserted += 1
 
     print(f"[ImportOrderHistory] done: inserted={inserted} archived={skipped_archived} "
-          f"dupes={skipped_duplicate} no_items={skipped_no_items} "
-          f"no_id={skipped_no_id} no_name={skipped_no_name} no_match={skipped_no_match}")
+          f"dupes={skipped_duplicate} recent_dupes={recent_duplicates} items_updated={items_updated} "
+          f"no_items={skipped_no_items} no_id={skipped_no_id} no_name={skipped_no_name} no_match={skipped_no_match}")
 
     return {
         "inserted": inserted,
