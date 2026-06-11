@@ -30,7 +30,7 @@ from slowapi.errors import RateLimitExceeded
 
 from db import connect, is_postgres, tx
 from db import get_system_setting, set_system_setting
-from mk_chat_core import MKChatEngine, save_session_state, insert_job, maybe_queue_initial_customer_import
+from mk_chat_core import MKChatEngine, save_session_state, insert_job, maybe_queue_initial_customer_import, _build_chat_help_html
 from billing_routes import router as billing_router
 
 from auth_core import (
@@ -1388,6 +1388,31 @@ def app_page(request: Request):
             i = html.lower().find("<body")
             j = html.find(">", i) + 1
             html = html[:j] + banner + html[j:]
+
+    # Welcome bubble — shown only while initial sync is pending (one-time, disappears once sync completes)
+    if not c.get("initial_sync_completed"):
+        _wlang = (c.get("language") or "en").strip().lower()
+        _help_html = _build_chat_help_html(has_team=False, lang=_wlang)
+        if _wlang == "es":
+            _welcome_intro = (
+                "<strong>¡Bienvenida a MyPinkAssistant! 🎉</strong><br><br>"
+                "Tus datos de clientes casi terminan de sincronizarse desde MyCustomers — "
+                "¡solo tomará un momento más!<br><br>"
+                "Mientras tanto, aquí hay algunas cosas que puedes hacer en el chat, "
+                "o visita la <a href='/help'>página de ayuda</a> o las <a href='/faq'>preguntas frecuentes</a>.<br><br>"
+            )
+        else:
+            _welcome_intro = (
+                "<strong>Welcome to MyPinkAssistant! 🎉</strong><br><br>"
+                "Your customer data is almost done syncing from MyCustomers — "
+                "should only be another minute or two!<br><br>"
+                "In the meantime, here are some things you can do in chat, "
+                "or check out the <a href='/help'>Help page</a> or <a href='/faq'>FAQ</a>.<br><br>"
+            )
+        _welcome_html = f'<div class="msg bot">{_welcome_intro}{_help_html}</div>'
+    else:
+        _welcome_html = ""
+    html = html.replace("{{WELCOME_MESSAGE}}", _welcome_html)
 
     return HTMLResponse(html)
 

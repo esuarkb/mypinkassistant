@@ -1560,13 +1560,15 @@ def _split_order_for_prefix(message: str) -> tuple[str, str]:
 
     return customer_hint, item_hint
 
-def propose_top(top: dict, current_qty: int, ui: dict = None) -> str:
+def propose_top(top: dict, current_qty: int, ui: dict = None, original_text: str | None = None) -> str:
     if ui is None:
         ui = UI_EN
     if not (top.get("sku") or "").strip():
-        return ui.get("no_catalog_match",
-                      "I couldn't find that product in the catalog. "
-                      "Try rewording it (brand, line, or shade helps), or say `cancel` to start over.") + _QR_YN
+        _label = f'"{original_text}"' if original_text else "that product"
+        return (
+            f"I couldn't find {_label} in the catalog. "
+            "Try rewording it (brand, line, or shade helps), say 'skip' to skip this item, or `cancel` to start over."
+        ) + _QR_YN
     q = int(current_qty or 1)
     qtxt = f" x{q}" if q != 1 else ""
 
@@ -3927,7 +3929,7 @@ class MKChatEngine:
         # Look book (no LLM call)
         # -------------------------
         if not pending:
-            if any(t in lowered for t in ("referral code", "referral link", "my referral", "refer a friend", "refer someone", "referral")):
+            if any(t in lowered for t in ("referral code", "referral link", "my referral", "refer a friend", "refer someone")):
                 import os as _os
                 _ref_base = (_os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
                 from db import tx as _rtx
@@ -4482,10 +4484,19 @@ class MKChatEngine:
                         _date_scrub = "last year"
 
                     # --- 2. Limit ---
+                    _WORD_NUMS = {
+                        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+                    }
                     limit = 999 if _start_date else 3
                     _m_lim = re.search(r"\blast\s+(\d+)\s+orders?\b", lowered)
+                    _m_lim_word = re.search(
+                        rf"\blast\s+({'|'.join(_WORD_NUMS)})\s+orders?\b", lowered
+                    )
                     if _m_lim:
                         limit = max(1, min(10, int(_m_lim.group(1))))
+                    elif _m_lim_word:
+                        limit = _WORD_NUMS[_m_lim_word.group(1)]
                     elif "last order" in lowered or "latest order" in lowered:
                         limit = 1
                     elif "all" in lowered:
@@ -4513,6 +4524,8 @@ class MKChatEngine:
                         if t.isdigit():
                             continue
                         if t.lower() in ("day", "days", "week", "weeks", "month", "months", "year", "years"):
+                            continue
+                        if t.lower() in _WORD_NUMS:
                             continue
                         if t.lower() not in stop_words:
                             tokens.append(t)
@@ -5011,7 +5024,7 @@ class MKChatEngine:
 
                         state["pending"] = self._pending_for_top(order_draft, nxt, top, matches)
                         save_session_state(state, session_id=sid)
-                        return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"], ui=ui))
+                        return ChatReply(propose_top(top, current_qty=order_draft["lines"][nxt]["qty"], ui=ui, original_text=order_draft["lines"][nxt].get("text")))
 
                     state["pending"] = {"kind": "order_confirm", "order": order_draft}
                     save_session_state(state, session_id=sid)
@@ -5374,9 +5387,10 @@ class MKChatEngine:
                 if yes(msg):
                     if not (top.get("sku") or "").strip():
                         # No match found — can't confirm a blank item
+                        _orig = (order["lines"][line_index].get("text") or "that product").strip()
                         return ChatReply(
-                            "I couldn't find that product in the catalog. "
-                            "Try rewording it (brand, line, or shade helps), or say `cancel` to start over."
+                            f"I couldn't find \"{_orig}\" in the catalog. "
+                            "Try rewording it (brand, line, or shade helps), say 'skip' to skip this item, or `cancel` to start over."
                         )
                     order["lines"][line_index]["chosen"] = top
                     state["pending"] = None
@@ -5384,6 +5398,7 @@ class MKChatEngine:
 
                 if no(msg):
                     if not matches:
+                        _orig = (order["lines"][line_index].get("text") or "that product").strip()
                         state["pending"] = {
                             "kind": "order_line_pick_top5_or_search",
                             "order": order,
@@ -5392,8 +5407,8 @@ class MKChatEngine:
                         }
                         save_session_state(state, session_id=sid)
                         return ChatReply(
-                            "I couldn't find that product in the catalog. "
-                            "Try typing a different description and I'll search again, or say cancel to start over."
+                            f"I couldn't find \"{_orig}\" in the catalog. "
+                            "Try rewording it (brand, line, or shade helps), say 'skip' to skip this item, or `cancel` to start over."
                         )
                     state["pending"] = {
                         "kind": "order_line_pick_top5_or_search",
@@ -5980,7 +5995,7 @@ class MKChatEngine:
                 state["pending"] = self._pending_for_top(order_draft, nxt, top, matches)
                 save_session_state(state, session_id=sid)
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
-                return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft['lines'][nxt]['qty'], ui=ui)}")
+                return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft['lines'][nxt]['qty'], ui=ui, original_text=order_draft['lines'][nxt].get('text'))}")
 
             # CDS orders require an address — hard block before showing confirm
             if fulfillment_method == "cds" and not self._customer_has_address(consultant_id, order_draft.get("customer_id")):
@@ -6052,7 +6067,7 @@ class MKChatEngine:
 
             state["pending"] = self._pending_for_top(order, nxt, top, matches)
             save_session_state(state, session_id=sid)
-            return ChatReply(propose_top(top, current_qty=order["lines"][nxt]["qty"], ui=ui))
+            return ChatReply(propose_top(top, current_qty=order["lines"][nxt]["qty"], ui=ui, original_text=order["lines"][nxt].get("text")))
 
     ## format_customer_confirm
     def _format_customer_confirm(self, customer: dict, ui: dict) -> str:
