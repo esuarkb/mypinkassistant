@@ -66,8 +66,11 @@
 
         <!-- Chat feed (ONLY scroll area) -->
         <section class="chatWrap" id="chatWrap">
-            <div id="chat" class="chat" aria-label="Chat messages">{{WELCOME_MESSAGE}}</div>
+            <div id="chat" class="chat" aria-label="Chat messages"></div>
         </section>
+
+        <!-- Welcome message (server-injected, read by app.js on load) -->
+        <div id="welcomeMessage" hidden>{{WELCOME_MESSAGE}}</div>
 
         <!-- Bottom composer (after first message) -->
         <section class="composerDock" id="composerDock">
@@ -78,7 +81,7 @@
 
     <div id="jobToast" class="toast hidden" role="status" aria-live="polite"></div>
 
-    <script src="/web/app.js?v=28"></script>
+    <script src="/web/app.js?v=29"></script>
 </body>
 
 </html>

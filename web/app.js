@@ -548,6 +548,13 @@ document.addEventListener("click", function(e) {
     await resetServerSession();
     resetToInitialState();
     await loadUiMessages();
+
+    // Show welcome bubble if server injected one (e.g. during initial sync)
+    const welcomeEl = document.getElementById("welcomeMessage");
+    if (welcomeEl && welcomeEl.innerHTML.trim()) {
+        addMessage(welcomeEl.innerHTML.trim(), "bot");
+        enterChatModeIfNeeded();
+    }
 })();
 
 // Hamburger menu
