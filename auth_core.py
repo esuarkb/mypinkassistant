@@ -255,7 +255,8 @@ def get_consultant_full(cid: int) -> Optional[dict]:
                 cancel_at_period_end,
                 onboarding_complete,
                 last_billing_event_at,
-                consecutive_login_failures
+                consecutive_login_failures,
+                initial_sync_completed
             FROM consultants
             WHERE id={PH}
             """,
