@@ -292,6 +292,7 @@ def get_consultant_full(cid: int) -> Optional[dict]:
         "onboarding_complete": int(_row_get(row, "onboarding_complete", 13) or 0),
         "last_billing_event_at": (_row_get(row, "last_billing_event_at", 14) or ""),
         "consecutive_login_failures": int(_row_get(row, "consecutive_login_failures", 15) or 0),
+        "initial_sync_completed": bool(_row_get(row, "initial_sync_completed", 16)),
     }
 
 
