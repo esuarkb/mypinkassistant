@@ -1883,7 +1883,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
 
         # birthday:
         if low.startswith("birthday") or low.startswith("birthdate") or low.startswith("bday") or low.startswith("dob"):
-            b_raw = re.sub(r"^(birthday|birthdate|bday|dob)\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
+            b_raw = re.sub(r"^(birthday|birthdate|bday|dob)\s*(?:is|was)?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
             b = normalize_birthday(b_raw)
             if b:
                 c["Birthday"] = b
@@ -1909,7 +1909,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
 
         # address:
         if low.startswith("address"):
-            addr = txt.replace("address", "", 1).strip(": ").strip()
+            addr = re.sub(r"^address\s*(?:is|was|at)?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
             if addr:
                 # ✅ Try smart parse first
                 parsed = parse_address_line(addr)
