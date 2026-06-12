@@ -172,7 +172,12 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         return
 
     # Process order: confirm delivery status change
-    page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
+    # Retry once — InTouch can be slow to render this button after Save and Review
+    try:
+        page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
+    except PlaywrightTimeoutError:
+        page.wait_for_timeout(3000)
+        page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Change To Processed").click()
     print(f"[Orders] Change To Processed clicked")
     page.get_by_role("button", name="Yes, Confirm").wait_for(state="visible", timeout=15000)

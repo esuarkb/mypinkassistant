@@ -905,7 +905,7 @@ def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
     # Special case: "31 W East st madison, WI 35976"
     # Split street at a real street suffix, then treat the rest as city/state/zip.
     m = re.match(
-        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
+        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt,
         re.IGNORECASE,
     )
@@ -925,7 +925,7 @@ def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
     # Special case (no comma): "232 Queens St Sun Prairie WI 53590"
     # Same suffix-split logic as above but without requiring a comma before state.
     m = re.match(
-        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
+        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt,
         re.IGNORECASE,
     )
@@ -949,7 +949,7 @@ def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
     # ---------- Pattern A: "street city, ST ZIP"
     # Example: "444 4th St Arab, AL 35976"
     m = re.match(
-        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
+        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt
     )
     if m:
@@ -968,7 +968,7 @@ def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
     # ---------- Pattern B: "street, city, ST ZIP"
     # Example: "444 4th St, Arab, AL 35976"
     m = re.match(
-        r"^(?P<street>.+?)\s*,\s*(?P<city>.+?)\s*,\s*(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
+        r"^(?P<street>.+?)\s*,\s*(?P<city>.+?)\s*,\s*(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt
     )
     if m:
@@ -987,7 +987,7 @@ def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
     # ---------- Pattern D: "street city ST ZIP" (no commas)
     # Example: "333 3rd st arab al 35976"
     m = re.match(
-        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,})\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
+        r"^(?P<street>.+?)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt
     )
     if m:
@@ -1768,6 +1768,10 @@ def looks_like_command(msg: str) -> bool:
     # detect possessive info requests like: "Jane's info"
     if re.search(r"\b\w+'\s*s?\s*(info|email|phone|address|birthday)\b", s):
         return True
+
+    # "add birthday X", "update phone X" etc. are field edits, not lookups
+    if re.match(r'^(add|edit|update|change)\s+(birthday|birthdate|bday|phone|email|address|name|tag|referred)', s):
+        return False
 
     # detect patterns like "Jane info"
     if re.search(r"\b\w+\s+(info|email|phone|address|birthday)\b", s):

@@ -388,7 +388,7 @@ def main():
                         if _ln_attempts <= 1:
                             print(f"[Worker] Login transient error on job {job_id} (attempt {_ln_attempts}) — requeueing for retry.")
                             requeue_job(job_id, "Queued")
-                            raise _RequeueSilently()
+                            continue  # _RequeueSilently here is not caught at this level — use continue instead
 
                     _record_login_failure(cid)
 

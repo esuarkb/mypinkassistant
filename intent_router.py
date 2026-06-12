@@ -88,7 +88,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         return IntentResult(intent="app_help", confidence=1.0, raw_text=msg)
 
     # cancel
-    if lowered in ("cancel", "stop", "nevermind", "never mind"):
+    if lowered in ("cancel", "stop", "nevermind", "never mind", "start over", "startover"):
         return IntentResult(intent="cancel", confidence=1.0, raw_text=msg)
 
     # unit_query — activity status code pattern (i3, t6, "who is i3", "show t6", etc.)
