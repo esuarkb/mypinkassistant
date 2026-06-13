@@ -1221,8 +1221,8 @@ UI_EN = {
     "data_query_no_results": "No results found for that search.",
     "unit_member_not_found": "I couldn't find a team member named {name}.",
     "unit_no_results": "No consultants match that criteria.",
-    "unit_consultant_count": "{n} consultant:",
-    "unit_consultants_count": "{n} consultants:",
+    "unit_consultant_count": "{n} consultant (as of the latest sync):",
+    "unit_consultants_count": "{n} consultants (as of the latest sync):",
 }
 
 UI_ES = {
@@ -2585,8 +2585,10 @@ _UNIT_SCHEMA = {
         "birthday, start_date, "
         "last_order_date (date of their most recent InTouch order — to find who has ordered this month use: "
         "last_order_date >= DATE_TRUNC('month', CURRENT_DATE); to find who has NOT ordered this month: "
-        "last_order_date < DATE_TRUNC('month', CURRENT_DATE) OR last_order_date IS NULL), "
-        "last_order_wholesale, last_order_retail, "
+        "last_order_date < DATE_TRUNC('month', CURRENT_DATE) OR last_order_date IS NULL; "
+        "always include last_order_date and last_order_wholesale in SELECT when answering order-activity questions), "
+        "last_order_wholesale (wholesale $ amount of their most recent order), "
+        "last_order_retail (retail $ amount of their most recent order), "
         "unit_number, segments (semicolon-separated contest/program tags), "
         "is_personal_recruit (1=personally recruited by this consultant, 0=in unit via downline), "
         "recruiter_info (text containing the recruiter's name in format 'First Name: X, Last Name: Y, Email: ...' — "
@@ -2970,7 +2972,8 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
     if has_name and len(value_cols) <= 8:
         # Drop columns where every row has the same value — but keep identity columns
         # (consultant_number, career_level_desc, activity_status) always visible per row
-        _ALWAYS_SHOW = {"consultant_number", "career_level_desc", "activity_status"}
+        _ALWAYS_SHOW = {"consultant_number", "career_level_desc", "activity_status",
+                        "last_order_date", "last_order_wholesale"}
         if len(dicts) > 1:
             uniform_cols = {c for c in value_cols
                             if c not in _ALWAYS_SHOW and len({d.get(c) for d in dicts}) == 1}
@@ -3023,6 +3026,18 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
                 return _html.escape(str(v))
             if c == "myshop_active":
                 return "MyShop: " + ("✓" if v == 1 else "✗")
+            if c == "last_order_date":
+                try:
+                    from datetime import date as _dt
+                    _d = _dt.fromisoformat(str(v)[:10])
+                    return _d.strftime("%m/%d/%y")
+                except Exception:
+                    return str(v)[:10]
+            if c == "last_order_wholesale":
+                try:
+                    return f"${float(v):,.0f}"
+                except Exception:
+                    return f"${v}"
             if isinstance(v, float):
                 return f"{c.replace('_',' ').title()}: ${v:,.2f}"
             return f"{c.replace('_',' ').title()}: {_html.escape(str(v))}"
@@ -3042,11 +3057,19 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
 
             val_ordered = [c for c in _VALUE_ORDER if c in value_cols]
             val_rest    = [c for c in value_cols if c not in _IDENTITY and c not in _VALUE_ORDER]
+
+            # last_order_date + last_order_wholesale render as a subline: "mm/dd/yy — $320"
+            _ORDER_SUBLINE_COLS = {"last_order_date", "last_order_wholesale"}
+            order_sub_parts = [p for c in ["last_order_date", "last_order_wholesale"]
+                                if c in value_cols and (p := _fmt_col(c, d.get(c))) is not None]
+            order_subline = ("\n  " + " — ".join(order_sub_parts)) if order_sub_parts else ""
+
             val_parts = [p for c in (val_ordered + val_rest)
-                         if (p := _fmt_col(c, d.get(c))) is not None]
+                         if c not in _ORDER_SUBLINE_COLS
+                         and (p := _fmt_col(c, d.get(c))) is not None]
             suffix = "  —  " + ", ".join(val_parts) if val_parts else ""
 
-            return f"• {_name_link(d)}{meta}{suffix}"
+            return f"• {_name_link(d)}{meta}{suffix}{order_subline}"
 
         detail_dicts = dicts[:_SHOW_DETAIL]
         rest_dicts   = dicts[_SHOW_DETAIL:]

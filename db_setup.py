@@ -389,6 +389,10 @@ CREATE TABLE IF NOT EXISTS unit_member_activity_history (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_activity_history_consultant ON unit_member_activity_history(consultant_id)")
 cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_activity_history_period ON unit_member_activity_history(consultant_id, period_month)")
+cur.execute("PRAGMA table_info(unit_member_activity_history)")
+_umah_cols = {r[1] for r in cur.fetchall()}
+if "last_order_date" not in _umah_cols:
+    cur.execute("ALTER TABLE unit_member_activity_history ADD COLUMN last_order_date TEXT")
 
 conn.commit()
 conn.close()

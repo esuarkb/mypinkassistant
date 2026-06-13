@@ -272,14 +272,15 @@ def _snapshot_unit_member_activity(cur, members: list[dict], ph: str) -> None:
     sql = f"""
         INSERT INTO unit_member_activity_history
           (consultant_id, consultant_number, period_month,
-           activity_status, last_order_retail, last_order_wholesale,
+           activity_status, last_order_retail, last_order_wholesale, last_order_date,
            career_level_code, career_level_desc, myshop_active,
            last_activated_date, synced_at)
-        VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
         ON CONFLICT (consultant_id, consultant_number, period_month) DO UPDATE SET
           activity_status      = excluded.activity_status,
           last_order_retail    = excluded.last_order_retail,
           last_order_wholesale = excluded.last_order_wholesale,
+          last_order_date      = excluded.last_order_date,
           career_level_code    = excluded.career_level_code,
           career_level_desc    = excluded.career_level_desc,
           myshop_active        = excluded.myshop_active,
@@ -304,6 +305,7 @@ def _snapshot_unit_member_activity(cur, members: list[dict], ph: str) -> None:
         cur.execute(sql, (
             consultant_id, cnum, period_month,
             current_status, m.get("last_order_retail"), m.get("last_order_wholesale"),
+            m.get("last_order_date"),
             m.get("career_level_code"), m.get("career_level_desc"), m.get("myshop_active"),
             last_activated_date, m.get("synced_at"),
         ))
