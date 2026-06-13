@@ -25,6 +25,7 @@ SUPPORTED_INTENTS = {
     "customer_spend",
     "leaderboard",
     "lapsed_customers",
+    "edit_request",
     "new_customer",
     "new_order",
     "order_add",
@@ -255,6 +256,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     )
     looks_like_name_info = bool(
         re.search(r"\b\w+\s+(info|email|phone|address|birthday)\b", lowered)
+        or re.search(r"\b(info|email|phone|address|birthday)\s+for\s+[a-z][a-z'-]+(?:\s+[a-z][a-z'-]+)?\s*$", lowered)
     )
     # Single word (or two words) that looks like a name — treat as lookup
     # e.g. "ruby" or "ruby perez" with no other context
@@ -292,6 +294,14 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         if not _is_adjective and not _is_bare_new:
             return IntentResult(intent="customers_by_city", confidence=0.95,
                                 slots={"city": _city.title()}, raw_text=msg)
+
+    # edit_request — someone trying to update customer info or an order
+    # Must come before customer_info; exclude "set up/new" to avoid catching new_customer phrases
+    _has_edit_verb  = bool(re.search(r"\b(update|change|edit|fix|correct|set|modify)\b", lowered))
+    _has_edit_field = bool(re.search(r"\b(address|phone|email|birthday|birthdate|name|order)\b", lowered))
+    _is_setup_phrase = bool(re.search(r"\b(set\s+up|new|add|an\s+order)\b", lowered))
+    if _has_edit_verb and _has_edit_field and not _is_setup_phrase:
+        return IntentResult(intent="edit_request", confidence=0.95, raw_text=msg)
 
     # "new order for X" or "order for X" → new_order (must check before new_customer)
     if re.match(r'^(new\s+)?order\s+for\b', lowered):

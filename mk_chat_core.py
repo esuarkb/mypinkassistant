@@ -3397,7 +3397,7 @@ class MKChatEngine:
         self._catalog_cache = {}  # {"en": [...], "es": [...]}
 
     ##
-    def handle_message(self, message: str, consultant_id: int, session_id: Optional[int] = None) -> ChatReply:
+    def handle_message(self, message: str, consultant_id: int, session_id: Optional[int] = None, user_agent: Optional[str] = None) -> ChatReply:
         sid = int(session_id or consultant_id)
         state = load_session_state(session_id=sid)
 
@@ -3458,15 +3458,15 @@ class MKChatEngine:
             with tx() as (_il_conn, _il_cur):
                 if is_postgres():
                     _il_cur.execute(
-                        f"INSERT INTO intent_logs (consultant_id, intent, confidence, message_text) VALUES ({PH}, {PH}, {PH}, {PH}) RETURNING id",
-                        (consultant_id, intent_result.intent, intent_result.confidence, msg[:200]),
+                        f"INSERT INTO intent_logs (consultant_id, intent, confidence, message_text, user_agent) VALUES ({PH}, {PH}, {PH}, {PH}, {PH}) RETURNING id",
+                        (consultant_id, intent_result.intent, intent_result.confidence, msg[:200], user_agent),
                     )
                     _row = _il_cur.fetchone()
                     _intent_log_id = _row[0] if _row else None
                 else:
                     _il_cur.execute(
-                        f"INSERT INTO intent_logs (consultant_id, intent, confidence, message_text) VALUES ({PH}, {PH}, {PH}, {PH})",
-                        (consultant_id, intent_result.intent, intent_result.confidence, msg[:200]),
+                        f"INSERT INTO intent_logs (consultant_id, intent, confidence, message_text, user_agent) VALUES ({PH}, {PH}, {PH}, {PH}, {PH})",
+                        (consultant_id, intent_result.intent, intent_result.confidence, msg[:200], user_agent),
                     )
                     _intent_log_id = _il_cur.lastrowid
         except Exception:
@@ -3975,9 +3975,9 @@ class MKChatEngine:
         )
         if _edit_not_supported:
             return ChatReply(
-                "To update a customer's info you'll need to edit them directly in MyCustomers on InTouch — "
-                "the change will be applied in MyPinkAssistant on the next sync. "
-                "I can still add new customers and place orders for you."
+                'Changes or updates to customer information must currently be done from '
+                '<a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. '
+                'The changes will then show in MyPinkAssistant on the next sync.'
             )
 
         # PCP enrolled list (no LLM call)
@@ -4682,6 +4682,13 @@ class MKChatEngine:
             return ChatReply(ui["canceled"])
 
         # App install help
+        if intent_result.intent == "edit_request":
+            return ChatReply(
+                'Changes or updates to customer information must currently be done from '
+                '<a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. '
+                'The changes will then show in MyPinkAssistant on the next sync.'
+            )
+
         if intent_result.intent == "app_help":
             return ChatReply(_APP_HELP_HTML)
 

@@ -557,6 +557,15 @@ document.addEventListener("click", function(e) {
     }
 })();
 
+// PWA install detection
+(function () {
+    var isStandalone = (window.navigator.standalone === true) ||
+                       (window.matchMedia('(display-mode: standalone)').matches);
+    if (isStandalone) {
+        fetch('/pwa-ping', { method: 'POST' }).catch(function () {});
+    }
+})();
+
 // Hamburger menu
 (function () {
     const btn = document.getElementById("menuBtn");

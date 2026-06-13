@@ -42,6 +42,8 @@ if "welcome_email_sent" not in cols:
     cur.execute("ALTER TABLE consultants ADD COLUMN welcome_email_sent INTEGER DEFAULT 0")
 if "email_opted_out" not in cols:
     cur.execute("ALTER TABLE consultants ADD COLUMN email_opted_out INTEGER DEFAULT 0")
+if "pwa_installed_at" not in cols:
+    cur.execute("ALTER TABLE consultants ADD COLUMN pwa_installed_at TEXT")
 
 # Add sync_status to unit_members if missing (tracks terminated/removed consultants)
 cur.execute("PRAGMA table_info(unit_members)")
@@ -242,8 +244,11 @@ CREATE TABLE IF NOT EXISTS intent_logs (
 cur.execute("CREATE INDEX IF NOT EXISTS idx_intent_logs_consultant ON intent_logs(consultant_id, created_at)")
 cur.execute("CREATE INDEX IF NOT EXISTS idx_intent_logs_intent ON intent_logs(intent, created_at)")
 cur.execute("PRAGMA table_info(intent_logs)")
-if "response_text" not in {r[1] for r in cur.fetchall()}:
+existing = {r[1] for r in cur.fetchall()}
+if "response_text" not in existing:
     cur.execute("ALTER TABLE intent_logs ADD COLUMN response_text TEXT")
+if "user_agent" not in existing:
+    cur.execute("ALTER TABLE intent_logs ADD COLUMN user_agent TEXT")
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS unit_members (

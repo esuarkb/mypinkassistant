@@ -1949,7 +1949,8 @@ async def chat(request: Request):
     message = (data.get("message") or "").strip()
 
     try:
-        reply_obj = engine.handle_message(message, consultant_id=cid)
+        ua = request.headers.get("user-agent")
+        reply_obj = engine.handle_message(message, consultant_id=cid, user_agent=ua)
         try:
             with tx() as (_lc, _lcu):
                 _lcu.execute(
@@ -1964,6 +1965,23 @@ async def chat(request: Request):
     except Exception as e:
         logging.error("Chat handler error: %s", repr(e))
         return {"reply": "Something went wrong. Please try again."}
+
+
+@app.post("/pwa-ping")
+async def pwa_ping(request: Request):
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return JSONResponse({}, status_code=401)
+    try:
+        with tx() as (_, cur):
+            cur.execute(
+                f"UPDATE consultants SET pwa_installed_at = {PH} WHERE id = {PH} AND pwa_installed_at IS NULL",
+                (datetime.utcnow().isoformat(), cid),
+            )
+    except Exception:
+        pass
+    return JSONResponse({})
 
 
 @app.get("/jobs")
