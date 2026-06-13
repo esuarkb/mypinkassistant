@@ -2582,7 +2582,11 @@ _UNIT_SCHEMA = {
         "If the user gives a full code with a number (e.g. 'T3', 'i3', 'I 3', 'a2'), ALWAYS use exact match: activity_status = 'T3'. "
         "Only use LIKE 'T%' when the user says just the letter with no number (e.g. 'show T status', 'who is terminating'). "
         "language (English or Spanish), myshop_active (1=yes, 0=no or never created), "
-        "birthday, start_date, last_order_date, last_order_wholesale, last_order_retail, "
+        "birthday, start_date, "
+        "last_order_date (date of their most recent InTouch order — to find who has ordered this month use: "
+        "last_order_date >= DATE_TRUNC('month', CURRENT_DATE); to find who has NOT ordered this month: "
+        "last_order_date < DATE_TRUNC('month', CURRENT_DATE) OR last_order_date IS NULL), "
+        "last_order_wholesale, last_order_retail, "
         "unit_number, segments (semicolon-separated contest/program tags), "
         "is_personal_recruit (1=personally recruited by this consultant, 0=in unit via downline), "
         "recruiter_info (text containing the recruiter's name in format 'First Name: X, Last Name: Y, Email: ...' — "
@@ -2819,8 +2823,13 @@ def _handle_unit_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
     # SQLite (text comparison) and Postgres (avoids text vs date type mismatch)
     from datetime import date as _date
     _today = _date.today().isoformat()
+    _first_of_month = _date.today().replace(day=1).isoformat()
+    # DATE_TRUNC('month', ...) → first day of current month (must run before CURRENT_DATE replacement)
+    sql = _re.sub(r"DATE_TRUNC\s*\(\s*'month'\s*,\s*CURRENT_DATE\s*\)", f"'{_first_of_month}'", sql, flags=_re.IGNORECASE)
     sql = _re.sub(r"CURRENT_DATE", f"'{_today}'", sql, flags=_re.IGNORECASE)
     sql = _re.sub(r"date\s*\(\s*'now'\s*\)", f"'{_today}'", sql, flags=_re.IGNORECASE)
+    # Handle DATE_TRUNC after CURRENT_DATE was already substituted to a literal date string
+    sql = _re.sub(r"DATE_TRUNC\s*\(\s*'month'\s*,\s*'\d{4}-\d{2}-\d{2}'\s*\)", f"'{_first_of_month}'", sql, flags=_re.IGNORECASE)
 
     print(f"[UnitQuery] Executing: {sql[:400]}")
 
@@ -4727,7 +4736,9 @@ class MKChatEngine:
                     stop_words = {
                         "what", "is", "whats", "what's", "info", "information", "for", "on",
                         "lookup", "show", "me", "please", "customer", "customers",
-                        "email", "phone", "number", "address", "birthday", "bday"
+                        "email", "phone", "number", "address", "birthday", "bday",
+                        "can", "you", "could", "tell", "give", "find", "get", "pull", "see",
+                        "i", "my", "the", "a", "an", "do", "would",
                     }
 
                     tokens = []

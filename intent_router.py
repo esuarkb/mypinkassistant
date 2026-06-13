@@ -118,6 +118,9 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "seminar", "registered for", "registration", "who is registered",
         "who has registered", "who signed up",
         "hasn't hit star", "haven't hit star", "hasn't made star", "haven't made star",
+        "what consultants", "which consultants", "consultants have ordered", "consultants ordered",
+        "consultants who ordered", "consultants who have ordered", "consultants in my unit",
+        "who in my unit", "ordered this month", "ordered last month",
     )
     if any(t in lowered for t in _unit_triggers):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
