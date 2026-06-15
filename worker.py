@@ -462,6 +462,9 @@ def main():
 
                 # Keep processing until idle
                 while True:
+                    if _shutdown:
+                        break
+
                     refresh_consultant_lock(cid)
 
                     claimed = claim_next_job_for_consultant(cid)
