@@ -12,38 +12,14 @@ Run once per quarter after enrollment closes.
 import sys
 from datetime import date
 from pathlib import Path
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+from playwright.sync_api import sync_playwright
 
 from playwright_automation.login import login_intouch
 from auth_core import decrypt_intouch_password
 from db import tx, is_postgres
 
-PCP_URL      = "https://applications.marykayintouch.com/pcp/Mailings/Enroll.aspx"
-PAGE_SIZE_ID = "ctl00_ctl00_ctl00_ContentPlaceHolder1_ContentPlaceHolder1_cphMain_gp_lstPageSize"
-FILTER_ID    = "ctl00_ctl00_ctl00_ContentPlaceHolder1_ContentPlaceHolder1_cphMain_gp_lstCustomerFilter"
-NEXT_BTN_ID  = "ctl00_ctl00_ctl00_ContentPlaceHolder1_ContentPlaceHolder1_cphMain_btnNext"
-
-EXTRACT_JS = """
-() => {
-    const results = [];
-    document.querySelectorAll('tr').forEach(tr => {
-        const cells = [...tr.querySelectorAll('td')];
-        if (cells.length < 4) return;
-        const nameLink = cells[0]?.querySelector('a');
-        if (!nameLink) return;
-        const name = nameLink.innerText.replace(/ /g, ' ').trim();
-        if (!name || name.length < 2) return;
-        if (name.includes("What's") || name.startsWith('Add a') || name.startsWith('Select All')) return;
-        const lang = cells[1]?.innerText.trim() || '';
-        if (lang.includes('Preference')) return;
-        const enrolledLabel = [...tr.querySelectorAll('b')].find(b => b.innerText.includes('Enrolled'));
-        const checkbox = tr.querySelector('input[type=checkbox]');
-        const enrolled = !!(enrolledLabel || (checkbox && checkbox.checked));
-        results.push({ name, enrolled });
-    });
-    return results;
-}
-"""
+PCP_APP_URL  = "https://apps.marykayintouch.com/enrolled-preferred-customers"
+PCP_API_FRAG = "FOReports/api/report?id=customer-pcp-enrolled"
 
 
 def current_quarter() -> str:
@@ -56,49 +32,37 @@ def scrape_enrolled(page, username: str, password: str, skip_login: bool = False
     if not skip_login:
         login_intouch(page, username, password)
 
-    page.goto(PCP_URL, wait_until="domcontentloaded")
-    if "Alerts.aspx" in page.url or "TermsAndConditions" in page.url:
-        raise RuntimeError("PCP Terms & Conditions not yet accepted in InTouch")
-    page.wait_for_timeout(3000)
+    raw_records: list[dict] = []
 
-    page.select_option(f"#{PAGE_SIZE_ID}", "500")
-    page.wait_for_timeout(2000)
-    page.select_option(f"#{FILTER_ID}", "ContactKey Enrolled")
-    page.wait_for_timeout(2000)
+    def _on_response(response):
+        if PCP_API_FRAG in response.url:
+            try:
+                data = response.json()
+                if isinstance(data, list):
+                    raw_records.extend(data)
+            except Exception as e:
+                print(f"[PcpSync] API response parse error: {e}")
 
-    all_customers: list[dict] = []
-    seen_names: set[str] = set()
-    page_num = 1
+    page.on("response", _on_response)
+    try:
+        page.goto(PCP_APP_URL, wait_until="load", timeout=60000)
+        if "Alerts.aspx" in page.url or "TermsAndConditions" in page.url:
+            raise RuntimeError("PCP Terms & Conditions not yet accepted in InTouch")
 
-    while True:
-        rows = page.evaluate(EXTRACT_JS)
-        new_rows = [r for r in rows if r['name'] not in seen_names]
-        if not new_rows:
-            break
+        # Wait up to 45s for the FOReports API call to fire and return
+        for _ in range(15):
+            page.wait_for_timeout(3000)
+            if raw_records:
+                break
+    finally:
+        page.remove_listener("response", _on_response)
 
-        for r in new_rows:
-            seen_names.add(r['name'])
-        all_customers.extend(new_rows)
-        print(f"    Page {page_num}: {len(new_rows)} enrolled customers")
-
-        next_disabled = page.evaluate(f"""
-            () => {{
-                const btn = document.getElementById('{NEXT_BTN_ID}');
-                if (!btn) return true;
-                return btn.disabled || btn.classList.contains('disabled') || btn.getAttribute('disabled') !== null;
-            }}
-        """)
-        if next_disabled:
-            break
-
-        try:
-            page.click(f"#{NEXT_BTN_ID}")
-            page.wait_for_timeout(2500)
-            page_num += 1
-        except Exception:
-            break
-
-    return all_customers
+    print(f"[PcpSync] {len(raw_records)} enrolled customers from API")
+    return [
+        {"name": f"{r['firstName']} {r['lastName']}", "enrolled": True}
+        for r in raw_records
+        if r.get("firstName") and r.get("lastName")
+    ]
 
 
 def get_consultants(cur, consultant_id: int | None) -> list:
@@ -218,7 +182,7 @@ def main():
                 continue
 
             if not enrolled:
-                print("  No enrolled customers found — no PCP enrollments or enrollment window not yet open.")
+                print("  No enrolled customers found — enrollment window may not be open.")
                 continue
 
             with tx() as (conn, cur):
