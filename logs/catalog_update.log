@@ -2407,3 +2407,53 @@ Logged in.
 
 Sending change summary email...
   Email sent to support@mypinkassistant.com
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 579 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+  Found PDF links for 2 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 579 products.
+  Auto-labeled: 10217415 → TimeWise Miracle Set - Combination/Oily (Old SKU)
+  Extracting use-up rates from 2 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 1 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 508 SKUs
+  Scraped        : 579 products
+  Total now      : 511 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+
+  NEW (3):
+    + 10254308  TimeWise Miracle Set - Combination/Oily  $116.00
+    + 10257239  Ultimate TimeWise Miracle Set  $150.00
+    + 10257838  Beyond Ultimate TimeWise Miracle Set  $208.00
+
+  OLD SKU LABELED (1):
+    ! 10217415  TimeWise Miracle Set - Combination/Oily (Old SKU)  (replaced by 10254308)
+  Auto-labeled: 10217415 → Juego Milagroso TimeWise - Combinada/grasa (Old SKU)
+
+[ES] Done.
+  Catalog before : 508 SKUs
+  Scraped        : 579 products
+  Total now      : 511 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  NEW (3):
+    + 10254308  Juego Milagroso TimeWise - Combinada/grasa  $116.00
+    + 10257239  Juego Milagroso TimeWise Ultimate  $150.00
+    + 10257838  Juego Milagroso TimeWise Beyond Ultimate  $208.00
+
+  OLD SKU LABELED (1):
+    ! 10217415  Juego Milagroso TimeWise - Combinada/grasa (Old SKU)  (replaced by 10254308)
+
+Sending change summary email...
+  Email sent to support@mypinkassistant.com
