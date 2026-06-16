@@ -750,6 +750,12 @@ def main():
                                 else:
                                     _pcp_msg = f"PCP sync failed — {_pcp_err}"
                                     print(f"[PcpSync] {_pcp_msg}")
+                            mark_job_done(job_id, _pcp_msg)
+
+                        # -------------------------
+                        # REPORT_SYNC (order detail backfill + team/unit member data sync)
+                        # -------------------------
+                        elif job_type == "REPORT_SYNC":
                             # Order detail sync — full backfill of all non-archived orders
                             try:
                                 _od_orders, _od_csrf = fetch_order_history(page)
@@ -758,7 +764,7 @@ def main():
                                     for o in _od_orders if o.get("Id") and not o.get("IsArchived_cb__c")
                                 ]
                                 if _non_archived and _od_csrf:
-                                    print(f"[PcpSync] starting order detail sync for {len(_non_archived)} orders")
+                                    print(f"[ReportSync] starting order detail sync for {len(_non_archived)} orders")
                                     _detail_map = fetch_order_details(page, _non_archived, _od_csrf)
                                     if _detail_map:
                                         conn = connect()
@@ -769,30 +775,8 @@ def main():
                                         finally:
                                             conn.close()
                             except Exception as _od_err:
-                                print(f"[PcpSync] Order detail sync failed (non-fatal): {_od_err}")
-                            # Reports (team data, challenge tracking, registrations) — same login session
-                            _report_msg = ""
-                            try:
-                                from playwright_automation.report_sync import run_report_sync as _run_reports
-                                from db import is_postgres as _isp
-                                _rph = "%s" if _isp() else "?"
-                                conn = connect()
-                                try:
-                                    cur = conn.cursor()
-                                    _rs = _run_reports(page, cur, cid, ph=_rph)
-                                    conn.commit()
-                                finally:
-                                    conn.close()
-                                if _rs["members"] > 0:
-                                    _report_msg = f" {_rs['members']} unit members."
-                            except Exception as _re:
-                                print(f"[PcpSync] Report sync failed (non-fatal): {_re}")
-                            mark_job_done(job_id, _pcp_msg + _report_msg)
-
-                        # -------------------------
-                        # REPORT_SYNC (team/unit member data sync)
-                        # -------------------------
-                        elif job_type == "REPORT_SYNC":
+                                print(f"[ReportSync] Order detail sync failed (non-fatal): {_od_err}")
+                            # Team/unit member data sync
                             from playwright_automation.report_sync import run_report_sync
                             _ph = "%s" if is_postgres() else "?"
                             conn = connect()
@@ -802,15 +786,8 @@ def main():
                                 conn.commit()
                             finally:
                                 conn.close()
-                            if summary["members"] == 0:
-                                mark_job_done(job_id, "Report sync complete — no team members found.")
-                            else:
-                                mark_job_done(
-                                    job_id,
-                                    f"Report sync complete — {summary['members']} members, "
-                                    f"{summary['great_start']} great start, "
-                                    f"{summary['star_tracking']} star tracking records synced.",
-                                )
+                            _member_count = summary["members"]
+                            mark_job_done(job_id, f"{_member_count} unit members." if _member_count else "0 unit members.")
 
                         # -------------------------
                         # Unknown job type

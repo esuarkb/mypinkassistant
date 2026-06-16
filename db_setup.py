@@ -44,6 +44,8 @@ if "email_opted_out" not in cols:
     cur.execute("ALTER TABLE consultants ADD COLUMN email_opted_out INTEGER DEFAULT 0")
 if "pwa_installed_at" not in cols:
     cur.execute("ALTER TABLE consultants ADD COLUMN pwa_installed_at TEXT")
+if "intouch_password_changed_at" not in cols:
+    cur.execute("ALTER TABLE consultants ADD COLUMN intouch_password_changed_at TEXT")
 
 # Add sync_status to unit_members if missing (tracks terminated/removed consultants)
 cur.execute("PRAGMA table_info(unit_members)")

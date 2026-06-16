@@ -52,6 +52,7 @@ _STALE_JOB_TIMEOUTS = {
     "NEW_CUSTOMER":  10,
     "PCP_SYNC":      10,
     "INITIAL_SYNC":  10,
+    "REPORT_SYNC":   10,
     "FULL_SYNC":     90,
 }
 

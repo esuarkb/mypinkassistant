@@ -261,6 +261,20 @@ def maybe_queue_initial_customer_import(cur, consultant_id: int) -> bool:
     if not cur.fetchone():
         insert_job("PCP_SYNC", {}, consultant_id=consultant_id, priority=0)
 
+    # Queue REPORT_SYNC alongside PCP_SYNC — order detail backfill + team data
+    cur.execute(
+        f"""
+        SELECT 1 FROM jobs
+        WHERE consultant_id = {PH}
+          AND type = 'REPORT_SYNC'
+          AND status IN ('queued', 'running')
+        LIMIT 1
+        """,
+        (consultant_id,),
+    )
+    if not cur.fetchone():
+        insert_job("REPORT_SYNC", {}, consultant_id=consultant_id, priority=0)
+
     return True
 
 
@@ -2662,7 +2676,7 @@ _UNIT_SCHEMA = {
     ),
 }
 
-_UNIT_SQL_SYSTEM = """You generate SQL SELECT queries for a Mary Kay consultant's team data. Use standard SQL compatible with both SQLite and PostgreSQL — use CURRENT_DATE (not date('now')) for today's date.
+_UNIT_SQL_SYSTEM = """You generate SQL SELECT queries for a Mary Kay consultant's team data. Use standard SQL compatible with both SQLite and PostgreSQL — use CURRENT_DATE (not date('now')) for today's date. Never hardcode a date string like '2026-06-01' — always use CURRENT_DATE for today and CURRENT_DATE - INTERVAL 'N days' (or months/years) for relative dates.
 
 {schema}
 
@@ -2764,6 +2778,7 @@ def _handle_unit_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
     if not sql:
         return ChatReply(ui["unit_query_unclear"])
 
+
     # Safety: SELECT-only, and must reference the consultant_id
     sql_upper = sql.upper().strip()
     if not sql_upper.startswith("SELECT"):
@@ -2822,15 +2837,41 @@ def _handle_unit_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
             print(f"[UnitQuery] Injected {_inject} into SELECT")
 
     # Replace any date-today reference with a plain ISO string literal — works in both
-    # SQLite (text comparison) and Postgres (avoids text vs date type mismatch)
-    from datetime import date as _date
-    _today = _date.today().isoformat()
-    _first_of_month = _date.today().replace(day=1).isoformat()
-    # DATE_TRUNC('month', ...) → first day of current month (must run before CURRENT_DATE replacement)
+    # Resolve date expressions to plain ISO text strings so they compare correctly with
+    # TEXT-typed date columns (last_order_date, etc.) in both SQLite and Postgres.
+    from datetime import date as _date, timedelta as _timedelta
+    _today = _date.today()
+
+    def _eval_date_interval(m):
+        base = _date.fromisoformat(m.group(1))
+        op, n, unit = m.group(2), int(m.group(3)), m.group(4).lower().rstrip("s")
+        if unit in ("day", "week"):
+            days = n * (7 if unit == "week" else 1)
+            result = base - _timedelta(days=days) if op == "-" else base + _timedelta(days=days)
+        elif unit == "month":
+            month = base.month + (-n if op == "-" else n)
+            year = base.year + (month - 1) // 12
+            month = ((month - 1) % 12) + 1
+            result = base.replace(year=year, month=month)
+        elif unit == "year":
+            result = base.replace(year=base.year + (-n if op == "-" else n))
+        else:
+            result = base
+        return f"'{result.isoformat()}'"
+
+    _today_iso = _today.isoformat()
+    _first_of_month = _today.replace(day=1).isoformat()
+    # DATE_TRUNC('month', CURRENT_DATE) → first day of current month
     sql = _re.sub(r"DATE_TRUNC\s*\(\s*'month'\s*,\s*CURRENT_DATE\s*\)", f"'{_first_of_month}'", sql, flags=_re.IGNORECASE)
-    sql = _re.sub(r"CURRENT_DATE", f"'{_today}'", sql, flags=_re.IGNORECASE)
-    sql = _re.sub(r"date\s*\(\s*'now'\s*\)", f"'{_today}'", sql, flags=_re.IGNORECASE)
-    # Handle DATE_TRUNC after CURRENT_DATE was already substituted to a literal date string
+    # Replace CURRENT_DATE / date('now') with today's ISO string
+    sql = _re.sub(r"CURRENT_DATE", f"'{_today_iso}'", sql, flags=_re.IGNORECASE)
+    sql = _re.sub(r"date\s*\(\s*'now'\s*\)", f"'{_today_iso}'", sql, flags=_re.IGNORECASE)
+    # Evaluate any remaining 'YYYY-MM-DD' ± INTERVAL 'N unit' in Python → plain text date
+    sql = _re.sub(
+        r"(?:DATE\s*)?'(\d{4}-\d{2}-\d{2})'\s*([+-])\s*INTERVAL\s*'(\d+)\s+(\w+)'",
+        _eval_date_interval, sql, flags=_re.IGNORECASE
+    )
+    # DATE_TRUNC after date substitution
     sql = _re.sub(r"DATE_TRUNC\s*\(\s*'month'\s*,\s*'\d{4}-\d{2}-\d{2}'\s*\)", f"'{_first_of_month}'", sql, flags=_re.IGNORECASE)
 
     print(f"[UnitQuery] Executing: {sql[:400]}")
