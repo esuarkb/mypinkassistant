@@ -371,9 +371,9 @@ def main():
                     else:
                         friendly = "Something unexpected happened. Please try again."
 
-                    # Silently retry transient network errors once before failing
+                    # Silently retry transient login errors once before failing
                     _transient = ("ERR_ABORTED", "net::", "ERR_CONNECTION", "ERR_TIMED_OUT",
-                                  "ERR_NAME_NOT_RESOLVED", "is interrupted")
+                                  "ERR_NAME_NOT_RESOLVED", "is interrupted", "Timeout")
                     if any(s in err for s in _transient):
                         try:
                             _ln_conn = connect()
