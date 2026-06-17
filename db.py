@@ -221,6 +221,12 @@ def run_migrations() -> None:
             print("[Migration] Backfilled initial_sync_completed for existing consultants")
         except Exception:
             conn.rollback()
+        try:
+            cur.execute("ALTER TABLE intent_logs ADD COLUMN user_agent TEXT")
+            conn.commit()
+            print("[Migration] Added user_agent to intent_logs")
+        except Exception:
+            conn.rollback()
     finally:
         conn.close()
 
