@@ -194,42 +194,6 @@ def fetchall(sql: str, params: Optional[Sequence[Any]] = None) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-def run_migrations() -> None:
-    """Apply any pending schema changes. Safe to call on every startup."""
-    conn = connect()
-    try:
-        cur = conn.cursor()
-        try:
-            cur.execute("ALTER TABLE customers ADD COLUMN intouch_account_id TEXT")
-            conn.commit()
-            print("[Migration] Added intouch_account_id to customers")
-        except Exception:
-            conn.rollback()
-        try:
-            cur.execute("ALTER TABLE consultants ADD COLUMN initial_sync_completed BOOLEAN NOT NULL DEFAULT FALSE")
-            conn.commit()
-            print("[Migration] Added initial_sync_completed to consultants")
-            # Backfill: mark anyone who already has a successful INITIAL_SYNC job
-            cur.execute("""
-                UPDATE consultants SET initial_sync_completed = TRUE
-                WHERE id IN (
-                    SELECT DISTINCT consultant_id FROM jobs
-                    WHERE type = 'INITIAL_SYNC' AND status = 'done'
-                )
-            """)
-            conn.commit()
-            print("[Migration] Backfilled initial_sync_completed for existing consultants")
-        except Exception:
-            conn.rollback()
-        try:
-            cur.execute("ALTER TABLE intent_logs ADD COLUMN user_agent TEXT")
-            conn.commit()
-            print("[Migration] Added user_agent to intent_logs")
-        except Exception:
-            conn.rollback()
-    finally:
-        conn.close()
-
 
 def execscript(sql: str) -> None:
     """

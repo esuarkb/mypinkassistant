@@ -12,7 +12,7 @@ load_dotenv(override=True)
 
 from datetime import datetime, timezone
 from pathlib import Path
-from db import connect, is_postgres, get_system_setting, run_migrations
+from db import connect, is_postgres, get_system_setting
 
 from emailer import send_wrong_credentials_email, send_login_failure_alert_email, send_sku_not_found_email
 from playwright_automation.customer_export import download_customer_export
@@ -93,7 +93,6 @@ from customer_api_import_store import import_customers_from_api
 for _startup_attempt in range(5):
     try:
         ensure_import_table()
-        run_migrations()
         break
     except Exception as _startup_err:
         print(f"[Worker] DB not ready yet (attempt {_startup_attempt + 1}/5): {_startup_err}")
