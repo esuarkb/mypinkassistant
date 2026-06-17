@@ -987,7 +987,17 @@ async def stripe_webhook(request: Request):
 
         elif etype == "invoice.payment_failed":
             customer_id = (obj.get("customer") or "").strip()
-            updated = _update_consultant_by_customer_id(customer_id, billing_status="past_due")
+            invoice_sub_id = (obj.get("subscription") or "").strip()
+
+            # Only mark past_due if the failed invoice belongs to the consultant's current
+            # subscription. If they've already resubscribed (different sub ID in DB), ignore.
+            existing = _get_consultant_by_customer_id(customer_id)
+            existing_sub_id = (existing[2] or "").strip() if existing else ""
+            if not invoice_sub_id or invoice_sub_id == existing_sub_id:
+                updated = _update_consultant_by_customer_id(customer_id, billing_status="past_due")
+            else:
+                updated = 0
+                print(f"[Webhook] Ignoring invoice.payment_failed for old sub {invoice_sub_id} (current={existing_sub_id})")
             print(f"[Webhook] OK: {etype} (cust={customer_id}, updated_rows={updated})")
 
         else:
