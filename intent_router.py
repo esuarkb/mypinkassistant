@@ -33,6 +33,7 @@ SUPPORTED_INTENTS = {
     "product_lookup",
     "top_sellers",
     "unit_query",
+    "car_program",
     "unknown",
 }
 
@@ -124,6 +125,19 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     )
     if any(t in lowered for t in _unit_triggers):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
+
+    # car program questions (director-only feature)
+    # Only use terms that are unambiguous — avoid "how close to" / "production" alone
+    # since those also appear in star/great-start unit_query phrases (which run earlier)
+    _car_triggers = (
+        "car program", "career car", "car qualification", "car award",
+        "premier club", "grand achiever", "cadillac",
+        "co-pay", "copay", "co pay",
+        "car maintenance", "car qualify", "car qualifying",
+        "earn a car", "get a car", "earn the car",
+    )
+    if any(t in lowered for t in _car_triggers):
+        return IntentResult(intent="car_program", confidence=0.95, raw_text=msg)
 
     # Star Consultant level names (Ruby, Diamond, Emerald, Pearl) in a unit context
     _STAR_LEVELS = ("ruby", "diamond", "emerald", "pearl")

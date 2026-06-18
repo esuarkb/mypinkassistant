@@ -60,8 +60,8 @@ with sync_playwright() as p:
     page.goto("https://mk.marykayintouch.com/s/consultant-list", wait_until="load", timeout=60000)
     page.wait_for_timeout(3000)
 
-    print("\nNavigating to career car detail page...")
-    page.goto("https://mk.marykayintouch.com/s/reports/director-career-car-detail", wait_until="load", timeout=60000)
+    print("\nNavigating to career car guidelines page...")
+    page.goto("https://mk.marykayintouch.com/s/career-car", wait_until="load", timeout=60000)
 
     # Wait for initial load
     for _ in range(8):
@@ -72,27 +72,46 @@ with sync_playwright() as p:
     page.screenshot(path="/Users/desktop/car_page_1.png")
     print("  [screenshot: car_page_1.png]")
 
-    # Wait for full render then extract all text from the page
-    page.wait_for_timeout(5000)
-    page_text = page.evaluate("() => document.body.innerText")
-    with open("/Users/desktop/car_page_text.txt", "w") as f:
-        f.write(page_text)
-    sys.stdout.write("  [page text saved: car_page_text.txt]\n")
-    sys.stdout.flush()
+    # Wait for FOReports data to load and render
+    for _ in range(10):
+        page.wait_for_timeout(3000)
+        if len(captured) >= 3:
+            break
+    page.wait_for_timeout(3000)  # extra settle time for rendering
+    # Try main frame first, then all iframes
+    all_text = []
+    all_text.append("=== MAIN FRAME ===")
+    all_text.append(page.evaluate("() => document.body.innerText"))
 
-    # Also get the Guidelines link href
-    try:
-        guidelines_href = page.evaluate("""
-            () => {
-                const links = Array.from(document.querySelectorAll('a'));
-                const g = links.find(l => l.textContent.trim() === 'Guidelines');
-                return g ? g.href : 'NOT FOUND';
-            }
-        """)
-        sys.stdout.write(f"  Guidelines link: {guidelines_href}\n")
-        sys.stdout.flush()
-    except Exception as e:
-        sys.stdout.write(f"  Guidelines link error: {e}\n")
+    for i, frame in enumerate(page.frames):
+        if frame == page.main_frame:
+            continue
+        try:
+            txt = frame.evaluate("() => document.body ? document.body.innerText : ''")
+            if txt and len(txt.strip()) > 50:
+                all_text.append(f"\n=== FRAME {i} ({frame.url[:80]}) ===")
+                all_text.append(txt)
+                # Also grab Guidelines link from this frame
+                try:
+                    g = frame.evaluate("""
+                        () => {
+                            const links = Array.from(document.querySelectorAll('a'));
+                            const gl = links.find(l => l.textContent.trim() === 'Guidelines');
+                            return gl ? gl.href : null;
+                        }
+                    """)
+                    if g:
+                        all_text.append(f"  [Guidelines href: {g}]")
+                except Exception:
+                    pass
+        except Exception as e:
+            all_text.append(f"\n=== FRAME {i} error: {e} ===")
+
+    combined = "\n".join(all_text)
+    with open("/Users/desktop/car_page_text.txt", "w") as f:
+        f.write(combined)
+    sys.stdout.write(f"  [page text saved ({len(combined)} chars): car_page_text.txt]\n")
+    sys.stdout.flush()
 
     # Full page screenshot
     page.screenshot(path="/Users/desktop/car_page_full.png", full_page=True)

@@ -2,7 +2,7 @@
 #
 # Syncs team/unit member data from InTouch for any consultant with a team.
 # Populates: unit_members, unit_great_start, unit_star_tracking,
-#            unit_rise_radiate, unit_registrations
+#            unit_rise_radiate, unit_registrations, unit_car_award
 #
 # Call run_report_sync(page, cur, consultant_id) after login_intouch() has run.
 
@@ -517,6 +517,86 @@ def _upsert_registrations(cur, records: list[dict], ph: str) -> int:
     return len(records)
 
 
+def _map_car_award(raw: dict, consultant_id: int) -> dict:
+    def _iso(val):
+        if not val:
+            return None
+        return str(val)[:10]
+    return {
+        "consultant_id":             consultant_id,
+        "car_award":                 raw.get("carAward"),
+        "car_award_desc":            raw.get("carAwardDesc"),
+        "car_status_type":           raw.get("carStatusType"),
+        "car_status_type_desc":      raw.get("carStatusTypeDesc"),
+        "car_unit_status_type":      raw.get("carUnitStatusType"),
+        "unit_maint_min_qtr":        raw.get("unitMaintMinQtrUnit"),
+        "ot_goal":                   raw.get("otGoal"),
+        "needed_ot_goal":            raw.get("neededOTGoal"),
+        "q0_total_car_production":   raw.get("q0TotalCarProduction"),
+        "q1_total_car_production":   raw.get("q1TotalCarProduction"),
+        "q2_total_car_production":   raw.get("q2TotalCarProduction"),
+        "q3_total_car_production":   raw.get("q3TotalCarProduction"),
+        "car_unit_balance":          raw.get("carUnitBalance"),
+        "car_unit_balance_prev_qtr": raw.get("carUnitBalancePrevQuarter"),
+        "requalification_date":      _iso(raw.get("requalificationDate")),
+        "requalification_status":    raw.get("requalificationStatus"),
+        "display_u_month0":          _iso(raw.get("displayUMonth0")),
+        "display_u_month1":          _iso(raw.get("displayUMonth1")),
+        "display_u_month2":          _iso(raw.get("displayUMonth2")),
+        "synced_at":                 datetime.utcnow().isoformat(),
+    }
+
+
+def _upsert_car_award(cur, record: dict, ph: str) -> None:
+    import json as _json
+    sql = f"""
+        INSERT INTO unit_car_award
+          (consultant_id, car_award, car_award_desc,
+           car_status_type, car_status_type_desc, car_unit_status_type,
+           unit_maint_min_qtr, ot_goal, needed_ot_goal,
+           q0_total_car_production, q1_total_car_production,
+           q2_total_car_production, q3_total_car_production,
+           car_unit_balance, car_unit_balance_prev_qtr,
+           requalification_date, requalification_status,
+           display_u_month0, display_u_month1, display_u_month2,
+           raw_json, synced_at)
+        VALUES ({ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph},{ph})
+        ON CONFLICT (consultant_id) DO UPDATE SET
+          car_award                 = excluded.car_award,
+          car_award_desc            = excluded.car_award_desc,
+          car_status_type           = excluded.car_status_type,
+          car_status_type_desc      = excluded.car_status_type_desc,
+          car_unit_status_type      = excluded.car_unit_status_type,
+          unit_maint_min_qtr        = excluded.unit_maint_min_qtr,
+          ot_goal                   = excluded.ot_goal,
+          needed_ot_goal            = excluded.needed_ot_goal,
+          q0_total_car_production   = excluded.q0_total_car_production,
+          q1_total_car_production   = excluded.q1_total_car_production,
+          q2_total_car_production   = excluded.q2_total_car_production,
+          q3_total_car_production   = excluded.q3_total_car_production,
+          car_unit_balance          = excluded.car_unit_balance,
+          car_unit_balance_prev_qtr = excluded.car_unit_balance_prev_qtr,
+          requalification_date      = excluded.requalification_date,
+          requalification_status    = excluded.requalification_status,
+          display_u_month0          = excluded.display_u_month0,
+          display_u_month1          = excluded.display_u_month1,
+          display_u_month2          = excluded.display_u_month2,
+          raw_json                  = excluded.raw_json,
+          synced_at                 = excluded.synced_at
+    """
+    cur.execute(sql, (
+        record["consultant_id"], record["car_award"], record["car_award_desc"],
+        record["car_status_type"], record["car_status_type_desc"], record["car_unit_status_type"],
+        record["unit_maint_min_qtr"], record["ot_goal"], record["needed_ot_goal"],
+        record["q0_total_car_production"], record["q1_total_car_production"],
+        record["q2_total_car_production"], record["q3_total_car_production"],
+        record["car_unit_balance"], record["car_unit_balance_prev_qtr"],
+        record["requalification_date"], record["requalification_status"],
+        record["display_u_month0"], record["display_u_month1"], record["display_u_month2"],
+        _json.dumps(record.get("_raw")), record["synced_at"],
+    ))
+
+
 def _upsert_star_tracking(cur, records: list[dict], ph: str) -> int:
     if not records:
         return 0
@@ -658,10 +738,23 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
     else:
         print("[ReportSync] No upcoming Seminar event found — skipping registration sync")
 
+    # Step 7: car award tracking (director-car-program-tracking-personal)
+    raw_car = _foreposts_get(cookies, "director-car-program-tracking-personal", {})
+    car_synced = 0
+    if raw_car and isinstance(raw_car, list) and raw_car[0].get("carAward"):
+        mapped_car = _map_car_award(raw_car[0], consultant_id)
+        mapped_car["_raw"] = raw_car[0]
+        _upsert_car_award(cur, mapped_car, ph)
+        car_synced = 1
+        print(f"[ReportSync] Upserted car award: {raw_car[0].get('carAwardDesc')} ({raw_car[0].get('carStatusTypeDesc')})")
+    else:
+        print("[ReportSync] No car award data found — skipping")
+
     return {
         "members": members_count,
         "great_start": gs_count,
         "star_tracking": star_count,
         "rise_radiate": rr_count,
         "registrations": reg_count,
+        "car_award": car_synced,
     }

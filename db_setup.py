@@ -395,6 +395,37 @@ cur.execute("PRAGMA table_info(unit_member_activity_history)")
 _umah_cols = {r[1] for r in cur.fetchall()}
 if "last_order_date" not in _umah_cols:
     cur.execute("ALTER TABLE unit_member_activity_history ADD COLUMN last_order_date TEXT")
+if "last_activated_date" not in _umah_cols:
+    cur.execute("ALTER TABLE unit_member_activity_history ADD COLUMN last_activated_date TEXT")
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS unit_car_award (
+  id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id             INTEGER NOT NULL UNIQUE,
+  car_award                 TEXT,
+  car_award_desc            TEXT,
+  car_status_type           TEXT,
+  car_status_type_desc      TEXT,
+  car_unit_status_type      TEXT,
+  unit_maint_min_qtr        REAL,
+  ot_goal                   REAL,
+  needed_ot_goal            REAL,
+  q0_total_car_production   REAL,
+  q1_total_car_production   REAL,
+  q2_total_car_production   REAL,
+  q3_total_car_production   REAL,
+  car_unit_balance          REAL,
+  car_unit_balance_prev_qtr REAL,
+  requalification_date      TEXT,
+  requalification_status    INTEGER,
+  display_u_month0          TEXT,
+  display_u_month1          TEXT,
+  display_u_month2          TEXT,
+  raw_json                  TEXT,
+  synced_at                 TEXT NOT NULL DEFAULT (datetime('now'))
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_car_award_consultant ON unit_car_award(consultant_id)")
 
 conn.commit()
 conn.close()
