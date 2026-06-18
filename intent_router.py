@@ -306,6 +306,10 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if _has_edit_verb and _has_edit_field and not _is_setup_phrase:
         return IntentResult(intent="edit_request", confidence=0.95, raw_text=msg)
 
+    # "ingredients in X" → always product_lookup (must come before customer_info catch-all)
+    if re.search(r"\bingredients?\b", lowered):
+        return IntentResult(intent="product_lookup", confidence=0.95, raw_text=msg)
+
     # "new order for X" or "order for X" → new_order (must check before new_customer)
     if re.match(r'^(new\s+)?order\s+for\b', lowered):
         return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)

@@ -956,9 +956,10 @@ def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
             "Postal Code": m.group("zip").strip(),
         }
 
-    # Pull ZIP first (required for full parse)
+    # Pull ZIP first (required for full parse).
+    # Skip a 5-digit match at position 0 — that's a house number, not a zip.
     mzip = re.search(r"\b(\d{5})(?:-\d{4})?\b", txt)
-    zip5 = mzip.group(1) if mzip else ""
+    zip5 = mzip.group(1) if (mzip and mzip.start() > 0) else ""
 
     # ---------- Pattern A: "street city, ST ZIP"
     # Example: "444 4th St Arab, AL 35976"
@@ -1829,13 +1830,23 @@ def _extract_zip(s: str) -> str:
 
 
 def _extract_phone_candidate(s: str) -> str:
-    # Keep digits; if 7/10/11 digits it's likely a phone
-    digits = normalize_phone(s)
-    if len(digits) in (7, 10, 11):
-        return digits
-    # Sometimes they paste "256-xxx-xxxx ext 2" -> still ok
-    if len(digits) >= 10:
-        return digits
+    # Require recognizable phone grouping — avoids treating street numbers
+    # like "10208 NE 75th way" as a 7-digit phone after digit stripping.
+    # 10/11-digit: (NNN) NNN-NNNN, NNN-NNN-NNNN, NNNNNNNNNN, +1NNN...
+    m = re.search(
+        r"(?:\+?1[\s\-.]?)?(?:\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4})",
+        s,
+    )
+    if m:
+        digits = normalize_phone(m.group(0))
+        if len(digits) in (10, 11):
+            return digits
+    # 7-digit local: NNN-NNNN or NNNNNNN (digits only, word-boundary delimited)
+    m = re.search(r"\b\d{3}[\s\-.]?\d{4}\b", s)
+    if m:
+        digits = normalize_phone(m.group(0))
+        if len(digits) == 7:
+            return digits
     return ""
 
 
@@ -2138,6 +2149,8 @@ def _parse_product_price_query_text(msg: str) -> str:
         r"(?i)^price (?:of|check|for)\s+(?:the\s+)?(.+?)\s*\??$",
         r"(?i)^what(?:'s| is) the price (?:of|for)\s+(?:the\s+)?(.+?)\s*\??$",
         r"(?i)^what does\s+(?:the\s+)?(.+?)\s+cost\s*\??$",
+        r"(?i)^what(?:'s| are)? (?:the\s+)?ingredients? (?:in|of|for)\s+(?:the\s+)?(.+?)\s*\??$",
+        r"(?i)^ingredients? (?:in|of|for)\s+(?:the\s+)?(.+?)\s*\??$",
     ):
         m = re.match(pattern, s)
         if m:
