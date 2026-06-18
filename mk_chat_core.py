@@ -3307,7 +3307,7 @@ def _fmt_dollars(val) -> str:
     return f"${val:,.0f}"
 
 
-def _handle_car_program(consultant_id: int) -> "ChatReply":
+def _handle_car_program(consultant_id: int, msg: str = "") -> "ChatReply":
     with connect() as conn:
         cur = conn.cursor()
         PH = "%s" if is_postgres() else "?"
@@ -3391,15 +3391,15 @@ def _handle_car_program(consultant_id: int) -> "ChatReply":
     if q2 is not None:
         lines.append(f"Two quarters ago: {_fmt_dollars(q2)}")
 
-    # Co-pay: determined by last quarter's production via the official MK schedule.
-    # balance fields track excess production credits carried forward, not co-pay deficits.
-    copay = _car_copay_amount(level, q1)
-    if copay is None:
-        pass  # no data to determine
-    elif copay > 0:
-        lines.append(f"Co-pay: ${copay:,.2f}/mo this quarter")
-    else:
-        lines.append("Co-pay: None ✓")
+    # Co-pay: only shown when the user specifically asks about it
+    if re.search(r"\bco[- ]?pay\b", msg, re.IGNORECASE):
+        copay = _car_copay_amount(level, q1)
+        if copay is None:
+            pass
+        elif copay > 0:
+            lines.append(f"Co-pay: ${copay:,.2f}/mo this quarter")
+        else:
+            lines.append("Co-pay: None ✓")
 
     if requali_date:
         lines.append(f"Requalification Date: {_fmt_date(requali_date)}")
@@ -4972,7 +4972,7 @@ class MKChatEngine:
         # Car program status (director feature)
         # -------------------------
         if not pending and intent_result.intent == "car_program":
-            return _handle_car_program(consultant_id)
+            return _handle_car_program(consultant_id, msg=msg)
 
         # -------------------------
         # CRM quick lookup: customer info lookup (no LLM call)
