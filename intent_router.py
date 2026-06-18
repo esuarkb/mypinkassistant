@@ -134,6 +134,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "premier club", "grand achiever", "cadillac",
         "co-pay", "copay", "co pay",
         "car maintenance", "car qualify", "car qualifying",
+        "car production", "car data",
         "earn a car", "get a car", "earn the car",
     )
     if any(t in lowered for t in _car_triggers):
