@@ -671,7 +671,7 @@ def billing_portal(request: Request):
     if (
         not stripe_customer_id
         or not stripe_subscription_id
-        or billing_status not in ("active", "trialing")
+        or billing_status not in ("active", "trialing", "past_due")
     ):
         return RedirectResponse("/billing/start", status_code=302)
 
