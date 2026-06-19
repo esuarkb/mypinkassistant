@@ -28,6 +28,15 @@ def current_quarter() -> str:
     return f"{today.year}-Q{q}"
 
 
+_QUARTER_TO_SEASON = {1: "Spring", 2: "Summer", 3: "Holiday", 4: "Winter"}
+
+def current_pcp_program() -> str:
+    today = date.today()
+    q = (today.month - 1) // 3 + 1
+    season = _QUARTER_TO_SEASON[q]
+    return f"PCP {season} {today.year} Program"
+
+
 def scrape_enrolled(page, username: str, password: str, skip_login: bool = False) -> list[dict]:
     if not skip_login:
         login_intouch(page, username, password)
@@ -57,11 +66,13 @@ def scrape_enrolled(page, username: str, password: str, skip_login: bool = False
     finally:
         page.remove_listener("response", _on_response)
 
-    print(f"[PcpSync] {len(raw_records)} enrolled customers from API")
+    program = current_pcp_program()
+    print(f"[PcpSync] {len(raw_records)} total records from API, filtering to '{program}'")
     return [
         {"name": f"{r['firstName']} {r['lastName']}", "enrolled": True}
         for r in raw_records
         if r.get("firstName") and r.get("lastName")
+        and r.get("programName") == program
     ]
 
 
