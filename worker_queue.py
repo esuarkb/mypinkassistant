@@ -12,6 +12,10 @@ from db import connect, is_postgres, paramify
 # How long a consultant lock is valid (seconds) in case a worker crashes.
 LOCK_TTL_SECONDS = 2 * 60  # 2 minutes
 
+# Job types that can legitimately run longer than LOCK_TTL_SECONDS
+_LONG_RUNNING_JOB_TYPES = ('REPORT_SYNC', 'INITIAL_SYNC', 'FULL_SYNC', 'PCP_SYNC')
+_LONG_RUNNING_TTL_SECONDS = 20 * 60  # 20 minutes
+
 WORKER_ID = os.environ.get("MK_WORKER_ID") or f"worker-{uuid.uuid4().hex[:8]}"
 
 # Placeholder style differs:
@@ -75,10 +79,13 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
     conn = _conn()
     cur = conn.cursor()
     try:
+        long_types_pg = "'" + "','".join(_LONG_RUNNING_JOB_TYPES) + "'"
+        long_types_sqlite = ",".join(f"'{t}'" for t in _LONG_RUNNING_JOB_TYPES)
+
         if is_postgres():
-            # Fail stale running jobs
+            # Fail stale running jobs — long-running types get extended TTL
             cur.execute(
-                """
+                f"""
                 UPDATE jobs
                 SET status='failed',
                     status_msg='Failed ❌',
@@ -89,23 +96,34 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
                     finished_at=NOW()
                 WHERE status='running'
                   AND started_at IS NOT NULL
-                  AND started_at < (NOW() - (%s * INTERVAL '1 second'))
+                  AND started_at < (NOW() - (
+                      CASE WHEN type IN ({long_types_pg})
+                           THEN {_LONG_RUNNING_TTL_SECONDS}
+                           ELSE %s
+                      END * INTERVAL '1 second'
+                  ))
                 """,
                 (int(ttl_seconds),),
             )
 
-            # Clear stale consultant locks
+            # Clear stale consultant locks — skip if consultant has a long-running job active
             cur.execute(
-                """
-                DELETE FROM consultant_locks
-                WHERE locked_at < (NOW() - (%s * INTERVAL '1 second'))
+                f"""
+                DELETE FROM consultant_locks cl
+                WHERE cl.locked_at < (NOW() - (%s * INTERVAL '1 second'))
+                  AND NOT EXISTS (
+                      SELECT 1 FROM jobs j
+                      WHERE j.status = 'running'
+                        AND j.consultant_id = cl.consultant_id
+                        AND j.type IN ({long_types_pg})
+                  )
                 """,
                 (int(ttl_seconds),),
             )
         else:
             # SQLite (timestamps stored as TEXT, compare via epoch seconds)
             cur.execute(
-                """
+                f"""
                 UPDATE jobs
                 SET status='failed',
                     status_msg='Failed ❌',
@@ -116,16 +134,24 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
                     finished_at=datetime('now')
                 WHERE status='running'
                   AND started_at IS NOT NULL
-                  AND (strftime('%s','now') - strftime('%s', started_at)) > ?
+                  AND (strftime('%s','now') - strftime('%s', started_at)) > CASE
+                      WHEN type IN ({long_types_sqlite}) THEN {_LONG_RUNNING_TTL_SECONDS}
+                      ELSE ?
+                  END
                 """,
                 (int(ttl_seconds),),
             )
 
             cur.execute(
-                """
+                f"""
                 DELETE FROM consultant_locks
                 WHERE locked_at IS NOT NULL
                   AND (strftime('%s','now') - strftime('%s', locked_at)) > ?
+                  AND consultant_id NOT IN (
+                      SELECT consultant_id FROM jobs
+                      WHERE status = 'running'
+                        AND type IN ({long_types_sqlite})
+                  )
                 """,
                 (int(ttl_seconds),),
             )
