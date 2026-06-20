@@ -2160,13 +2160,14 @@ def _parse_product_price_query_text(msg: str) -> str:
 
 def _looks_like_inventory_count(msg: str) -> bool:
     s = (msg or "").strip().lower()
-    if "how many" in s and " do i have" in s and not any(w in s for w in ("order", "customer", "followup", "client", "people")):
+    _NOT_INVENTORY = ("order", "customer", "followup", "client", "people", "consultant", "team", "member")
+    if "how many" in s and " do i have" in s and not any(w in s for w in _NOT_INVENTORY):
         return True
     if s.endswith(" in inventory"):
         return True
     if "how many" in s and "inventory" in s:
         return True
-    if s.startswith("how many ") and not any(w in s for w in ("order", "customer", "followup", "client", "people")):
+    if s.startswith("how many ") and not any(w in s for w in _NOT_INVENTORY):
         return True
     if "on hand" in s and "do i have" in s:
         return True
@@ -2706,6 +2707,7 @@ Rules:
 - Do not SELECT a column that is already fixed by an equality filter in WHERE (e.g. if filtering WHERE activity_status = 'I3', do not also SELECT activity_status — the user already knows)
 - When filtering by first_name or last_name, always use LOWER() on both sides: LOWER(first_name) = LOWER('samyra') — names in the DB are title-cased but user input may not be
 - Always include first_name and last_name in the SELECT when querying unit_members, even for single-person queries
+- Never use COUNT(*). For ALL "how many" questions, return the full list (SELECT first_name, last_name, consultant_number, career_level_desc, activity_status with the appropriate WHERE filter). The formatter shows the count in the header automatically.
 - In JOIN queries, always qualify consultant_id with the table alias (e.g., um.consultant_id = 1) to avoid ambiguity — do NOT use a table alias prefix when querying a single table with no JOIN
 - When querying unit_star_tracking, always include level_name in the SELECT — show the consultant's current star level even when the question is about progress toward the next level
 - Keep queries simple and readable"""
@@ -2959,10 +2961,22 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
 
     cols = list(dicts[0].keys())
 
-    # Pure count result
-    if len(cols) == 1 and cols[0].startswith("count"):
-        count = list(dicts[0].values())[0]
-        return f"{count}"
+    # Pure count result — also handles SQLite artifact where LLM mixes name cols with COUNT(*)
+    _count_cols = [c for c in cols if "count" in c.lower()]
+    _is_count_query = len(cols) == 1 and _count_cols
+    # Mixed artifact: 1 row returned with both name columns AND a count column —
+    # this happens in SQLite when LLM forgets GROUP BY; the count value is the real answer
+    _is_mixed_count = (
+        _count_cols
+        and len(dicts) == 1
+        and ("first_name" in cols or "last_name" in cols)
+        and int(dicts[0].get(_count_cols[0]) or 0) != 1  # if count=1 it might be a real single result
+    )
+    if _is_count_query or _is_mixed_count:
+        count = dicts[0].get(_count_cols[0])
+        label = "consultant" if "consultant" in original_msg.lower() else "result"
+        plural = "s" if count != 1 else ""
+        return f"{count} {label}{plural}"
 
     import html as _html
 
@@ -3446,9 +3460,24 @@ def _handle_data_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
     )
 
     # Normalize plural product category words so LIKE clauses use singular forms
-    _msg_for_query = _re.sub(r'\bsets\b', 'set', msg, flags=_re.IGNORECASE)
-    _msg_for_query = _re.sub(r'\bkits\b', 'kit', _msg_for_query, flags=_re.IGNORECASE)
-    _msg_for_query = _re.sub(r'\bcreams\b', 'cream', _msg_for_query, flags=_re.IGNORECASE)
+    _product_plural_map = [
+        (r'\bsets\b', 'set'), (r'\bkits\b', 'kit'), (r'\bcreams\b', 'cream'),
+        (r'\bfoundations\b', 'foundation'), (r'\bprimers\b', 'primer'),
+        (r'\bserums\b', 'serum'), (r'\bmoisturizers\b', 'moisturizer'),
+        (r'\bcleansers\b', 'cleanser'), (r'\bconcealers\b', 'concealer'),
+        (r'\bpowders\b', 'powder'), (r'\bhighlighters\b', 'highlighter'),
+        (r'\bshadows\b', 'shadow'), (r'\beyeliners\b', 'eyeliner'),
+        (r'\bmascaras\b', 'mascara'), (r'\bbrushes\b', 'brush'),
+        (r'\bmasks\b', 'mask'), (r'\bwipes\b', 'wipe'),
+        (r'\blotions\b', 'lotion'), (r'\bscrubs\b', 'scrub'),
+        (r'\btoners\b', 'toner'), (r'\bbalms\b', 'balm'),
+        (r'\bsticks\b', 'stick'), (r'\bpencils\b', 'pencil'),
+        (r'\bgels\b', 'gel'), (r'\blipsticks\b', 'lipstick'),
+        (r'\bbronzers\b', 'bronzer'), (r'\blotions\b', 'lotion'),
+    ]
+    _msg_for_query = msg
+    for _pat, _repl in _product_plural_map:
+        _msg_for_query = _re.sub(_pat, _repl, _msg_for_query, flags=_re.IGNORECASE)
 
     client = OpenAI()
     try:
@@ -3692,7 +3721,8 @@ class MKChatEngine:
         msg = _re.sub(r'\b(\d{8})\b', lambda m: _sku_map.get(m.group(1), m.group(1)), msg)
 
         # Product look-up "show more" — client sends "show all <term>" when consultant taps "+N more"
-        _SHOW_ALL_CRM_TERMS = {"customer", "customers", "order", "orders", "inventory", "follow", "followup", "followups", "lapsed"}
+        _SHOW_ALL_CRM_TERMS = {"customer", "customers", "order", "orders", "inventory", "follow", "followup", "followups", "lapsed",
+                               "team", "consultants", "consultant", "unit", "members", "member"}
         if msg.lower().startswith("show all "):
             _more_term = msg[len("show all "):].strip()
             _more_words = set(_more_term.lower().split())
@@ -3783,7 +3813,7 @@ class MKChatEngine:
         # -------------------------
         # Bare inventory-style write guardrail
         # -------------------------
-        if _looks_like_bare_inventory_write(msg):
+        if not pending and _looks_like_bare_inventory_write(msg):
             return ChatReply(
                 "That looks like an inventory update.\n"
                 "Try again using the word 'inventory':\n"
@@ -5269,6 +5299,21 @@ class MKChatEngine:
                         "First Name": (c.get("first_name") or "").strip(),
                         "Last Name": (c.get("last_name") or "").strip(),
                     }
+
+                    # Drop any items whose text is just a customer name token —
+                    # happens when the LLM mistakes a last name for a product
+                    # (e.g. "Order for Carrie Alloy" → items=["alloy"])
+                    _cust_tokens = {
+                        t.lower() for t in [
+                            (c.get("first_name") or "").strip(),
+                            (c.get("last_name") or "").strip(),
+                        ] if t
+                    }
+                    if _cust_tokens:
+                        order_draft["lines"] = [
+                            ln for ln in order_draft.get("lines", [])
+                            if ln.get("text", "").strip().lower() not in _cust_tokens
+                        ]
 
                     save_session_state(state, session_id=sid)
 

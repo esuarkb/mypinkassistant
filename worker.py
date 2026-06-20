@@ -639,7 +639,14 @@ def main():
                                 conn.close()
                             _cust_count = _cust_summary.get("inserted", 0) + _cust_summary.get("updated", 0)
                             _ord_count = _ord_summary.get("inserted", 0)
-                            mark_job_done(job_id, f"Customer & order import complete! {_cust_count} customers, {_ord_count} orders imported.")
+                            conn = connect()
+                            try:
+                                cur = conn.cursor()
+                                cur.execute(f"SELECT COUNT(*) FROM customers WHERE consultant_id={PH_W} AND source_status='active'", (cid,))
+                                _active_count = (cur.fetchone() or [0])[0]
+                            finally:
+                                conn.close()
+                            mark_job_done(job_id, f"Customer & order import complete! {_cust_count} customers ({_active_count} active), {_ord_count} orders imported.")
                             conn = connect()
                             try:
                                 cur = conn.cursor()

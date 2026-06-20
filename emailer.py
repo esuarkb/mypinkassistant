@@ -56,8 +56,10 @@ Ejemplo:
 PROGRAMA DE REFERIDOS
 ¡Da un mes, gana un mes! Tu enlace de referido personal está en Configuración en https://mypinkassistant.com
 
-SÍGUENOS EN FACEBOOK
-Consejos, nuevas funciones y actualizaciones: https://www.facebook.com/mypinkassistant1
+SÍGUENOS EN FACEBOOK, INSTAGRAM Y TIKTOK
+Facebook: https://www.facebook.com/mypinkassistant1
+Instagram: https://www.instagram.com/mypinkassistant
+TikTok: https://www.tiktok.com/@mypinkassistant
 
 ¿Tienes preguntas? Consulta nuestras Preguntas Frecuentes: https://mypinkassistant.com/faq
 
@@ -142,10 +144,12 @@ support@mypinkassistant.com
         ¡Da un mes, gana un mes! Tu enlace de referido personal está en <strong>Configuración</strong>.
       </p>
 
-      <h3 style="margin:16px 0 8px 0;font-size:16px;">📣 Síguenos en Facebook</h3>
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📣 Síguenos en Facebook, Instagram y TikTok</h3>
       <p style="margin:0 0 16px 0;color:#111;">
-        Síguenos en Facebook para consejos, nuevas funciones y actualizaciones:
-        <a href="https://www.facebook.com/mypinkassistant1" style="color:#e91e63;text-decoration:none;font-weight:bold;">facebook.com/mypinkassistant1</a>
+        Consejos, nuevas funciones y actualizaciones:<br>
+        <a href="https://www.facebook.com/mypinkassistant1" style="color:#e91e63;text-decoration:none;font-weight:bold;">facebook.com/mypinkassistant1</a><br>
+        <a href="https://www.instagram.com/mypinkassistant" style="color:#e91e63;text-decoration:none;font-weight:bold;">instagram.com/mypinkassistant</a><br>
+        <a href="https://www.tiktok.com/@mypinkassistant" style="color:#e91e63;text-decoration:none;font-weight:bold;">tiktok.com/@mypinkassistant</a>
       </p>
 
       <p style="margin:0 0 18px 0;font-size:15px;color:#111;font-weight:500;">
@@ -210,8 +214,10 @@ How many TimeWise sets do I have? Set my par for charcoal masks to 3.
 REFERRAL PROGRAM
 Give a month, get a month! Your referral link is in Settings at https://mypinkassistant.com
 
-FOLLOW US ON FACEBOOK
-Tips, new features, and updates: https://www.facebook.com/mypinkassistant1
+FOLLOW US ON FACEBOOK, INSTAGRAM & TIKTOK
+Facebook: https://www.facebook.com/mypinkassistant1
+Instagram: https://www.instagram.com/mypinkassistant
+TikTok: https://www.tiktok.com/@mypinkassistant
 
 Have questions? Check out our FAQ: https://mypinkassistant.com/faq
 
@@ -245,46 +251,39 @@ support@mypinkassistant.com
 
       <div style="border-top:1px solid #e6e6e6;padding-top:16px;margin-top:10px;"></div>
 
+      <p style="margin:0 0 14px 0;color:#111;">Here are some things you can do in chat:</p>
+
       <h3 style="margin:16px 0 8px 0;font-size:16px;">💁‍♀️ Add a New Customer</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        Include as much or as little detail as you’d like: name, address, email, phone number, birthday.
+        Include as much or as little detail as you’d like: name, address, email, phone number, birthday. I’ll organize what you enter and send it to MyCustomers automatically.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
         New customer Jane Doe, 444 4th St, Anytown, Alabama 55555, jane@gmail.com, 5551231234, 12-25-02
       </p>
-      <p style="margin:0 0 16px 0;color:#111;">
-        I’ll organize what you enter and send it to <strong>MyCustomers</strong> automatically.
-      </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📇 Look up Customer Information and Orders</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        Instantly find customer details and past orders — just type a name. Your existing customers and order history from MyCustomers are imported automatically when you sign up, so you can look up past orders right away.
+        Instantly find customer details and past orders — just type a name. Your existing customers and order history from MyCustomers are imported automatically when you sign up, so you can look up customers and past orders right away. I’ll find the closest match even if you don’t remember the exact spelling.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
         Jane Doe<br>
         What were Jane’s last 3 orders?
       </p>
-      <p style="margin:0 0 16px 0;color:#111;">
-        I’ll find the closest match even if you don’t remember the exact spelling.
-      </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🛍 Add a Customer Order</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        Add multiple items and quantities in one message — no SKU numbers needed.
+        Add multiple items and quantities in one message — no SKU numbers needed. I’ll confirm each item before submitting, and you can always add/remove before final approval.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
         New order for Jane Doe; she wants a red lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
       </p>
-      <p style="margin:0 0 16px 0;color:#111;">
-        I’ll confirm each item before submitting, and you can always add/remove before final approval.
-      </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📦 Personal Inventory</h3>
       <p style="margin:0 0 10px 0;color:#111;">
-        When you place an inventory order through MaryKayInTouch.com, your stock updates automatically — no manual entry needed. You can also check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
+        When you place an inventory order through marykayintouch.com, your stock updates automatically — no manual entry needed. You can also check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
@@ -293,17 +292,19 @@ support@mypinkassistant.com
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🎁 Referral Program</h3>
       <p style="margin:0 0 16px 0;color:#111;">
-        Give a month, get a month! Your personal referral link is in <strong>Settings</strong>.
+        Give a month, get a month! Your personal referral link is in <a href="https://mypinkassistant.com/settings" style="color:#e91e63;text-decoration:none;">Settings</a>.
       </p>
 
-      <h3 style="margin:16px 0 8px 0;font-size:16px;">📣 Follow Us on Facebook</h3>
-      <p style="margin:0 0 16px 0;color:#111;">
-        Follow our Facebook page for tips, new features, and updates:
-        <a href="https://www.facebook.com/mypinkassistant1" style="color:#e91e63;text-decoration:none;font-weight:bold;">facebook.com/mypinkassistant1</a>
-      </p>
-
-      <p style="margin:0 0 18px 0;font-size:15px;color:#111;font-weight:500;">
+      <p style="margin:0 0 16px 0;font-size:15px;color:#111;font-weight:500;">
         We built MyPinkAssistant to save you time and simplify your business — and we’re honored you’re here. 💗
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">📣 Follow Us on Facebook, Instagram & TikTok</h3>
+      <p style="margin:0 0 16px 0;color:#111;">
+        Tips, new features, and updates:<br>
+        <a href="https://www.facebook.com/mypinkassistant1" style="color:#e91e63;text-decoration:none;font-weight:bold;">facebook.com/mypinkassistant1</a><br>
+        <a href="https://www.instagram.com/mypinkassistant" style="color:#e91e63;text-decoration:none;font-weight:bold;">instagram.com/mypinkassistant</a><br>
+        <a href="https://www.tiktok.com/@mypinkassistant" style="color:#e91e63;text-decoration:none;font-weight:bold;">tiktok.com/@mypinkassistant</a>
       </p>
 
       <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:18px;"></div>
@@ -313,11 +314,6 @@ support@mypinkassistant.com
         <a href="mailto:support@mypinkassistant.com" style="color:#e91e63;text-decoration:none;">support@mypinkassistant.com</a>.
       </p>
 
-      <p style="margin:10px 0 0 0;font-size:12px;color:#5a5a5a;">
-        Open MyPinkAssistant anytime: <a href="https://mypinkassistant.com" style="color:#e91e63;text-decoration:none;">
-          mypinkassistant.com
-        </a>
-      </p>
     </div>
   </body>
 </html>

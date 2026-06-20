@@ -313,6 +313,11 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
             return IntentResult(intent="customers_by_city", confidence=0.95,
                                 slots={"city": _city.title()}, raw_text=msg)
 
+    # "add this address/phone/email/birthday to [name]" → edit_request
+    # Must come before the general edit_request and customer_info checks
+    if re.search(r'\badd\s+(?:this\s+)?(address|phone|email|birthday|birthdate)\b', lowered):
+        return IntentResult(intent="edit_request", confidence=0.95, raw_text=msg)
+
     # edit_request — someone trying to update customer info or an order
     # Must come before customer_info; exclude "set up/new" to avoid catching new_customer phrases
     _has_edit_verb  = bool(re.search(r"\b(update|change|edit|fix|correct|set|modify)\b", lowered))
@@ -325,8 +330,8 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if re.search(r"\bingredients?\b", lowered):
         return IntentResult(intent="product_lookup", confidence=0.95, raw_text=msg)
 
-    # "new order for X" or "order for X" → new_order (must check before new_customer)
-    if re.match(r'^(new\s+)?order\s+for\b', lowered):
+    # "new/add/place/start order for X" or bare "order for X" → new_order (must check before new_customer)
+    if re.match(r'^(new\s+|add\s+|place\s+|start\s+(?:an?\s+)?)?order\s+for\b', lowered):
         return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
 
     # "create X" without "order" → new customer (e.g. "create nichole giveaway")
