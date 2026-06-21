@@ -102,6 +102,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # Must come before customer_info and lapsed_customers to avoid misrouting
     _unit_triggers = (
         "my team", "my unit", "my consultants", "my downline",
+        "my personal team", "personal team", "my personal recruits", "personal recruits",
         "team member", "unit member",
         "great start", "star consultant", "star tracking", "star status",
         "myshop", "my shop",
