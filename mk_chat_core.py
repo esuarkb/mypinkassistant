@@ -6014,6 +6014,28 @@ class MKChatEngine:
                     # 2) Queue jobs for worker/playwright
                     _leave_pending = bool(order.get("leave_pending", False))
                     _order_date = (order.get("order_date") or "").strip() or None
+
+                    # For CDS orders, include customer address in payload so Playwright
+                    # can fill it in if InTouch reports a missing delivery address
+                    _cds_address = {}
+                    if _fulfillment == "cds":
+                        from crm_store import get_customer_id_by_name as _get_cid_by_name
+                        with tx() as (_cds_conn, _cds_cur):
+                            _cds_cid = order.get("customer_id") or _get_cid_by_name(_cds_cur, consultant_id, cust_first, cust_last)
+                            if _cds_cid:
+                                _cds_cur.execute(
+                                    f"SELECT street, city, state, postal_code FROM customers WHERE consultant_id={PH} AND id={PH} LIMIT 1",
+                                    (consultant_id, int(_cds_cid)),
+                                )
+                                _cds_row = _cds_cur.fetchone()
+                                if _cds_row:
+                                    _cds_address = {
+                                        "street": (_cds_row["street"] if isinstance(_cds_row, dict) else _cds_row[0]) or "",
+                                        "city": (_cds_row["city"] if isinstance(_cds_row, dict) else _cds_row[1]) or "",
+                                        "state": (_cds_row["state"] if isinstance(_cds_row, dict) else _cds_row[2]) or "",
+                                        "postal_code": (_cds_row["postal_code"] if isinstance(_cds_row, dict) else _cds_row[3]) or "",
+                                    }
+
                     _first_job = True
                     for line in order["lines"]:
                         sku = (line["chosen"].get("sku") or "").strip()
@@ -6029,6 +6051,8 @@ class MKChatEngine:
                                 "leave_pending": _leave_pending,
                                 "order_date": _order_date,
                             }
+                            if _cds_address:
+                                payload.update(_cds_address)
                             if _first_job and _total_discount > 0:
                                 payload["discount_amount"] = _total_discount
                                 payload["tax_amount"] = _tax_amount

@@ -156,7 +156,34 @@ def fill_discount_fields(page: Page, discount_amount: float = 0.0, tax_amount: f
             print(f"[Orders] Could not fill shipping/tax field: {e}")
 
 
-def finalize_order(page: Page, leave_pending: bool = False, discount_amount: float = 0.0, tax_amount: float = 0.0) -> None:
+def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code: str) -> None:
+    page.get_by_role("button", name="Add New Address").first.click()
+    first_name_field = page.locator('[id^="AddressFirstName-"]')
+    first_name_field.wait_for(state="visible", timeout=5000)
+
+    page.locator('[id^="Street-"]').fill(street)
+    page.wait_for_timeout(100)
+    page.locator('[id^="City-"]').fill(city)
+    page.wait_for_timeout(100)
+    page.locator('[id^="PostalCode-"]').fill(postal_code)
+    page.wait_for_timeout(100)
+
+    dialog = page.get_by_role("dialog")
+    dialog.get_by_role("button", name="Select an option").click()
+    page.wait_for_timeout(700)
+    dialog.get_by_role("option", name=state, exact=True).click()
+    page.wait_for_timeout(700)
+
+    page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
+    try:
+        first_name_field.wait_for(state="hidden", timeout=10000)
+    except PlaywrightTimeoutError:
+        pass
+    page.wait_for_timeout(1000)
+    print(f"[Orders] CDS address filled: {street}, {city}, {state} {postal_code}")
+
+
+def finalize_order(page: Page, leave_pending: bool = False, discount_amount: float = 0.0, tax_amount: float = 0.0, cds_address: dict | None = None) -> None:
     # Fill discount/tax fields before saving (only if a discount was applied)
     if discount_amount > 0:
         fill_discount_fields(page, discount_amount=discount_amount, tax_amount=tax_amount)
@@ -167,7 +194,32 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
     print(f"[Orders] Save and Review clicked")
 
     if leave_pending:
-        # Poll window.location.href — InTouch uses SPA routing so wait_for_url won't fire
+        # Wait for success or address error popup
+        page.wait_for_function(
+            "() => window.location.href.includes('order-details') || "
+            "document.body.innerText.includes('Valid delivery address is required')",
+            timeout=20000
+        )
+        if "order-details" in page.url:
+            return
+
+        # Address error — try filling from payload if available
+        if not cds_address or not cds_address.get("street"):
+            raise RuntimeError("CDS order failed: a valid delivery address is required. Please add the customer's address in InTouch and try again.")
+
+        print(f"[Orders] CDS address error detected — filling address and retrying")
+        fill_cds_address(
+            page,
+            street=cds_address["street"],
+            city=cds_address.get("city", ""),
+            state=cds_address.get("state", ""),
+            postal_code=cds_address.get("postal_code", ""),
+        )
+
+        # Retry Save and Review
+        page.get_by_role("button", name="Save and Review").wait_for(state="visible", timeout=15000)
+        page.get_by_role("button", name="Save and Review").click()
+        print(f"[Orders] Save and Review clicked (retry after address fill)")
         page.wait_for_function("() => window.location.href.includes('order-details')", timeout=20000)
         return
 
@@ -220,7 +272,15 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
         except SkuNotCdsEligible as e:
             skipped_skus.append(str(e))
 
-    finalize_order(page, leave_pending=leave_pending, discount_amount=discount_amount, tax_amount=tax_amount)
+    cds_address = None
+    if fulfillment_method == "cds" and rows[0].get("street"):
+        cds_address = {
+            "street": rows[0].get("street", ""),
+            "city": rows[0].get("city", ""),
+            "state": rows[0].get("state", ""),
+            "postal_code": rows[0].get("postal_code", ""),
+        }
+    finalize_order(page, leave_pending=leave_pending, discount_amount=discount_amount, tax_amount=tax_amount, cds_address=cds_address)
 
     if skipped_skus:
         raise SkuNotCdsEligible("\n".join(skipped_skus))
