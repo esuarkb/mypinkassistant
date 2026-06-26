@@ -157,6 +157,8 @@ def fill_discount_fields(page: Page, discount_amount: float = 0.0, tax_amount: f
 
 
 def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code: str) -> None:
+    from mk_chat_core import normalize_state
+    state = normalize_state(state)
     page.get_by_role("button", name="Add New Address").first.click()
     first_name_field = page.locator('[id^="AddressFirstName-"]')
     first_name_field.wait_for(state="visible", timeout=5000)
