@@ -378,6 +378,15 @@ def update_settings(cid: int, language: str, intouch_username: str, intouch_pass
     try:
         if intouch_password is not None and intouch_password.strip() != "":
             enc = encrypt_intouch_password(intouch_password.strip())
+            # Save current password as previous before overwriting
+            cur.execute(
+                f"""
+                UPDATE consultants
+                SET intouch_password_prev_enc = intouch_password_enc
+                WHERE id={PH} AND intouch_password_enc != ''
+                """,
+                (cid,),
+            )
             cur.execute(
                 f"""
                 UPDATE consultants
