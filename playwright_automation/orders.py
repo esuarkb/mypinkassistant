@@ -167,8 +167,8 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
     print(f"[Orders] Save and Review clicked")
 
     if leave_pending:
-        # Leave order in pending state — do not change delivery status
-        page.wait_for_timeout(1500)
+        # Wait for order detail page to confirm InTouch saved the CDS order
+        page.get_by_role("button", name="Edit Ticket").wait_for(state="visible", timeout=15000)
         return
 
     # Process order: confirm delivery status change

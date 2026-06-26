@@ -691,6 +691,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         "- For shades/colors/variants (Normal/Dry, Combination/Oily), include them in item text if present.\n"
         "- If the user says a variant applies to multiple items (e.g., 'normal/dry both'), append that variant phrase to each affected item.\n"
         "- Do NOT treat numbers OR product descriptor words that are part of a product name as quantity (examples: '4-in-1 cleanser', '2-in-1', '3D', 'Duo Stick', 'Trio Set'). These are product names, not user-specified quantities.\n"
+        "- For foundation products, the shade number is always part of the product name, never a quantity (e.g., 'medium 2 foundation' → qty 1, item text 'medium 2 foundation'; 'light 1 foundation' → qty 1, item text 'light 1 foundation').\n"
         "- Only set qty > 1 if the user explicitly indicates quantity (two, x2, qty 2, three of them, etc.). Otherwise qty must be 1.\n"
         "- If the user says a quantity change like 'make that 2' or 'change it to 3', do NOT output a new order. That will be handled separately.\n"
         '- Set fulfillment_method to "cds" if the user mentions CDS or customer delivery. Default is "inventory".\n'
@@ -6181,6 +6182,8 @@ class MKChatEngine:
             customer_name_for_lookup = " ".join([p for p in [cust_first, cust_last] if p]).strip()
 
             if not customer_name_for_lookup:
+                if fulfillment_method == "cds":
+                    return ChatReply('To create a CDS order, type: <strong>New CDS order for [customer name]</strong> and then tell me the products.')
                 return ChatReply(ui["need_customer_for_order"])
 
             # Resolve CRM customer match once and carry it through the order flow
