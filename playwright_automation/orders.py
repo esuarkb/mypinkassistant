@@ -167,8 +167,8 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
     print(f"[Orders] Save and Review clicked")
 
     if leave_pending:
-        # Wait for order-details URL to confirm InTouch saved the CDS order
-        page.wait_for_url("**/order-details**", timeout=20000)
+        # Poll window.location.href — InTouch uses SPA routing so wait_for_url won't fire
+        page.wait_for_function("() => window.location.href.includes('order-details')", timeout=20000)
         return
 
     # Process order: confirm delivery status change
