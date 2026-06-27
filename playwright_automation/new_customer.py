@@ -158,7 +158,11 @@ def create_customer_basic(page: Page, customer: dict) -> None:
             page.wait_for_timeout(200)
 
     page.get_by_role("button", name="Save New Customer").click()
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(1500)
+    if page.locator('.slds-notify.slds-theme_error').is_visible():
+        err = page.locator('.slds-notify.slds-theme_error').first.inner_text()
+        lines = [l.strip() for l in err.split('\n') if l.strip() and l.strip().lower() not in ('error', 'close')]
+        raise RuntimeError(f"InTouch: {' '.join(lines)}")
     print(f"[NewCustomer] Basic info saved: {_name}")
 
     # If we have address info, fill that in too

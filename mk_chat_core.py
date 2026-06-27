@@ -1184,7 +1184,7 @@ UI_EN = {
     "got_it_ordering_for": "Got it — order for {name}.",
     "no_matches": "No close matches. Try rewording the item (brand/line/shade helps).",
     "reply_yes_no_qty": "Reply yes, no, skip, or cancel — or add a quantity like 'x2'",
-    "order_adjust_hint": "You can also say `add` or `remove`, or `cancel` to start over.",
+    "order_adjust_hint": "You can also <strong>add</strong> or <strong>remove</strong> a product, or <strong>cancel</strong> to start over.",
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Parse error: {err}",
@@ -1194,7 +1194,7 @@ UI_EN = {
     "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
     "order_reject": "Okay — paste the corrected order and I'll rebuild the summary.",
 
-    "no_catalog_match": "I couldn't find that product in the catalog. Try rewording it (brand, line, or shade helps), or say `cancel` to start over.",
+    "no_catalog_match": "I couldn't find that product in the catalog. Try rewording it (brand, line, or shade helps), or say <strong>cancel</strong> to start over.",
     "no_customer_found": "I couldn't find {name} in your saved customers.",
     "no_customer_found_yet": "I couldn't find {name} in your saved customers yet.",
     "no_customer_id": "I couldn't find a customer with ID {cid}.",
@@ -1213,13 +1213,13 @@ UI_EN = {
     "confirming_customer": "You're confirming a new customer. Reply yes or no, or type cancel to retry.",
     "deleted_customer": "✅ Deleted {name} from MyPinkAssistant (MyCustomers was not changed).",
     "delete_failed": "I couldn't delete that customer (maybe it was already removed).",
-    "delete_confirm_prompt": "To confirm deletion, type DELETE. Or type `cancel`.",
+    "delete_confirm_prompt": "To confirm deletion, type DELETE. Or type <strong>cancel</strong>.",
     "no_items_caught": "I didn't catch any items — try again with the product names.",
     "add_hint": "Tell me what to add, e.g. `add satin hands`.",
     "remove_hint": "Tell me what to remove, e.g. `remove 1` or `remove charcoal`.",
     "remove_not_found": "I couldn't find that item to remove. Try `remove 1` or part of the name.",
-    "confirming_order": "You're confirming an order. Reply yes or no, or say add or remove to edit the order.",
-    "reply_yes_no_adjust": "Reply yes or no — or say add or remove to adjust the order.",
+    "confirming_order": "You're confirming an order. Reply <strong>yes</strong> or <strong>no</strong>, or say <strong>add [product]</strong> or <strong>remove [product]</strong> to edit the order.",
+    "reply_yes_no_adjust": "Reply <strong>yes</strong>, <strong>no</strong>, or <strong>cancel</strong>, or tell me to <strong>add [product]</strong> or <strong>remove [product]</strong>.",
     "trouble": "I'm having a little trouble right now, please try again in a moment.",
     "customer_not_in_mc": "I'm not finding {name} in MyCustomers. We will need to add {name} as a new customer first.",
     "propose_top": "I think you mean: {line}. Is that right? (yes/no)",
@@ -1266,7 +1266,7 @@ UI_ES = {
     "got_it_ordering_for": "Listo — pedido para {name}.",
     "no_matches": "No encuentro coincidencias cercanas. Intenta describirlo de otra forma (línea/tono/variante ayuda).",
     "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
-    "order_adjust_hint": "También puedes decir `add` o `remove`, o `cancel` para empezar de nuevo.",
+    "order_adjust_hint": "También puedes <strong>add</strong> o <strong>remove</strong> un producto, o <strong>cancel</strong> para empezar de nuevo.",
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Error al interpretar: {err}",
@@ -1583,7 +1583,7 @@ def propose_top(top: dict, current_qty: int, ui: dict = None, original_text: str
         _label = f'"{original_text}"' if original_text else "that product"
         return (
             f"I couldn't find {_label} in the catalog. "
-            "Try rewording it (brand, line, or shade helps), say 'skip' to skip this item, or `cancel` to start over."
+            "Try rewording it (brand, line, or shade helps), say <strong>skip</strong> to skip this item, or <strong>cancel</strong> to start over."
         ) + _QR_YN
     q = int(current_qty or 1)
     qtxt = f" x{q}" if q != 1 else ""
@@ -1634,7 +1634,7 @@ def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None,
     n = len(top)
     reply_range = "1" if n == 1 else f"1-{n}"
     if skip_hint:
-        intro = _html.escape(f"Got it — select the best match, try different search words, or say 'skip' to move on.")
+        intro = "Got it — select the best match, try different search words, or say <strong>skip</strong> to move on."
     else:
         intro = _html.escape(ui["render_top5_intro"].format(range=reply_range))
     rows = ""
@@ -4165,7 +4165,7 @@ class MKChatEngine:
                             )
                         return ChatReply(
                             f"This will delete {state['pending']['customer_name']} from MyPinkAssistant. "
-                            f"Type DELETE to confirm, or `cancel`."
+                            f"Type DELETE to confirm, or <strong>cancel</strong>."
                         )
 
                     # delete by name
@@ -4201,7 +4201,7 @@ class MKChatEngine:
                         )
                     return ChatReply(
                         f"This will delete {state['pending']['customer_name']} from MyPinkAssistant. "
-                        f"Type DELETE to confirm, or `cancel`."
+                        f"Type DELETE to confirm, or <strong>cancel</strong>."
                     )
 
                 # Multiple matches -> richer delete picker
@@ -5272,7 +5272,7 @@ class MKChatEngine:
                         )
                     return ChatReply(
                         f"This will delete {customer_name} from MyPinkAssistant. "
-                        f"Type DELETE to confirm, or `cancel`."
+                        f"Type DELETE to confirm, or <strong>cancel</strong>."
                     )
 
                 if action == "spend":
@@ -5573,7 +5573,7 @@ class MKChatEngine:
                     if not first or not last:
                         return ChatReply(
                             "I need both a first and last name before MyCustomers can save this customer. "
-                            "Please type `cancel` and re-enter the customer with the full name."
+                            "Please type <strong>cancel</strong> and re-enter the customer with the full name."
                         )
 
                     phone_digits = normalize_phone(customer.get("Phone") or "")
@@ -5715,7 +5715,7 @@ class MKChatEngine:
                         _orig = (order["lines"][line_index].get("text") or "that product").strip()
                         return ChatReply(
                             f"I couldn't find \"{_orig}\" in the catalog. "
-                            "Try rewording it (brand, line, or shade helps), say 'skip' to skip this item, or `cancel` to start over."
+                            "Try rewording it (brand, line, or shade helps), say <strong>skip</strong> to skip this item, or <strong>cancel</strong> to start over."
                         )
                     order["lines"][line_index]["chosen"] = top
                     state["pending"] = None
@@ -5733,7 +5733,7 @@ class MKChatEngine:
                         save_session_state(state, session_id=sid)
                         return ChatReply(
                             f"I couldn't find \"{_orig}\" in the catalog. "
-                            "Try rewording it (brand, line, or shade helps), say 'skip' to skip this item, or `cancel` to start over."
+                            "Try rewording it (brand, line, or shade helps), say <strong>skip</strong> to skip this item, or <strong>cancel</strong> to start over."
                         )
                     state["pending"] = {
                         "kind": "order_line_pick_top5_or_search",
@@ -5779,7 +5779,7 @@ class MKChatEngine:
                 new_matches = best_matches(catalog, msg, limit=MATCH_LIMIT)
                 if not new_matches:
                     return ChatReply(
-                        "No close matches. Try different search words, or say 'skip' to move on."
+                        "No close matches. Try different search words, or say <strong>skip</strong> to move on."
                     )
 
                 state["pending"] = {

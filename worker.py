@@ -930,7 +930,10 @@ def main():
                         # Default user-facing message should be safe and non-technical
                         err_text = "Something went wrong submitting this. Please try again."
 
-                        if "Post-save" in raw_err:
+                        if raw_err.startswith("InTouch:"):
+                            err_text = raw_err
+
+                        elif "Post-save" in raw_err:
                             err_text = (
                                 "Customer was saved to MyCustomers, but we couldn't confirm it completed. "
                                 "Please verify in MyCustomers before trying again."

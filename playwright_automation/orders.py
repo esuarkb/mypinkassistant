@@ -156,6 +156,16 @@ def fill_discount_fields(page: Page, discount_amount: float = 0.0, tax_amount: f
             print(f"[Orders] Could not fill shipping/tax field: {e}")
 
 
+def _read_intouch_error(page: Page) -> str:
+    try:
+        text = page.locator('.slds-notify.slds-theme_error').first.inner_text()
+        lines = [l.strip() for l in text.split('\n')
+                 if l.strip() and l.strip().lower() not in ('error', 'close')]
+        return ' '.join(lines)
+    except Exception:
+        return "Unknown InTouch error"
+
+
 def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code: str) -> None:
     from mk_chat_core import normalize_state
     state = normalize_state(state)
@@ -196,40 +206,45 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
     print(f"[Orders] Save and Review clicked")
 
     if leave_pending:
-        # Wait for success or address error popup
+        # Wait for success (order-details URL) or any InTouch error toast
         page.wait_for_function(
             "() => window.location.href.includes('order-details') || "
-            "document.body.innerText.includes('Valid delivery address is required')",
+            "document.querySelector('.slds-notify.slds-theme_error') !== null",
             timeout=20000
         )
         if "order-details" in page.url:
             return
 
-        # Address error — try filling from payload if available
-        if not cds_address or not cds_address.get("street"):
-            raise RuntimeError("CDS order failed: a valid delivery address is required. Please add the customer's address in InTouch and try again.")
+        # An error toast appeared — read it
+        intouch_error = _read_intouch_error(page)
 
-        print(f"[Orders] CDS address error detected — filling address and retrying")
-        fill_cds_address(
-            page,
-            street=cds_address["street"],
-            city=cds_address.get("city", ""),
-            state=cds_address.get("state", ""),
-            postal_code=cds_address.get("postal_code", ""),
-        )
+        # CDS address error — try filling from payload if available
+        if "delivery address" in intouch_error.lower():
+            if not cds_address or not cds_address.get("street"):
+                raise RuntimeError(f"InTouch: {intouch_error}")
+            print(f"[Orders] CDS address error — filling address and retrying")
+            fill_cds_address(
+                page,
+                street=cds_address["street"],
+                city=cds_address.get("city", ""),
+                state=cds_address.get("state", ""),
+                postal_code=cds_address.get("postal_code", ""),
+            )
+            page.get_by_role("button", name="Save and Review").wait_for(state="visible", timeout=15000)
+            page.get_by_role("button", name="Save and Review").click()
+            print(f"[Orders] Save and Review clicked (retry after address fill)")
+            page.wait_for_function("() => window.location.href.includes('order-details')", timeout=20000)
+            return
 
-        # Retry Save and Review
-        page.get_by_role("button", name="Save and Review").wait_for(state="visible", timeout=15000)
-        page.get_by_role("button", name="Save and Review").click()
-        print(f"[Orders] Save and Review clicked (retry after address fill)")
-        page.wait_for_function("() => window.location.href.includes('order-details')", timeout=20000)
-        return
+        raise RuntimeError(f"InTouch: {intouch_error}")
 
     # Process order: confirm delivery status change
     # Retry once — InTouch can be slow to render this button after Save and Review
     try:
         page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
     except PlaywrightTimeoutError:
+        if page.locator('.slds-notify.slds-theme_error').is_visible():
+            raise RuntimeError(f"InTouch: {_read_intouch_error(page)}")
         page.wait_for_timeout(3000)
         page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Change To Processed").click()
