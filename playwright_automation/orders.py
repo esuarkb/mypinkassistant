@@ -100,6 +100,7 @@ def add_sku_to_bag(page: Page, sku: str, fulfillment_method: str = "inventory") 
     page.get_by_role("searchbox", name="Note Title").fill(sku)
     # waits for the SKU to appear in search results
     page.locator(f"text={sku}").first.wait_for(timeout=12000)
+    page.wait_for_timeout(500)
 
     # check for no-CDS chip before attempting to add (CDS orders only)
     if fulfillment_method == "cds":
@@ -169,9 +170,20 @@ def _read_intouch_error(page: Page) -> str:
 def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code: str) -> None:
     from mk_chat_core import normalize_state
     state = normalize_state(state)
-    page.get_by_role("button", name="Add New Address").first.click()
+    page.wait_for_timeout(1500)
+    add_address_btn = page.get_by_role("button", name="Add New Address").first
     first_name_field = page.locator('[id^="AddressFirstName-"]')
-    first_name_field.wait_for(state="visible", timeout=5000)
+    for _ in range(4):
+        add_address_btn.scroll_into_view_if_needed()
+        add_address_btn.click()
+        page.wait_for_timeout(700)
+        try:
+            first_name_field.wait_for(state="visible", timeout=1000)
+            break
+        except PlaywrightTimeoutError:
+            pass
+    else:
+        raise RuntimeError("CDS address dialog failed to open after 4 attempts.")
 
     page.locator('[id^="Street-"]').fill(street)
     page.wait_for_timeout(100)
@@ -209,7 +221,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         # Wait for success (order-details URL) or any InTouch error toast
         page.wait_for_function(
             "() => window.location.href.includes('order-details') || "
-            "document.querySelector('.slds-notify.slds-theme_error') !== null",
+            "document.body.innerText.toLowerCase().includes('error')",
             timeout=20000
         )
         if "order-details" in page.url:
@@ -230,6 +242,12 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
                 state=cds_address.get("state", ""),
                 postal_code=cds_address.get("postal_code", ""),
             )
+            # Wait for any dialog/modal to fully disappear before clicking Save and Review
+            try:
+                page.locator('[role="dialog"]').wait_for(state="hidden", timeout=5000)
+            except PlaywrightTimeoutError:
+                pass
+            page.wait_for_timeout(500)
             page.get_by_role("button", name="Save and Review").wait_for(state="visible", timeout=15000)
             page.get_by_role("button", name="Save and Review").click()
             print(f"[Orders] Save and Review clicked (retry after address fill)")
