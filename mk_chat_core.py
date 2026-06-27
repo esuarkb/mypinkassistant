@@ -6032,7 +6032,7 @@ class MKChatEngine:
                                     _cds_address = {
                                         "street": (_cds_row["street"] if isinstance(_cds_row, dict) else _cds_row[0]) or "",
                                         "city": (_cds_row["city"] if isinstance(_cds_row, dict) else _cds_row[1]) or "",
-                                        "state": (_cds_row["state"] if isinstance(_cds_row, dict) else _cds_row[2]) or "",
+                                        "state": normalize_state((_cds_row["state"] if isinstance(_cds_row, dict) else _cds_row[2]) or ""),
                                         "postal_code": (_cds_row["postal_code"] if isinstance(_cds_row, dict) else _cds_row[3]) or "",
                                     }
 
