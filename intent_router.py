@@ -82,11 +82,9 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         return IntentResult(intent="chat_help", confidence=1.0, raw_text=msg)
 
     # app installation help
-    if lowered in ("app", "install app", "install", "the app", "app help", "help app") or any(t in lowered for t in (
-        "help with app", "app help", "help app", "install app", "add to home", "home screen",
-        "add the app", "download the app", "make the app", "get the app",
-        "add to my phone", "save to phone", "put on my phone",
-    )):
+    _app_word = bool(re.search(r'\bapp\b', lowered))
+    _app_context = any(t in lowered for t in ("phone", "home screen", "home scrn", "ipad", "tablet", "device", "install", "download", "add to home"))
+    if lowered in ("app", "install", "the app", "app help", "help app") or _app_context or (_app_word and any(t in lowered for t in ("add", "save", "put", "get", "help", "screen", "phone", "install", "download"))):
         return IntentResult(intent="app_help", confidence=1.0, raw_text=msg)
 
     # cancel
