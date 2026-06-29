@@ -246,6 +246,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if (
         ("spent" in lowered or "spend" in lowered or "total" in lowered)
         and any(k in lowered for k in ("how much", "total", "spent", "spend"))
+        and not ("add" in lowered and "order" in lowered)
     ):
         return IntentResult(intent="customer_spend", confidence=0.9, raw_text=msg)
 
@@ -332,6 +333,8 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         return IntentResult(intent="product_lookup", confidence=0.95, raw_text=msg)
 
     # "new/add/place/start order for X" or bare "order for X" → new_order (must check before new_customer)
+    if re.search(r'\badd\s+an?\s+order\b', lowered):
+        return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
     if re.match(r'^(new\s+|add\s+|place\s+|start\s+(?:an?\s+)?)?order\s+for\b', lowered):
         return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
 
