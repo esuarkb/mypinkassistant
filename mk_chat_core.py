@@ -1195,8 +1195,8 @@ UI_EN = {
     "order_reject": "Okay — paste the corrected order and I'll rebuild the summary.",
 
     "no_catalog_match": "I couldn't find that product in the catalog. Try rewording it (brand, line, or shade helps), or say <strong>cancel</strong> to start over.",
-    "no_customer_found": "I couldn't find {name} in your saved customers.",
-    "no_customer_found_yet": "I couldn't find {name} in your saved customers yet.",
+    "no_customer_found": "I couldn't find {name} in your saved customers. You can type <strong>help</strong> to see things you can do in chat.",
+    "no_customer_found_yet": "I couldn't find {name} in your saved customers yet. You can type <strong>help</strong> to see things you can do in chat.",
     "no_customer_id": "I couldn't find a customer with ID {cid}.",
     "customer_spent": "{name} has spent ${total} ({period}).",
     "who_is_customer": "Who is the customer? Try: \u201cshow Jane\u2019s info\u201d.",
@@ -1277,8 +1277,8 @@ UI_ES = {
     "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
 
     "no_catalog_match": "No pude encontrar ese producto en el catálogo. Intenta describirlo de otra forma (marca, línea o tono ayuda), o di `cancelar` para empezar de nuevo.",
-    "no_customer_found": "No encontré a {name} en tus clientes guardados.",
-    "no_customer_found_yet": "Aún no encontré a {name} en tus clientes guardados.",
+    "no_customer_found": "No encontré a {name} en tus clientes guardados. Puedes escribir <strong>ayuda</strong> para ver lo que puedes hacer en el chat.",
+    "no_customer_found_yet": "Aún no encontré a {name} en tus clientes guardados. Puedes escribir <strong>ayuda</strong> para ver lo que puedes hacer en el chat.",
     "no_customer_id": "No encontré un cliente con ID {cid}.",
     "customer_spent": "{name} ha gastado ${total} ({period}).",
     "who_is_customer": "¿Quién es el cliente? Prueba: \u201cinfo de Jane\u201d.",
