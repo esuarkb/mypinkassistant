@@ -167,7 +167,7 @@ def _read_intouch_error(page: Page) -> str:
         return "Unknown InTouch error"
 
 
-def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code: str) -> None:
+def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code: str, first_name: str = "", last_name: str = "") -> None:
     from mk_chat_core import normalize_state
     state = normalize_state(state)
     page.wait_for_timeout(1500)
@@ -185,6 +185,10 @@ def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code
     else:
         raise RuntimeError("CDS address dialog failed to open after 4 attempts.")
 
+    first_name_field.fill(first_name)
+    page.wait_for_timeout(100)
+    page.locator('[id^="AddressLastName-"]').fill(last_name)
+    page.wait_for_timeout(100)
     page.locator('[id^="Street-"]').fill(street)
     page.wait_for_timeout(100)
     page.locator('[id^="City-"]').fill(city)
@@ -241,6 +245,8 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
                 city=cds_address.get("city", ""),
                 state=cds_address.get("state", ""),
                 postal_code=cds_address.get("postal_code", ""),
+                first_name=cds_address.get("first_name", ""),
+                last_name=cds_address.get("last_name", ""),
             )
             # Wait for any dialog/modal to fully disappear before clicking Save and Review
             try:
@@ -310,6 +316,8 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
     cds_address = None
     if fulfillment_method == "cds" and rows[0].get("street"):
         cds_address = {
+            "first_name": rows[0].get("First Name", ""),
+            "last_name": rows[0].get("Last Name", ""),
             "street": rows[0].get("street", ""),
             "city": rows[0].get("city", ""),
             "state": rows[0].get("state", ""),
