@@ -235,7 +235,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         intouch_error = _read_intouch_error(page)
 
         # CDS address error — try filling from payload if available
-        if "delivery address" in intouch_error.lower():
+        if "address" in intouch_error.lower():
             if not cds_address or not cds_address.get("street"):
                 raise RuntimeError(f"InTouch: {intouch_error}")
             print(f"[Orders] CDS address error — filling address and retrying")
