@@ -27,6 +27,7 @@ SUPPORTED_INTENTS = {
     "lapsed_customers",
     "edit_request",
     "new_customer",
+    "inventory",
     "new_order",
     "order_add",
     "order_remove",
@@ -86,6 +87,10 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     _app_context = any(t in lowered for t in ("phone", "home screen", "home scrn", "ipad", "tablet", "device", "install", "download", "add to home"))
     if lowered in ("app", "install", "the app", "app help", "help app") or _app_context or (_app_word and any(t in lowered for t in ("add", "save", "put", "get", "help", "screen", "phone", "install", "download"))):
         return IntentResult(intent="app_help", confidence=1.0, raw_text=msg)
+
+    # inventory
+    if "inventory" in lowered or lowered in ("show my inventory", "show inventory", "my inventory"):
+        return IntentResult(intent="inventory", confidence=1.0, raw_text=msg)
 
     # cancel
     if lowered in ("cancel", "stop", "nevermind", "never mind", "start over", "startover"):

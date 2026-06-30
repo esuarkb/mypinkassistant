@@ -2092,6 +2092,8 @@ def _normalize_inventory_command_text(msg: str) -> str:
 def _looks_like_inventory_show(msg: str) -> bool:
     from rapidfuzz.distance import Levenshtein
     s = (msg or "").strip().lower()
+    if s.startswith(("add ", "remove ", "set ")):
+        return False
     if s in ("show my inventory", "show inventory", "my inventory", "inventory"):
         return True
     return any(Levenshtein.distance(w, "inventory") <= 2 for w in s.split())
@@ -2196,17 +2198,23 @@ def _parse_inventory_write(msg: str) -> tuple[str | None, int | None, str]:
 
     s = _normalize_inventory_command_text(raw)
 
-    m = re.match(r"^\s*add\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
+    m = re.match(r"^\s*add\s+(.+?)\s*$", s, re.IGNORECASE)
     if m:
-        qty = _parse_small_number(m.group(1))
-        if qty is not None:
-            return ("add", qty, m.group(2).strip())
+        rest = m.group(1).strip()
+        parts = rest.split(None, 1)
+        qty = _parse_small_number(parts[0]) if parts else None
+        if qty is not None and len(parts) > 1:
+            return ("add", qty, parts[1].strip())
+        return ("add", 1, rest)
 
-    m = re.match(r"^\s*remove\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
+    m = re.match(r"^\s*remove\s+(.+?)\s*$", s, re.IGNORECASE)
     if m:
-        qty = _parse_small_number(m.group(1))
-        if qty is not None:
-            return ("remove", qty, m.group(2).strip())
+        rest = m.group(1).strip()
+        parts = rest.split(None, 1)
+        qty = _parse_small_number(parts[0]) if parts else None
+        if qty is not None and len(parts) > 1:
+            return ("remove", qty, parts[1].strip())
+        return ("remove", 1, rest)
 
     m = re.match(r"^\s*set\s+(.+?)\s+to\s+(\w+)\s*$", s, re.IGNORECASE)
     if m:
