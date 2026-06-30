@@ -478,7 +478,7 @@ def billing_start(request: Request):
             "trial_days": str(trial_days or ""),
             "referred_by": str(ref_id_int) if ref_id_int > 0 else "",
         },
-        "allow_promotion_codes": True,
+        "allow_promotion_codes": ref_id_int == 0,
     }
 
     if trial_days:
