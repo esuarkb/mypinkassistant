@@ -227,7 +227,9 @@ def _record_login_failure(cid: int) -> None:
 
 
 def _is_intouch_outage() -> bool:
-    """Return True if 2+ different consultants have failed login in the last 30 minutes."""
+    """Return True if 2+ established consultants have failed login in the last 30 minutes.
+    Excludes consultants who haven't completed initial sync — their failures are likely
+    bad credentials entered at signup, not an InTouch outage."""
     from datetime import timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
     conn = connect()
@@ -239,6 +241,7 @@ def _is_intouch_outage() -> bool:
             SELECT COUNT(DISTINCT id) FROM consultants
             WHERE last_login_failure_at >= {PH_L}
               AND consecutive_login_failures >= 1
+              AND initial_sync_completed = TRUE
             """,
             (cutoff,),
         )
