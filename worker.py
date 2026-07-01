@@ -921,6 +921,78 @@ def main():
                                                         )
                                                 except Exception as _mail_err:
                                                     print(f"[Worker] SKU not found email failed: {_mail_err}")
+                                                # Write a local_only record so this sale persists through nightly sync
+                                                try:
+                                                    _ls_conn = connect()
+                                                    _ls_cur = _ls_conn.cursor()
+                                                    PH_LS = "%s" if is_postgres() else "?"
+                                                    _ls_first = payload.get("First Name", "").strip()
+                                                    _ls_last = payload.get("Last Name", "").strip()
+                                                    _ls_cur.execute(
+                                                        f"""SELECT id FROM customers
+                                                            WHERE consultant_id = {PH_LS}
+                                                              AND LOWER(first_name) = LOWER({PH_LS})
+                                                              AND LOWER(last_name) = LOWER({PH_LS})
+                                                            ORDER BY id DESC LIMIT 1""",
+                                                        (cid, _ls_first, _ls_last),
+                                                    )
+                                                    _ls_cust_row = _ls_cur.fetchone()
+                                                    if _ls_cust_row:
+                                                        _ls_customer_id = int(_ls_cust_row[0] if not isinstance(_ls_cust_row, dict) else _ls_cust_row["id"])
+                                                        _ls_price = 0.0
+                                                        try:
+                                                            import csv as _csv_ls
+                                                            with open(Path(__file__).resolve().parent / "catalog" / "en.csv", newline="") as _cf_ls:
+                                                                for _crow_ls in _csv_ls.reader(_cf_ls):
+                                                                    if _crow_ls and _crow_ls[0].strip() == _failing_sku:
+                                                                        try:
+                                                                            _ls_price = float(_crow_ls[2]) if len(_crow_ls) > 2 and _crow_ls[2] else 0.0
+                                                                        except Exception:
+                                                                            pass
+                                                                        break
+                                                        except Exception:
+                                                            pass
+                                                        _ls_today = datetime.now(timezone.utc).date().isoformat()
+                                                        if is_postgres():
+                                                            _ls_cur.execute(
+                                                                f"""INSERT INTO orders
+                                                                    (consultant_id, customer_id, order_date, total, source, intouch_order_id, discount_amount, tax_amount, created_at)
+                                                                    VALUES ({PH_LS},{PH_LS},{PH_LS},{PH_LS},'local_only',NULL,0,0,NOW())
+                                                                    RETURNING id""",
+                                                                (cid, _ls_customer_id, _ls_today, _ls_price),
+                                                            )
+                                                            _ls_order_id = int(_ls_cur.fetchone()[0])
+                                                        else:
+                                                            _ls_cur.execute(
+                                                                f"""INSERT INTO orders
+                                                                    (consultant_id, customer_id, order_date, total, source, intouch_order_id, discount_amount, tax_amount, created_at)
+                                                                    VALUES ({PH_LS},{PH_LS},{PH_LS},{PH_LS},'local_only',NULL,0,0,datetime('now'))""",
+                                                                (cid, _ls_customer_id, _ls_today, _ls_price),
+                                                            )
+                                                            _ls_order_id = int(_ls_cur.lastrowid)
+                                                        if is_postgres():
+                                                            _ls_cur.execute(
+                                                                """INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity, discount_amount, created_at)
+                                                                   VALUES (%s,%s,%s,%s,1,0,NOW())""",
+                                                                (_ls_order_id, _failing_sku, _prod_name, _ls_price),
+                                                            )
+                                                        else:
+                                                            _ls_cur.execute(
+                                                                """INSERT INTO order_items (order_id, sku, product_name, unit_price, quantity, discount_amount, created_at)
+                                                                   VALUES (?,?,?,?,1,0,datetime('now'))""",
+                                                                (_ls_order_id, _failing_sku, _prod_name, _ls_price),
+                                                            )
+                                                        _ls_conn.commit()
+                                                        print(f"[Worker] local_only record written: SKU={_failing_sku} customer_id={_ls_customer_id} order_id={_ls_order_id}")
+                                                    else:
+                                                        print(f"[Worker] local_only: customer not found for '{_ls_first} {_ls_last}', skipping")
+                                                except Exception as _ls_err:
+                                                    print(f"[Worker] local_only write failed: {_ls_err}")
+                                                finally:
+                                                    try:
+                                                        _ls_conn.close()
+                                                    except Exception:
+                                                        pass
                                                 continue
                                     except Exception as _sw_err:
                                         print(f"[Worker] Predecessor swap error: {_sw_err}")

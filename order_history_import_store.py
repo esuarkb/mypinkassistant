@@ -388,6 +388,40 @@ def import_order_history(cur, consultant_id: int, raw_orders: list[dict]) -> dic
           f"dupes={skipped_duplicate} recent_dupes={recent_duplicates} items_updated={items_updated} "
           f"no_items={skipped_no_items} no_id={skipped_no_id} no_name={skipped_no_name} no_match={skipped_no_match}")
 
+    # Merge local_only items (discontinued SKUs sold from personal inventory) into
+    # their matching intouch_import order by consultant + customer + date.
+    try:
+        cur.execute(
+            f"SELECT id, customer_id, DATE(order_date) FROM orders WHERE consultant_id = {PH} AND source = 'local_only'",
+            (consultant_id,),
+        )
+        _local_orders = cur.fetchall()
+        _merged = 0
+        for _lo_id, _lo_cust_id, _lo_date in _local_orders:
+            cur.execute(
+                f"""SELECT id FROM orders
+                    WHERE consultant_id = {PH}
+                      AND customer_id = {PH}
+                      AND DATE(order_date) = {PH}
+                      AND source = 'intouch_import'
+                    LIMIT 1""",
+                (consultant_id, _lo_cust_id, _lo_date),
+            )
+            _match = cur.fetchone()
+            if _match:
+                _target_id = int(_match[0])
+                cur.execute(
+                    f"UPDATE order_items SET order_id = {PH} WHERE order_id = {PH}",
+                    (_target_id, _lo_id),
+                )
+                cur.execute(f"DELETE FROM orders WHERE id = {PH}", (_lo_id,))
+                _merged += 1
+                print(f"[ImportOrderHistory] merged local_only order {_lo_id} → intouch_import order {_target_id}")
+        if _merged:
+            print(f"[ImportOrderHistory] merged {_merged} local_only order(s) into intouch_import")
+    except Exception as _merge_err:
+        print(f"[ImportOrderHistory] local_only merge error (non-fatal): {_merge_err}")
+
     return {
         "inserted": inserted,
         "skipped_archived": skipped_archived,
