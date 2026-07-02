@@ -390,6 +390,13 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "- unknown\n\n"
         "Return JSON like:\n"
         '{"intent":"customer_info","confidence":0.92}\n\n'
+        "If the intent is product_lookup, also include a \"product_query\" field containing "
+        "ONLY the product name or phrase, with everything else stripped out — both conversational "
+        "wrapper words (e.g. \"can you tell me about\", \"what's the\", \"info on\") AND words about "
+        "what the user wants to know (e.g. \"price\", \"cost\", \"ingredients\"). Those words describe "
+        "the question, not the product, and must not appear in product_query.\n"
+        'Example: {"intent":"product_lookup","confidence":0.95,"product_query":"lifting serum"}\n'
+        'Example: "ingredients in the lifting serum" -> {"intent":"product_lookup","confidence":0.95,"product_query":"lifting serum"}\n\n'
         "Rules:\n"
         "- Choose exactly one allowed intent.\n"
         "- If unsure, return unknown.\n"
@@ -451,9 +458,16 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         if intent not in SUPPORTED_INTENTS:
             intent = "unknown"
 
+        slots = {}
+        if intent == "product_lookup":
+            product_query = (data.get("product_query") or "").strip()
+            if product_query:
+                slots["product_query"] = product_query
+
         return IntentResult(
             intent=intent,
             confidence=confidence,
+            slots=slots,
             raw_text=msg,
         )
 

@@ -14,7 +14,7 @@ Usage:
 import csv
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
@@ -527,6 +527,29 @@ def _print_lang_report(lang: str, before: int, scraped: list, catalog: dict,
             print(f"    ! {item['sku']}  {item['product_name']}  (replaced by {item['replaced_by']})")
 
 
+def _log_run_history(lang_reports: list[dict]) -> None:
+    """
+    Append one line to logs/catalog_change_log.jsonl for every run (changed or not),
+    so consecutive runs can be compared later to narrow down MK's actual update window.
+    """
+    import json as _json
+    log_path = Path(__file__).parent / "logs" / "catalog_change_log.jsonl"
+    log_path.parent.mkdir(exist_ok=True)
+
+    entry = {"run_at": datetime.now().astimezone().isoformat(), "any_changes": False}
+    for r in lang_reports:
+        lang_changes = bool(r["added"] or r["updated"] or r["labeled"])
+        entry["any_changes"] = entry["any_changes"] or lang_changes
+        entry[r["lang"]] = {
+            "added": [{"sku": i["sku"], "product_name": i["product_name"]} for i in r["added"]],
+            "updated": [{"sku": i["sku"], "changes": i["changes"]} for i in r["updated"]],
+            "labeled": [{"sku": i["sku"], "replaced_by": i["replaced_by"]} for i in r["labeled"]],
+        }
+
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(_json.dumps(entry) + "\n")
+
+
 def main(username: str, password: str) -> None:
     en_scraped: list[dict] = []
     es_scraped: list[dict] = []
@@ -594,6 +617,8 @@ def main(username: str, password: str) -> None:
         save_catalog(es_catalog, es_path, scraped_order=es_scraped)
         _print_lang_report("es", es_before, es_scraped, es_catalog, es_added, es_updated, es_labeled, es_path)
         lang_reports.append({"lang": "es", "added": es_added, "updated": es_updated, "labeled": es_labeled})
+
+    _log_run_history(lang_reports)
 
     any_changes = any(
         r["added"] or r["updated"] or r["labeled"]

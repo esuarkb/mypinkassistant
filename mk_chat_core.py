@@ -4589,14 +4589,17 @@ class MKChatEngine:
         # Product price lookup (intent-based fallback)
         # -------------------------
         if not pending and intent_result.intent == "product_lookup":
-            product_text = _parse_product_price_query_text(msg)
+            product_text = intent_result.slots.get("product_query") or _parse_product_price_query_text(msg)
             if re.search(r',', product_text):
                 return ChatReply("I can look up one product at a time — try searching for each one separately.")
             matches = best_matches(catalog, product_text, limit=3, min_score=50)
             if not matches:
                 return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
             top = matches[0]
-            if len(matches) == 1 or int(top.get("score") or 0) >= 80:
+            top_score = int(top.get("score") or 0)
+            runner_up_score = int(matches[1].get("score") or 0) if len(matches) > 1 else 0
+            confident = len(matches) == 1 or (top_score >= 80 and (top_score - runner_up_score) >= 15)
+            if confident:
                 return ChatReply(_fmt_product_lookup_single(top))
             lines = ["<strong>Product Look Up</strong>"]
             for m in matches:
