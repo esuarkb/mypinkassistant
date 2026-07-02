@@ -17,6 +17,11 @@ How cases work:
   expected  — a single intent, or a tuple of acceptable intents for genuinely
               ambiguous phrasings the LLM classifies inconsistently.
 
+ROUTE_CASES exercise intent_router.route() — the full pipeline handle_message
+dispatches on since the 2026-07-02 routing consolidation (keyword rules + LLM
+fallback + the heuristic hijack chain: catalog matches, inventory phrasings,
+look book, birthdays, follow-ups, pending-flow guards, ...). All deterministic.
+
 KNOWN_BUGS at the bottom: real misroutes observed in production, verified against
 the router. They do NOT fail the suite while still broken; the suite tells you
 when one gets FIXED (move it up into CASES) or when its behavior CHANGES to some
@@ -250,17 +255,43 @@ SLOT_CASES = [
 KNOWN_BUGS = []
 
 # ---------------------------------------------------------------------------
-# FUTURE_CORE_CASES — routed correctly today by pre-intent heuristics inside
-# mk_chat_core.handle_message, NOT by intent_router.parse_intent (which returns
-# something else or falls to the LLM). Not runnable against parse_intent yet.
-# Enable these when routing is consolidated into intent_router (planned step 2).
+# ROUTE_CASES — full-pipeline checks against intent_router.route(), which is
+# what handle_message actually dispatches on since the 2026-07-02 routing
+# consolidation. These exercise the heuristic ("hijack") rules that parse_intent
+# alone can't answer: catalog matches, inventory phrasings, look book, etc.
+# All deterministic (no LLM), so they run in --no-llm mode too.
+# Format: (message, state_or_None, expected_route_intent)
 # ---------------------------------------------------------------------------
-FUTURE_CORE_CASES = [
-    ("charcoal mask",                          "product_lookup",  "exact catalog match early-exit"),
-    ("lifting serum",                          "product_lookup",  "exact catalog match early-exit"),
-    ("how many timewise sets do i have on hand", "inventory",     "_looks_like_inventory_count early-exit"),
-    ("spanish look book",                      "look_book",       "look book early-exit"),
-    ("what should i order",                    "inventory",       "_looks_like_low_stock_query early-exit"),
+_MID_FLOW = {"pending": {"kind": "order_confirm"}}  # any active pending flow
+
+ROUTE_CASES = [
+    # graduated from FUTURE_CORE_CASES 2026-07-02 (step-2 consolidation done)
+    ("charcoal mask",                            None, "product_lookup"),   # bare catalog match
+    ("lifting serum",                            None, "product_lookup"),
+    ("how many timewise sets do i have on hand", None, "inventory_count"),
+    ("spanish look book",                        None, "look_book"),
+    ("what should i order",                      None, "inventory_low_stock"),
+    # hijack-chain rules
+    ("show all satin hands",                     None, "show_all_products"),
+    ("print my inventory",                       None, "inventory_print"),
+    ("add 3 satin hands to inventory",           None, "inventory_write"),
+    ("add 3 satin hands",                        None, "inventory_guardrail"),
+    ("keep 3 charcoal mask on hand",             None, "inventory_threshold"),
+    ("delete jane doe",                          None, "delete_customer"),
+    ("my referral link",                         None, "referral"),
+    ("update jane's phone number",               None, "edit_request"),
+    ("birthdays this month",                     None, "birthday_lookup"),
+    ("follow ups",                               None, "followup"),
+    # stubbed/offline LLM -> customers_by_product rule; live LLM often says
+    # customers_by_city, whose handler product-search fallback gives the same
+    # answer (identical to pre-consolidation behavior) — both are correct
+    ("who are my retinol customers",             None, ("customers_by_product", "customers_by_city")),
+    ("how much is the charcoal mask",            None, "product_lookup"),   # price query
+    # pending-flow guards: mid-flow, guarded rules must NOT claim the message,
+    # so the pending flow consumes it (route falls through to the base intent)
+    ("charcoal mask",                            _MID_FLOW, "customer_info"),  # bare-name rule; pending flow eats it
+    ("spanish look book",                        _MID_FLOW, "look_book"),      # look book works even mid-order
+    ("print my inventory",                       _MID_FLOW, "inventory_print"),
 ]
 
 
@@ -334,6 +365,21 @@ def main():
             failed += 1
             failures.append((msg, f"{slot}={want}", f"{slot}={got}", "slot"))
         print(f"{msg[:W]:<{W}} {slot}={want!r:<12} got {got!r:<14} {'PASS' if ok else 'FAIL'}")
+
+    print("\n--- route() pipeline checks (deterministic, full chain) ---")
+    from mk_chat_core import load_catalog, get_catalog_path_for_language
+    _catalog = load_catalog(get_catalog_path_for_language("en"))
+    for msg, st, expected in ROUTE_CASES:
+        accepted = expected if isinstance(expected, tuple) else (expected,)
+        r = intent_router.route(msg, dict(st) if st else {}, _catalog)
+        ok = r.intent in accepted
+        if ok:
+            passed += 1
+        else:
+            failed += 1
+            failures.append((msg, "/".join(accepted), r.intent, "route"))
+        _pend = " [mid-flow]" if (st or {}).get("pending") else ""
+        print(f"{(msg + _pend)[:W]:<{W}} {'/'.join(accepted)[:17]:<18} {r.intent:<18} route {'PASS' if ok else 'FAIL'}")
 
     print("\n--- known bugs (do not fail while still broken) ---")
     fixed_bugs = []

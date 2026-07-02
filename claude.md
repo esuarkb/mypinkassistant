@@ -107,8 +107,16 @@ matters more than perfect parity.
 ## Key Files
 - `app.py` — FastAPI routes, auth, session management, admin panel
 - `auth_core.py` — Password hashing, Fernet encryption, consultant CRUD
-- `mk_chat_core.py` — AI chat engine, intent routing, CRM operations (large file)
-- `intent_router.py` — Intent classification (keyword fast-path + OpenAI fallback)
+- `mk_chat_core.py` — AI chat engine: intent HANDLERS only (fetch data, build
+  replies, pending flows). Makes no routing decisions (large file)
+- `intent_router.py` — ALL message routing: `route()` decides which feature
+  answers every chat message, in one documented precedence order. Also holds
+  INTENT_REGISTRY (the one place intents are declared) and the routing
+  predicates/parsers. Read its module docstring first — it has a plain-English
+  overview and a step-by-step recipe for adding a new intent
+- `test_intent_golden.py` — intent-routing regression suite harvested from real
+  production messages. Run before every deploy that touches routing or chat:
+  `python test_intent_golden.py` (or `--no-llm` for the free offline subset)
 - `crm_store.py` — Customer/order/unit_member DB queries, fuzzy name search,
   format_consultant_card(), format_customer_card()
 - `billing_routes.py` — Stripe checkout, webhooks, portal
@@ -125,6 +133,33 @@ matters more than perfect parity.
   - `report_sync.py` — Director/team data sync (unit_members, great_start,
     star_tracking) via Aura intercept + FOReports API
 - `run_report_sync.py` — One-shot local test runner for REPORT_SYNC (headed browser)
+
+## How Chat Messages Are Routed (since 2026-07-02)
+Every chat message goes through exactly three steps in
+`MKChatEngine.handle_message` (mk_chat_core.py):
+
+1. **Route** — `intent_router.route(message, state, catalog)` decides which
+   feature answers. It returns an IntentResult with `.intent` (feature name),
+   `.slots` (parsed details like product name or quantity), and `.raw_text`
+   (the cleaned-up message handlers must use).
+2. **Log** — one row goes to intent_logs with that intent name.
+3. **Dispatch** — handle_message runs the block matching the intent name.
+   Handler blocks only fetch data and build replies; they never decide
+   whether they should run.
+
+Rules of thumb:
+- Message goes to the WRONG feature → fix intent_router.py (the rule order
+  in `route()` is documented at the top of that file).
+- RIGHT feature, wrong answer → fix that handler in mk_chat_core.py.
+- Adding a new chat feature → follow the "TO ADD A NEW INTENT" recipe in the
+  intent_router.py docstring (registry entry → route() rule → dispatch block
+  → golden suite case).
+- ALWAYS run `python test_intent_golden.py` before deploying routing/chat
+  changes. It replays real production phrasings and fails on regressions.
+- Mid-conversation flows ("pending" state — order confirms, pickers): route()
+  already applies each rule's pending guard, so most rules step aside and let
+  the pending flow consume the reply. A few (look book, inventory commands,
+  cancel, help) intentionally work even mid-flow.
 
 ## ⚠️ Playwright Scripts — Handle With Extreme Care
 The Playwright scripts are the most fragile and most valuable part of the 

@@ -10,7 +10,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from crm_store import find_customers_by_name, format_customer_card, get_recent_orders_for_customer
-from intent_router import parse_intent
+from intent_router import (
+    route,
+    parse_intent,
+    best_matches,
+    _looks_like_full_customer_entry,
+    _parse_product_price_query_text,
+    _parse_inventory_lookup_text,
+    _parse_inventory_write,
+    _parse_inventory_threshold,
+    # re-exported for scripts/tests that still import these from mk_chat_core;
+    # their canonical home is intent_router (routing consolidation 2026-07-02)
+    _looks_like_new_order_entry,
+    _looks_like_bare_inventory_write,
+    _looks_like_inventory_print,
+    _looks_like_inventory_show,
+    _looks_like_inventory_count,
+    _looks_like_low_stock_query,
+    _looks_like_inventory_threshold,
+    _looks_like_product_price_query,
+    _PRODUCT_QUERY_SYNONYMS,
+)
 from inventory_store import (
     upsert_inventory_quantity,
     get_inventory_item,
@@ -383,113 +403,8 @@ def _fmt_product_lookup_single(m: dict) -> str:
     return "<br>".join(parts)
 
 
-_SEARCH_STOP_WORDS = {"mary", "kay"}
-
-def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int = 30) -> List[dict]:
-    q = (query or "").lower().strip()
-    q = re.sub(r"\+", " ", q)  # treat + as a space so "ha+ceramide" splits correctly before pre-filter
-    q_compact = re.sub(r"\s+", " ", q)
-
-    # Strip noise words that appear in most product names and hurt WRatio scoring
-    q_words = [w for w in q_compact.split() if w not in _SEARCH_STOP_WORDS]
-    if q_words:
-        q = " ".join(q_words)
-
-    anchors = [
-        "4-in-1",
-        "4 in 1",
-        "timewise 3d",
-        "3d",
-        "cc cream",
-        "miracle set",
-        "repair set",
-        "volu-firm set",
-        "satin hands",
-        "satin lips",
-        "foundation primer",
-        "foundation brush",
-        "shimmer eye shadow stick",
-        "undereye corrector",
-        "eye renewal cream",
-        "repair eye cream",
-        "volu-firm eye cream",
-        "volu firm eye cream",
-        "timewise repair eye cream",
-        "eye cream",
-        "roll-up bag",
-        "great heights",
-        "sheer illusion",
-        "cleanser",
-    ]
-
-    anchored = None
-    for a in anchors:
-        if a in q_compact:
-            anchored = a
-            break
-
-    candidates = catalog
-    if anchored:
-        a_l = anchored.lower()
-        words = a_l.split()
-        filtered = [
-            c for c in catalog
-            if all(
-                w in f"{c['product_name'].lower()} {(c.get('search_terms') or '').lower()}"
-                for w in words
-            )
-        ]
-        if filtered:
-            candidates = filtered
-
-    # Pre-filter: keep only candidates that contain at least one significant
-    # query word (3+ chars) as a whole word. This prevents short queries like
-    # "charcoal" from matching unrelated products via character-level fuzz.
-    sig_tokens = [t for t in re.split(r"\s+", q) if len(t) >= 3]
-    if sig_tokens:
-        pattern = "|".join(re.escape(t) for t in sig_tokens)
-        candidates = [
-            c for c in candidates
-            if re.search(rf"\b(?:{pattern})\b", c["search_string"], re.IGNORECASE)
-        ]
-
-    # Normalize conjunctions/symbols to a space so "berry and vanilla" scores the
-    # same as "berry & vanilla", and "serum c plus e" matches "Serum C+E".
-    def _norm_plus(s: str) -> str:
-        s = re.sub(r"\bplus\b", " ", s, flags=re.IGNORECASE)
-        s = re.sub(r"\band\b", " ", s, flags=re.IGNORECASE)
-        s = re.sub(r"[+&]", " ", s)
-        return re.sub(r"\s+", " ", s).strip()
-
-    names = [c["search_string"] for c in candidates]
-    names_for_score = [_norm_plus(n) for n in names]
-    q_for_score = _norm_plus(q)
-    results = process.extract(q_for_score, names_for_score, scorer=fuzz.WRatio, limit=limit)
-
-    q_words = {w for w in re.split(r"\s+", q) if len(w) >= 3}
-
-    matches: List[dict] = []
-    for name, score, idx in results:
-        if score < min_score:
-            continue
-        c = candidates[idx]
-        name_l = c["product_name"].lower()
-        word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", name_l))
-        on_the_go = 1 if "the go set" in name_l else 0
-        matches.append(
-            {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"],
-             "previous_price": c.get("previous_price"), "score": score,
-             "fact_sheet_url": c.get("fact_sheet_url", ""), "order_of_application_url": c.get("order_of_application_url", ""),
-             "use_up_rate_months": c.get("use_up_rate_months", ""),
-             "_hits": word_hits, "_otg": on_the_go}
-        )
-
-    matches.sort(key=lambda m: (m["score"], m["_hits"], -m["_otg"]), reverse=True)
-    for m in matches:
-        del m["_hits"]
-        del m["_otg"]
-    return matches
-
+# best_matches moved to intent_router.py (routing consolidation 2026-07-02);
+# imported back at the top of this file.
 
 def auto_pick_match(catalog: List[dict], query: str) -> Tuple[Optional[dict], List[dict]]:
     q = (query or "").strip().lower()
@@ -843,24 +758,7 @@ def normalize_state(state: str) -> str:
         return STATE_MAP.get(s.upper(), s)
     return s
 
-NUMBER_WORDS = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-}
-
-def _parse_small_number(text: str) -> Optional[int]:
-    s = (text or "").strip().lower()
-    if s.isdigit():
-        return int(s)
-    return NUMBER_WORDS.get(s)
+# NUMBER_WORDS / _parse_small_number moved to intent_router.py (2026-07-02)
 
 STREET_SUFFIXES = (
     "st", "street", "rd", "road", "ave", "avenue", "blvd", "boulevard",
@@ -1741,28 +1639,6 @@ def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[i
 
     return f'<div class="select-intro">{_html.escape(intro)}</div><div class="select-list">{rows}</div>'
 
-def _looks_like_new_order_entry(text: str) -> bool:
-                t = (text or "").strip().lower()
-
-                has_order_verb = any(x in t for x in ("order ", "ordered ", "wants ", "want ", "needs ", "need "))
-                has_item_connector = any(x in t for x in (" and ", ","))
-                has_quantity = bool(re.search(r"\b(\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten)\b", t))
-                has_product_hint = any(
-                    x in t for x in (
-                        "mask", "set", "cleanser", "cream", "lipstick", "foundation",
-                        "charcoal", "poppy", "repair", "cc cream", "satin hands"
-                    )
-                )
-
-                score = sum([
-                    has_order_verb,
-                    has_item_connector,
-                    has_quantity,
-                    has_product_hint,
-                ])
-
-                return score >= 2
-
 def looks_like_command(msg: str) -> bool:
     s = (msg or "").strip().lower()
     if not s:
@@ -2069,35 +1945,6 @@ def _looks_like_inventory_add(msg: str) -> bool:
     s = (msg or "").strip().lower()
     return "inventory" in s and (s.startswith("add ") or s.startswith("remove ") or s.startswith("set "))
 
-def _normalize_inventory_command_text(msg: str) -> str:
-    s = (msg or "").strip().lower()
-
-    # Remove common inventory phrases anywhere in the message
-    replacements = [
-        "to my inventory",
-        "from my inventory",
-        "my inventory",
-        "to inventory",
-        "from inventory",
-        "inventory",
-    ]
-
-    for phrase in replacements:
-        s = s.replace(phrase, " ")
-
-    # Clean extra spaces
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-def _looks_like_inventory_show(msg: str) -> bool:
-    from rapidfuzz.distance import Levenshtein
-    s = (msg or "").strip().lower()
-    if s.startswith(("add ", "remove ", "set ")):
-        return False
-    if s in ("show my inventory", "show inventory", "my inventory", "inventory"):
-        return True
-    return any(Levenshtein.distance(w, "inventory") <= 2 for w in s.split())
-
 def _inventory_help_text() -> str:
     return (
         "Here are a few inventory things you can say:\n"
@@ -2120,173 +1967,9 @@ def _inventory_help_text() -> str:
         "• print my inventory"
     )
 
-# Common search terms that differ from MK's official product naming
-_PRODUCT_QUERY_SYNONYMS: dict = {
-    "eyeshadow": "eye shadow",
-    "eye liner": "eyeliner",
-    "lip color": "lipstick",
-    "lip colour": "lipstick",
-    "lip colors": "lipstick",
-    "lip colours": "lipstick",
-    "deluxe mini": "Unlimited Lip Gloss Set Deluxe Mini",
-    "deluxe minis": "Unlimited Lip Gloss Set Deluxe Mini",
-    "c+e": "serum c+e",
-    "c + e": "serum c+e",
-}
-
-def _looks_like_product_price_query(msg: str) -> bool:
-    s = (msg or "").strip().lower()
-    if any(s.startswith(p) for p in ("how much is ", "how much does ", "price of ", "price check ", "what does ", "what's the price", "what is the price")):
-        return True
-    if re.search(r"\bhow much\b.{0,30}\bcost\b", s):
-        return True
-    if re.search(r"\bprice\b.{0,30}\bfor\b", s) and "order" not in s:
-        return True
-    return False
-
-
-def _parse_product_price_query_text(msg: str) -> str:
-    s = (msg or "").strip()
-    for pattern in (
-        r"(?i)^how much (?:is|does)\s+(?:the\s+)?(.+?)(?:\s+cost)?\s*\??$",
-        r"(?i)^price (?:of|check|for)\s+(?:the\s+)?(.+?)\s*\??$",
-        r"(?i)^what(?:'s| is) the price (?:of|for)\s+(?:the\s+)?(.+?)\s*\??$",
-        r"(?i)^what does\s+(?:the\s+)?(.+?)\s+cost\s*\??$",
-        r"(?i)^what(?:'s| are)? (?:the\s+)?ingredients? (?:in|of|for)\s+(?:the\s+)?(.+?)\s*\??$",
-        r"(?i)^ingredients? (?:in|of|for)\s+(?:the\s+)?(.+?)\s*\??$",
-    ):
-        m = re.match(pattern, s)
-        if m:
-            return m.group(1).strip()
-    return s
-
-
-def _looks_like_inventory_count(msg: str) -> bool:
-    s = (msg or "").strip().lower()
-    _NOT_INVENTORY = ("order", "customer", "followup", "client", "people", "consultant", "team", "member")
-    if "how many" in s and " do i have" in s and not any(w in s for w in _NOT_INVENTORY):
-        return True
-    if s.endswith(" in inventory"):
-        return True
-    if "how many" in s and "inventory" in s:
-        return True
-    if s.startswith("how many ") and not any(w in s for w in _NOT_INVENTORY):
-        return True
-    if "on hand" in s and "do i have" in s:
-        return True
-    if "do i have" in s and "inventory" in s:
-        return True
-    if "in my inventory" in s:
-        return True
-    return False
-
-
-def _parse_inventory_write(msg: str) -> tuple[str | None, int | None, str]:
-    """
-    Returns (action, qty, product_text)
-    action = add | remove | set | None
-
-    Requires the original message to contain 'inventory' somewhere.
-    After inventory words are removed, supports:
-    - add <qty> <product>
-    - remove <qty> <product>
-    - set <product> to <qty>
-    """
-    raw = (msg or "").strip()
-    if "inventory" not in raw.lower():
-        return (None, None, "")
-
-    s = _normalize_inventory_command_text(raw)
-
-    m = re.match(r"^\s*add\s+(.+?)\s*$", s, re.IGNORECASE)
-    if m:
-        rest = m.group(1).strip()
-        parts = rest.split(None, 1)
-        qty = _parse_small_number(parts[0]) if parts else None
-        if qty is not None and len(parts) > 1:
-            return ("add", qty, parts[1].strip())
-        return ("add", 1, rest)
-
-    m = re.match(r"^\s*remove\s+(.+?)\s*$", s, re.IGNORECASE)
-    if m:
-        rest = m.group(1).strip()
-        parts = rest.split(None, 1)
-        qty = _parse_small_number(parts[0]) if parts else None
-        if qty is not None and len(parts) > 1:
-            return ("remove", qty, parts[1].strip())
-        return ("remove", 1, rest)
-
-    m = re.match(r"^\s*set\s+(.+?)\s+to\s+(\w+)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(2))
-        if qty is not None:
-            return ("set", qty, m.group(1).strip())
-
-    return (None, None, "")
-
-def _looks_like_bare_inventory_write(msg: str) -> bool:
-    s = (msg or "").strip().lower()
-
-    # Ignore if they already clearly said inventory
-    if "inventory" in s:
-        return False
-
-    # Ignore threshold-setting phrases — those are handled separately
-    if "on hand" in s or bool(re.search(r"\bpar\b", s)) or "minimum" in s:
-        return False
-
-    m = re.match(r"^\s*(add|remove)\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(2))
-        return qty is not None
-
-    m = re.match(r"^\s*set\s+(.+?)\s+to\s+(\w+)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(2))
-        return qty is not None
-
-    return False
-
-def _parse_inventory_lookup_text(msg: str) -> str:
-    s = (msg or "").strip()
-
-    m = re.match(r"^\s*how\s+many\s+(.+?)\s+do\s+i\s+have\s+on\s+hand\s*\??$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    m = re.match(r"^\s*how\s+many\s+(.+?)\s+on\s+hand\s*\??$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    m = re.match(r"^\s*how\s+many\s+(.+?)\s+do\s+i\s+have\s*$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    m = re.match(r"^\s*how\s+many\s+(.+?)\s+(?:in\s+)?inventory\s*\??\s*$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    m = re.match(r"^\s*(.+?)\s+in\s+inventory\s*\??\s*$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    m = re.match(r"^\s*do\s+i\s+have\s+(.+?)\s+on\s+hand\s*\??$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    m = re.match(r"^\s*do\s+i\s+have\s+(.+?)\s+in\s+(?:my\s+)?inventory\s*\??$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    m = re.match(r"^\s*is\s+(?:the\s+)?(.+?)\s+in\s+(?:my\s+)?inventory\s*\??$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    m = re.match(r"^\s*how\s+many\s+(.+?)\s*$", s, re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-
-    return ""
+# Routing predicates/parsers (_PRODUCT_QUERY_SYNONYMS, price-query,
+# inventory count/write/bare-write/lookup-text) moved to intent_router.py
+# (routing consolidation 2026-07-02); imported back at the top of this file.
 
 def _format_inventory_list(rows: List[dict], catalog: List[dict]) -> str:
     if not rows:
@@ -2357,41 +2040,6 @@ def _format_inventory_item(row: dict | None, catalog_item: dict | None, requeste
     return f"You have {qty} {name} in inventory."
 
 
-def _looks_like_inventory_print(msg: str) -> bool:
-    s = (msg or "").strip().lower()
-    return any(phrase in s for phrase in (
-        "print my inventory",
-        "print inventory",
-        "inventory pdf",
-        "download inventory",
-        "export inventory",
-        "inventory report",
-    ))
-
-
-def _looks_like_low_stock_query(msg: str) -> bool:
-    s = (msg or "").strip().lower()
-    return any(phrase in s for phrase in (
-        "what am i low on",
-        "what's low",
-        "whats low",
-        "what is low",
-        "low on",
-        "running low",
-        "what should i order",
-        "what do i need to order",
-        "what do i need to reorder",
-        "what should i reorder",
-        "show low",
-        "low inventory",
-        "low stock",
-        "out of stock",
-        "what am i out of",
-        "what items am i out of",
-        "need to reorder",
-    ))
-
-
 def _format_low_stock_list(rows: list[dict], catalog: list[dict]) -> str:
     if not rows:
         return "You're all stocked up — nothing is below your desired on-hand levels."
@@ -2411,115 +2059,6 @@ def _format_low_stock_list(rows: list[dict], catalog: list[dict]) -> str:
         lines.append(f"• {name} — you have {qty}, want {threshold} (need {needed} more)")
 
     return "\n".join(lines)
-
-
-def _looks_like_inventory_threshold(msg: str) -> bool:
-    s = (msg or "").strip().lower()
-    has_qty = bool(re.search(r"\b\d+\b|\b(one|two|three|four|five|six|seven|eight|nine|ten)\b", s))
-    if not has_qty:
-        return False
-    return (
-        "on hand" in s
-        or bool(re.search(r"\bpar\b", s))
-        or "minimum" in s
-        or bool(re.search(r"\bmin\s+\d", s))
-    )
-
-
-def _parse_inventory_threshold(msg: str) -> tuple[int | None, str]:
-    """
-    Returns (qty, product_text) or (None, "")
-    Trigger words: "on hand", "par", "minimum" / "min"
-
-    on hand:
-    - keep 3 charcoal mask on hand
-    - 3 charcoal mask on hand
-    - I want (to) (always) have 3 charcoal mask on hand
-    - set charcoal mask to 3 on hand
-
-    par:
-    - charcoal mask par 3
-    - par 3 charcoal mask
-    - set charcoal mask (to) par 3
-
-    minimum / min:
-    - minimum 3 charcoal mask
-    - charcoal mask minimum 3
-    - set minimum charcoal mask to 3
-    """
-    s = (msg or "").strip()
-
-    # ---- on hand ----
-    # "keep / want (to) (always) have <qty> <product> on hand"
-    m = re.match(
-        r"^\s*(?:keep|(?:i\s+)?want\s+(?:to\s+)?(?:always\s+)?have)\s+(\w+)\s+(.+?)\s+on\s+hand\s*$",
-        s, re.IGNORECASE,
-    )
-    if m:
-        qty = _parse_small_number(m.group(1))
-        if qty is not None:
-            return qty, m.group(2).strip()
-
-    # "set <product> to <qty> on hand"
-    m = re.match(r"^\s*set\s+(.+?)\s+to\s+(\w+)\s+on\s+hand\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(2))
-        if qty is not None:
-            return qty, m.group(1).strip()
-
-    # "<qty> <product> on hand"
-    m = re.match(r"^\s*(\w+)\s+(.+?)\s+on\s+hand\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(1))
-        if qty is not None:
-            return qty, m.group(2).strip()
-
-    # ---- par ----
-    # "set <product> (inventory) (to) par (to) <qty>"
-    m = re.match(r"^\s*set\s+(.+?)\s+(?:inventory\s+)?(?:to\s+)?par\s+(?:to\s+)?(\w+)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(2))
-        if qty is not None:
-            product = re.sub(r"\binventory\b", "", m.group(1), flags=re.IGNORECASE).strip()
-            return qty, product
-
-    # "<product> par <qty>"
-    m = re.match(r"^\s*(.+?)\s+par\s+(\w+)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(2))
-        if qty is not None:
-            return qty, m.group(1).strip()
-
-    # "par <qty> <product>"
-    m = re.match(r"^\s*par\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(1))
-        if qty is not None:
-            return qty, m.group(2).strip()
-
-    # ---- minimum / min ----
-    # "set minimum <product> to <qty>"
-    m = re.match(r"^\s*set\s+(?:minimum|min)\s+(.+?)\s+to\s+(\w+)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(2))
-        if qty is not None:
-            return qty, m.group(1).strip()
-
-    # "minimum <qty> <product>"
-    m = re.match(r"^\s*(?:minimum|min)\s+(\w+)\s+(.+?)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(1))
-        if qty is not None:
-            return qty, m.group(2).strip()
-
-    # "<product> minimum <qty>"
-    m = re.match(r"^\s*(.+?)\s+(?:minimum|min)\s+(\w+)\s*$", s, re.IGNORECASE)
-    if m:
-        qty = _parse_small_number(m.group(2))
-        if qty is not None:
-            return qty, m.group(1).strip()
-
-    return None, ""
 
 
 # -------------------------
@@ -3722,35 +3261,32 @@ class MKChatEngine:
 
         last_customer = (state.get("last_ref_customer_name") or "").strip() or None
         pending = state.get("pending")
-        msg = (message or "").strip()
 
-        # Replace standalone 8-digit SKU numbers with product names before any parsing
+        # ALL routing decisions live in intent_router.route() — one call, one
+        # documented precedence order (see the intent_router.py docstring).
+        # raw_text comes back normalized: stripped, standalone 8-digit SKUs
+        # replaced with product names.
         import re as _re
-        _sku_map = {str(item["sku"]).strip(): item["product_name"] for item in catalog if item.get("sku")}
-        msg = _re.sub(r'\b(\d{8})\b', lambda m: _sku_map.get(m.group(1), m.group(1)), msg)
+        intent_result = route(message, state, catalog)
+        msg = intent_result.raw_text
 
-        # Product look-up "show more" — client sends "show all <term>" when consultant taps "+N more"
-        _SHOW_ALL_CRM_TERMS = {"customer", "customers", "order", "orders", "inventory", "follow", "followup", "followups", "lapsed",
-                               "team", "consultants", "consultant", "unit", "members", "member"}
-        if msg.lower().startswith("show all "):
-            _more_term = msg[len("show all "):].strip()
-            _more_words = set(_more_term.lower().split())
-            if not (_more_words & _SHOW_ALL_CRM_TERMS):
-                def _all_words_in_product_more(query: str, product_name: str) -> bool:
-                    words = [w for w in query.lower().split() if len(w) >= 2]
-                    name_l = product_name.lower()
-                    return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
-                _all_more = [c for c in catalog if _all_words_in_product_more(_more_term, c["product_name"])]
-                if not _all_more:
-                    _all_more = best_matches(catalog, _more_term, limit=20, min_score=50)
-                if _all_more:
-                    lines = ["<strong>Product Look Up</strong>"]
-                    for m in _all_more:
-                        lines.append(_fmt_product_list_item(m))
-                    return ChatReply("<br>".join(lines))
-                return ChatReply("I couldn't find any products matching that search.")
-
-        intent_result = parse_intent(msg, state)
+        # Product look-up "show more" — client sends "show all <term>" when
+        # consultant taps "+N more". Returns before intent logging, as before.
+        if intent_result.intent == "show_all_products":
+            _more_term = intent_result.slots.get("term", "")
+            def _all_words_in_product_more(query: str, product_name: str) -> bool:
+                words = [w for w in query.lower().split() if len(w) >= 2]
+                name_l = product_name.lower()
+                return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
+            _all_more = [c for c in catalog if _all_words_in_product_more(_more_term, c["product_name"])]
+            if not _all_more:
+                _all_more = best_matches(catalog, _more_term, limit=20, min_score=50)
+            if _all_more:
+                lines = ["<strong>Product Look Up</strong>"]
+                for m in _all_more:
+                    lines.append(_fmt_product_list_item(m))
+                return ChatReply("<br>".join(lines))
+            return ChatReply("I couldn't find any products matching that search.")
         print("[INTENT]", intent_result.intent, intent_result.confidence, intent_result.raw_text)
         _intent_log_id = None
         try:
@@ -3771,22 +3307,6 @@ class MKChatEngine:
         except Exception:
             pass
 
-        def _correct_intent_log(effective_intent: str) -> None:
-            if not _intent_log_id:
-                return
-            try:
-                with tx() as (_cl_conn, _cl_cur):
-                    _cl_cur.execute(
-                        f"UPDATE intent_logs SET intent = {PH} WHERE id = {PH}",
-                        (effective_intent, _intent_log_id),
-                    )
-            except Exception:
-                pass
-
-        # Intent override: some "recent_orders" phrasings are actually NEW order entry
-        if intent_result.intent == "recent_orders" and _looks_like_new_order_entry(msg):
-            intent_result.intent = "new_order"
-
         def _resolve_pronoun_guess(guess: str, state: dict) -> str:
             g = (guess or "").strip().lower()
 
@@ -3803,9 +3323,9 @@ class MKChatEngine:
         lowered = msg.lower()
         
         # -------------------------
-        # Look Book — global early exit so it works even mid-order
+        # Look Book — works even mid-order
         # -------------------------
-        if "look book" in lowered or "lookbook" in lowered:
+        if intent_result.intent == "look_book":
             _force_es = "spanish" in lowered or "español" in lowered or "espanol" in lowered
             _force_en = "english" in lowered or "inglés" in lowered or "ingles" in lowered
             if _force_es or (language == "es" and not _force_en):
@@ -3822,7 +3342,7 @@ class MKChatEngine:
         # -------------------------
         # Bare inventory-style write guardrail
         # -------------------------
-        if not pending and _looks_like_bare_inventory_write(msg):
+        if intent_result.intent == "inventory_guardrail":
             return ChatReply(
                 "That looks like an inventory update.\n"
                 "Try again using the word 'inventory':\n"
@@ -3834,7 +3354,7 @@ class MKChatEngine:
         # -------------------------
         # Inventory: print / PDF report
         # -------------------------
-        if _looks_like_inventory_print(msg):
+        if intent_result.intent == "inventory_print":
             import os
             base_url = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
             link = f"{base_url}/inventory/print" if base_url else "/inventory/print"
@@ -3843,43 +3363,27 @@ class MKChatEngine:
         # -------------------------
         # Exact product name match — handles data-send clicks from multi-result lists
         # -------------------------
-        if not pending:
-            _exact = next((c for c in catalog if c['product_name'].lower() == lowered.strip()), None)
-            if _exact:
-                return ChatReply(_fmt_product_lookup_single(_exact))
+        if intent_result.intent == "product_lookup" and intent_result.slots.get("source") == "exact":
+            return ChatReply(_fmt_product_lookup_single(intent_result.slots["match"]))
 
         # -------------------------
-        # Product price lookup (early — "how much is X", "price of X",
-        # or bare product name typed alone with high catalog confidence)
+        # Product price lookup ("how much is X", "price of X") and bare
+        # product names typed alone — claimed by route() with the matched
+        # product_text in slots
         # -------------------------
         def _all_words_in_product(query: str, product_name: str) -> bool:
             words = [w for w in query.lower().split() if len(w) >= 2]
             name_l = product_name.lower()
             return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
 
-        _BARE_MSG_BLOCKING_INTENTS = {
-            "recent_orders", "new_order", "leaderboard",
-            "customers_by_city", "followup", "pcp", "top_sellers",
-            "unit_query", "data_query",
-        }
-        _is_bare_msg = (
-            not pending
-            and len(msg.split()) <= 4
-            and _re.match(r"^[\w\s\+\-]+$", msg)
-            and intent_result.intent not in _BARE_MSG_BLOCKING_INTENTS
-        )
-        _is_top_n_customers = bool(_re.search(r"\btop\s+\d+\s+customers?\b", lowered))
-        if not _is_top_n_customers and (_looks_like_product_price_query(msg) or _is_bare_msg):
-            product_text = _parse_product_price_query_text(msg) if _looks_like_product_price_query(msg) else msg
+        if intent_result.intent == "product_lookup" and intent_result.slots.get("source") in ("bare", "price"):
+            product_text = intent_result.slots.get("product_text") or msg
             if product_text:
-                # Normalize common search terms to MK catalog naming
-                product_text = _PRODUCT_QUERY_SYNONYMS.get(product_text.lower().strip(), product_text)
-                if _is_bare_msg:
+                if intent_result.slots["source"] == "bare":
                     # Word match first — more precise for bare product names
                     word_matches = [c for c in catalog if _all_words_in_product(product_text, c["product_name"])]
                     if len(word_matches) == 1:
                         m = word_matches[0]
-                        _correct_intent_log("product_lookup")
                         return ChatReply(_fmt_product_lookup_single(m))
                     elif len(word_matches) > 1:
                         lines = ["<strong>Product Look Up</strong>"]
@@ -3888,19 +3392,16 @@ class MKChatEngine:
                         if len(word_matches) > 3:
                             remaining = len(word_matches) - 3
                             lines.append(f'<a href="#" data-send="show all {product_text}">+{remaining} more</a>')
-                        _correct_intent_log("product_lookup")
                         return ChatReply("<br>".join(lines))
                     # Word match found nothing — fall back to fuzzy
                     matches = best_matches(catalog, product_text, limit=3, min_score=70)
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
-                            _correct_intent_log("product_lookup")
                             return ChatReply(_fmt_product_lookup_single(top))
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in matches:
                             lines.append(_fmt_product_list_item(m))
-                        _correct_intent_log("product_lookup")
                         return ChatReply("<br>".join(lines))
                 else:
                     # Explicit price query — fuzzy only
@@ -3908,21 +3409,18 @@ class MKChatEngine:
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
-                            _correct_intent_log("product_lookup")
                             return ChatReply(_fmt_product_lookup_single(top))
                         lines = ["<strong>Product Look Up</strong>"]
                         for m in matches:
                             lines.append(_fmt_product_list_item(m))
-                        _correct_intent_log("product_lookup")
                         return ChatReply("<br>".join(lines))
                     return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
 
         # -------------------------
-        # Inventory: quantity count query (early — before intent routing so
-        # "how many X do I have" isn't misclassified as new_order)
+        # Inventory: quantity count query ("how many X do I have")
         # -------------------------
-        if _looks_like_inventory_count(msg):
-            product_text = _parse_inventory_lookup_text(msg)
+        if intent_result.intent == "inventory_count":
+            product_text = intent_result.slots.get("product_text") or _parse_inventory_lookup_text(msg)
             if product_text:
                 exact = _find_exact_catalog_match(catalog, product_text)
                 if exact:
@@ -3949,9 +3447,9 @@ class MKChatEngine:
                 return ChatReply(_format_inventory_item(row, chosen, product_text))
 
         # -------------------------
-        # Inventory: show full list (early — same reason)
+        # Inventory: show full list
         # -------------------------
-        if _looks_like_inventory_show(msg):
+        if intent_result.intent == "inventory_show":
             with tx() as (conn, cur):
                 rows = list_inventory(cur, consultant_id=consultant_id)
             return ChatReply(_format_inventory_list(rows, catalog))
@@ -3959,7 +3457,7 @@ class MKChatEngine:
         # -------------------------
         # Inventory: low stock / what should I order
         # -------------------------
-        if _looks_like_low_stock_query(msg):
+        if intent_result.intent == "inventory_low_stock":
             from inventory_store import list_low_stock, has_any_thresholds
             with tx() as (conn, cur):
                 if not has_any_thresholds(cur, consultant_id=consultant_id):
@@ -3973,7 +3471,7 @@ class MKChatEngine:
         # -------------------------
         # Inventory: set desired on-hand threshold
         # -------------------------
-        if _looks_like_inventory_threshold(msg):
+        if intent_result.intent == "inventory_threshold":
             qty, product_text = _parse_inventory_threshold(msg)
             if qty is not None and product_text:
                 exact = _find_exact_catalog_match(catalog, product_text)
@@ -4009,9 +3507,9 @@ class MKChatEngine:
                 return ChatReply(ui["low_stock_set"].format(product=product_name, qty=qty))
 
         # -------------------------
-        # Inventory commands
+        # Inventory commands (add/remove/set)
         # -------------------------
-        if "inventory" in lowered:
+        if intent_result.intent == "inventory_write":
             action, qty, product_text = _parse_inventory_write(msg)
 
             if action and qty is not None and product_text:
@@ -4088,27 +3586,8 @@ class MKChatEngine:
 
                 return ChatReply(reply)
 
-            if _looks_like_inventory_show(msg):
-                with tx() as (conn, cur):
-                    rows = list_inventory(cur, consultant_id=consultant_id)
-                return ChatReply(_format_inventory_list(rows, catalog))
-
-            if _looks_like_inventory_count(msg):
-                product_text = _parse_inventory_lookup_text(msg)
-                if product_text:
-                    picked, matches = auto_pick_match(catalog, product_text)
-                    chosen = picked or (matches[0] if matches else None)
-
-                    if not chosen:
-                        return ChatReply(ui["no_catalog_match"])
-
-                    sku = (chosen.get("sku") or "").strip()
-
-                    with tx() as (conn, cur):
-                        row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
-
-                    return ChatReply(_format_inventory_item(row, chosen, product_text))
-
+        # Mentioned inventory but nothing above parsed a command — show help
+        if intent_result.intent == "inventory_help":
             return ChatReply(_inventory_help_text())
 
         import re
@@ -4116,37 +3595,13 @@ class MKChatEngine:
 
     
 
-        def _looks_like_full_customer_entry(text: str) -> bool:
-            t = (text or "").strip()
-
-            has_zip = bool(re.search(r"\b\d{5}(?:-\d{4})?\b", t))
-            has_phone = bool(re.search(r"(?:\+?1[\s\-\.]?)?(?:\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4})", t))
-            has_email = bool(re.search(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", t))
-            has_birthday_word = any(x in t.lower() for x in ("birthday", "bday", "dob"))
-            has_month_name = bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b", t, re.IGNORECASE))
-            has_address_word = any(x in t.lower() for x in ("address", "street", "st ", "road", "rd ", "avenue", "ave ", "drive", "dr ", "lane", "ln ", "court", "ct ", "circle", "cir ", "way", "blvd", "boulevard", "unit", "apt", "apartment", "lot"))
-            has_referred_by = bool(re.search(r'\breferred\s+by\b', t, re.IGNORECASE))
-
-            score = sum([
-                has_zip or has_address_word,
-                has_phone,
-                has_email,
-                has_birthday_word or has_month_name,
-                has_referred_by,
-            ])
-
-            # if it looks like a bundle of customer fields, treat it as a customer entry
-            return score >= 2
-
-        
+        # (_looks_like_full_customer_entry moved to intent_router.py — imported at top)
 
         # -------------------------
         # CRM: delete customer (local only)
         # -------------------------
-        if not pending:
-            m = re.match(r"^\s*delete\s+(customer\s+)?(.+?)\s*$", msg, re.IGNORECASE)
-            if m:
-                target = (m.group(2) or "").strip()
+        if intent_result.intent == "delete_customer":
+                target = intent_result.slots.get("target", "")
 
                 # delete by id: "delete customer id 7" or "delete id 7"
                 m_id = re.search(r"\b(id)\s+(\d+)\b", target, re.IGNORECASE)
@@ -4229,50 +3684,32 @@ class MKChatEngine:
 
         ##
         # -------------------------
-        # Look book (no LLM call)
+        # Referral link
         # -------------------------
-        if not pending:
-            if any(t in lowered for t in ("referral code", "referral link", "my referral", "refer a friend", "refer someone")):
-                import os as _os
-                _ref_base = (_os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
-                from db import tx as _rtx
-                with _rtx() as (_rc, _rcur):
-                    from db import is_postgres as _risp
-                    _RPH = "%s" if _risp() else "?"
-                    _rcur.execute(f"SELECT referral_code FROM consultants WHERE id={_RPH}", (consultant_id,))
-                    _rrow = _rcur.fetchone()
-                    _rcode = ((_rrow[0] if _rrow else None) or "").strip()
-                if _rcode and _ref_base:
-                    _ref_link = f"{_ref_base}/r/{_rcode}"
-                    return ChatReply(
-                        f'Your referral link: <a href="{_ref_link}" target="_blank">{_ref_link}</a>&nbsp; '
-                        f'<button class="fdp-copy copy-link-btn" data-copy="{_ref_link}">Copy Link</button>'
-                    )
-                return ChatReply('Find your referral link in <a href="/settings">Settings</a>.')
+        if intent_result.intent == "referral":
+            import os as _os
+            _ref_base = (_os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
+            from db import tx as _rtx
+            with _rtx() as (_rc, _rcur):
+                from db import is_postgres as _risp
+                _RPH = "%s" if _risp() else "?"
+                _rcur.execute(f"SELECT referral_code FROM consultants WHERE id={_RPH}", (consultant_id,))
+                _rrow = _rcur.fetchone()
+                _rcode = ((_rrow[0] if _rrow else None) or "").strip()
+            if _rcode and _ref_base:
+                _ref_link = f"{_ref_base}/r/{_rcode}"
+                return ChatReply(
+                    f'Your referral link: <a href="{_ref_link}" target="_blank">{_ref_link}</a>&nbsp; '
+                    f'<button class="fdp-copy copy-link-btn" data-copy="{_ref_link}">Copy Link</button>'
+                )
+            return ChatReply('Find your referral link in <a href="/settings">Settings</a>.')
 
 
         # -------------------------
         # Customer edit requests — not supported, redirect to InTouch
+        # (covers both the keyword-classified intent and the text rule)
         # -------------------------
-        _EDIT_FIELD_RE = r"\b(address|phone|email|birthday|birthdate|city|state|zip|postal)\b"
-        _edit_not_supported = (
-            not pending
-            and (
-                # "update/change/edit/modify [name] [field] ..."
-                (
-                    any(lowered.startswith(p) for p in ("update ", "change ", "edit ", "modify "))
-                    and re.search(_EDIT_FIELD_RE, lowered)
-                    and "order" not in lowered
-                    and "inventor" not in lowered
-                )
-                # "add [field] for/to [name]" — e.g. "add address for Jane"
-                or bool(re.match(
-                    r"^add\s+(an?\s+)?(address|phone|email|birthday|birthdate|phone\s+number|email\s+address)\b",
-                    lowered,
-                ))
-            )
-        )
-        if _edit_not_supported:
+        if intent_result.intent == "edit_request":
             return ChatReply(
                 'Changes or updates to customer information must currently be done from '
                 '<a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. '
@@ -4281,23 +3718,17 @@ class MKChatEngine:
 
         # PCP enrolled list (no LLM call)
         # -------------------------
-        if not pending:
-            _pcp_show = (
-                "pcp" in lowered and
-                any(t in lowered for t in ("list", "who", "show", "enrolled", "my pcp", "customers", "mailer")) and
-                not any(t in lowered for t in ("should", "candidate", "score", "add", "drop", "remove"))
-            )
-            if _pcp_show:
-                from crm_store import get_pcp_list as _get_pcp
-                from followup_store import render_pcp_cards as _render_pcp, get_pcp_completed_ids as _get_pcp_done
-                with tx() as (conn, cur):
-                    _pcp_customers, _pcp_quarter = _get_pcp(cur, consultant_id)
-                    _pcp_done_ids = _get_pcp_done(cur, consultant_id, _pcp_quarter) if _pcp_quarter else set()
-                if not _pcp_customers:
-                    return ChatReply("No PCP customers found for the current quarter.")
-                _pcp_pending = len([c for c in _pcp_customers if c.get("id") not in _pcp_done_ids])
-                _pcp_header = f"<strong>PCP List</strong> ({_pcp_pending} remaining · {len(_pcp_customers)} total)"
-                return ChatReply(_pcp_header + "\n" + _render_pcp(_pcp_customers, _pcp_done_ids, _pcp_quarter))
+        if intent_result.intent == "pcp_list":
+            from crm_store import get_pcp_list as _get_pcp
+            from followup_store import render_pcp_cards as _render_pcp, get_pcp_completed_ids as _get_pcp_done
+            with tx() as (conn, cur):
+                _pcp_customers, _pcp_quarter = _get_pcp(cur, consultant_id)
+                _pcp_done_ids = _get_pcp_done(cur, consultant_id, _pcp_quarter) if _pcp_quarter else set()
+            if not _pcp_customers:
+                return ChatReply("No PCP customers found for the current quarter.")
+            _pcp_pending = len([c for c in _pcp_customers if c.get("id") not in _pcp_done_ids])
+            _pcp_header = f"<strong>PCP List</strong> ({_pcp_pending} remaining · {len(_pcp_customers)} total)"
+            return ChatReply(_pcp_header + "\n" + _render_pcp(_pcp_customers, _pcp_done_ids, _pcp_quarter))
 
         ##
         # -------------------------
@@ -4398,27 +3829,8 @@ class MKChatEngine:
         # -------------------------
         # Birthday period lookup
         # -------------------------
-        if not pending:
-            _bday_period = None
-            _bday_triggers = ("birthday", "birthdays", "bday", "bdays")
-            _has_bday_word = any(t in lowered for t in _bday_triggers)
-            if _has_bday_word:
-                if "today" in lowered:
-                    _bday_period = "today"
-                elif "tomorrow" in lowered:
-                    _bday_period = "tomorrow"
-                elif any(x in lowered for x in ("this month", "this mo")):
-                    _bday_period = "month"
-                elif "next month" in lowered:
-                    _bday_period = "next_month"
-                elif "next week" in lowered:
-                    _bday_period = "next_week"
-                elif any(x in lowered for x in ("this week", "this wk")):
-                    _bday_period = "week"
-                elif any(x in lowered for x in ("this quarter", "quarter")):
-                    _bday_period = "quarter"
-                elif any(x in lowered for x in ("upcoming", "coming up", "soon", "next 30")):
-                    _bday_period = "upcoming"
+        if intent_result.intent == "birthday_lookup":
+            _bday_period = intent_result.slots.get("period")
 
             if _bday_period:
                 from crm_store import get_customers_by_birthday_period as _gbp
@@ -4462,23 +3874,9 @@ class MKChatEngine:
                 return ChatReply(_header + "\n" + _rbsc(_bday_results, _consultant_first, limit=_limit, period_label=_period_label, scope=_bday_scope))
 
         # -------------------------
-        # Guard: "who are my retinol customers" type messages get misclassified as
-        # lapsed_customers by the LLM. Detect product-search phrasing here so it
-        # falls through to the product-search block below.
-        _lapsed_product_override = False
-        _lapsed_guard_m = re.search(r"\bwho\s+are\s+(?:my\s+)?(.+?)\s+customers\b", lowered)
-        if _lapsed_guard_m:
-            _lapsed_non_product = {"lapsed", "inactive", "active", "top", "best", "new",
-                                   "recent", "who", "are", "my", "show", "all", "following"}
-            _lapsed_product_words = [w for w in _lapsed_guard_m.group(1).strip().lower().split()
-                                     if w not in _lapsed_non_product]
-            if _lapsed_product_words:
-                _lapsed_product_override = True
-
-        if not pending and not _lapsed_product_override and (
-            intent_result.intent == "lapsed_customers"
-            or re.match(r"show all lapsed \d+ days", lowered)
-        ):
+        # Lapsed customers (route() maps "show all lapsed N days" here too and
+        # suppresses product-search phrasings like "who are my retinol customers")
+        if not pending and intent_result.intent == "lapsed_customers":
             import re as _re_lapsed
             from crm_store import get_lapsed_customers, format_lapsed_customers
 
@@ -4524,10 +3922,7 @@ class MKChatEngine:
         # -------------------------
         # Customers by city
         # -------------------------
-        if not pending and (
-            intent_result.intent == "customers_by_city"
-            or re.match(r"customers\s+in\s+\S.+\s+all$", lowered)
-        ):
+        if not pending and intent_result.intent == "customers_by_city":
             from crm_store import (
                 get_customers_by_city, format_city_customers,
                 get_customers_by_city_and_state,
@@ -4588,7 +3983,7 @@ class MKChatEngine:
         # -------------------------
         # Product price lookup (intent-based fallback)
         # -------------------------
-        if not pending and intent_result.intent == "product_lookup":
+        if not pending and intent_result.intent == "product_lookup" and intent_result.slots.get("source") == "intent":
             product_text = intent_result.slots.get("product_query") or _parse_product_price_query_text(msg)
             if re.search(r',', product_text):
                 return ChatReply("I can look up one product at a time — try searching for each one separately.")
@@ -4609,118 +4004,44 @@ class MKChatEngine:
         # -------------------------
         # Follow-up trigger (2+2+2)
         # -------------------------
-        if not pending:
-            _followup_triggers = ("follow up", "followup", "follow-up", "any follow", "follow ups", "followups")
-            _more_triggers = ("any more", "more follow", "next follow")
-            _is_followup = any(t in lowered for t in _followup_triggers)
-            _is_more = any(t in lowered for t in _more_triggers)
-            if _is_followup or _is_more:
-                from followup_store import get_pending_followups, get_pending_birthday_followups, render_followup_cards
-                from db import tx
-                _offset = 0
-                if _is_more:
-                    _offset = state.get("followup_offset") or 0
-                from auth_core import get_consultant_full as _gcf
-                _consultant_first = (_gcf(consultant_id) or {}).get("first_name") or ""
-                _consultant_first = _consultant_first.strip()
+        if intent_result.intent == "followup":
+            _is_more = bool(intent_result.slots.get("more"))
+            from followup_store import get_pending_followups, get_pending_birthday_followups, render_followup_cards
+            from db import tx
+            _offset = 0
+            if _is_more:
+                _offset = state.get("followup_offset") or 0
+            from auth_core import get_consultant_full as _gcf
+            _consultant_first = (_gcf(consultant_id) or {}).get("first_name") or ""
+            _consultant_first = _consultant_first.strip()
+            with tx() as (conn, cur):
+                _order_followups = get_pending_followups(cur, consultant_id=consultant_id, offset=_offset, limit=5)
+                _bday_followups = get_pending_birthday_followups(cur, consultant_id=consultant_id) if _offset == 0 else []
+            _followups = _order_followups + _bday_followups
+            state["followup_offset"] = _offset + len(_order_followups)
+            save_session_state(state, session_id=sid)
+            return ChatReply(render_followup_cards(_followups, _consultant_first))
+
+        # -------------------------
+        # Customer search by product — phrase parsing lives in route(); the
+        # extracted product term / search terms arrive in slots
+        # -------------------------
+        if intent_result.intent == "customers_by_product":
+            from crm_store import find_customers_by_product, find_customers_by_category, format_customers_by_product
+            from db import tx
+            _product_term = intent_result.slots.get("product_term") or ""
+            terms = intent_result.slots.get("terms") or []
+            _or_terms = intent_result.slots.get("or_terms")
+
+            if _product_term and terms:
                 with tx() as (conn, cur):
-                    _order_followups = get_pending_followups(cur, consultant_id=consultant_id, offset=_offset, limit=5)
-                    _bday_followups = get_pending_birthday_followups(cur, consultant_id=consultant_id) if _offset == 0 else []
-                _followups = _order_followups + _bday_followups
-                state["followup_offset"] = _offset + len(_order_followups)
+                    if _or_terms:
+                        results = find_customers_by_category(cur, consultant_id=consultant_id, or_terms=_or_terms)
+                    else:
+                        results = find_customers_by_product(cur, consultant_id=consultant_id, terms=terms)
+                state["pending"] = None
                 save_session_state(state, session_id=sid)
-                return ChatReply(render_followup_cards(_followups, _consultant_first))
-
-        # -------------------------
-        # Customer search by product
-        # -------------------------
-        if not pending and not _looks_like_full_customer_entry(msg) and not re.match(r'^\s*tags?\s*:', msg, re.IGNORECASE) and not re.match(r'^\s*(new|add|create)\s+customer\b', msg, re.IGNORECASE):
-            import re as _re2
-            _product_term = None
-
-            # Pattern 1: "[product] customers" — e.g. "repair customers", "show my matte foundation customers"
-            _m1 = _re2.search(r"(?:show\s+)?(?:my\s+)?(.+?)\s+customers\b", lowered)
-            # Pattern 2: "customers who [use/ordered/buy/have] [product]" — e.g. "customers who use repair"
-            _m2 = _re2.search(r"\bcustomers\s+who\s+(?:(?:has|have|had)\s+)?(?:use|ordered|buy|have|bought|order|used|purchased)\s+(.+)", lowered)
-            # Pattern 3: "who bought/ordered/uses [product]" — "has/have" auxiliary handled explicitly
-            _m3 = _re2.search(r"\bwho\s+(?:(?:has|have|had)\s+)?(?:bought|ordered|uses|orders|buys|got|used|purchased|purchase)\s+(.+)", lowered)
-
-            _prefix_filler = {"who", "are", "my", "show", "list", "which", "what", "any",
-                              "the", "a", "all", "give", "me", "find", "get", "have", "do",
-                              "i", "is", "of", "new", "other", "please",
-                              "how", "many", "much", "more", "most"}
-
-            if _m2:
-                _product_term = _m2.group(1).strip()
-            elif _m3:
-                _product_term = _m3.group(1).strip()
-            elif _m1:
-                _candidate = _m1.group(1).strip()
-                # Strip leading filler words (e.g. "who are my" from "who are my repair customers")
-                _candidate_words = [w for w in _candidate.split() if w not in _prefix_filler]
-                _candidate = " ".join(_candidate_words).strip()
-                if _candidate:
-                    _product_term = _candidate
-
-            if _product_term:
-                from crm_store import find_customers_by_product, find_customers_by_category, format_customers_by_product
-                from db import tx
-                # Strip trailing time qualifiers so "repair the last 6 months" → "repair"
-                _product_term = _re2.sub(
-                    r'\s+(?:in\s+)?(?:the\s+)?(?:(?:last|past|this|next)\s+\d*\s*(?:day|week|month|year|quarter)s?'
-                    r'|(?:january|february|march|april|may|june|july|august|september|october|november|december)'
-                    r'|\d{4})$',
-                    '',
-                    _product_term,
-                    flags=_re2.IGNORECASE,
-                ).strip()
-                _filler = {"on", "the", "a", "an", "use", "using", "with", "for", "in", "of"}
-                _singular = {"sets": "set", "kits": "kit", "creams": "cream", "serums": "serum",
-                             "masks": "mask", "sticks": "stick", "glosses": "gloss", "liners": "liner",
-                             "primers": "primer", "powders": "powder", "products": "product"}
-                terms = [_singular.get(w, w) for w in
-                         (_product_term.lower().split()) if len(w) > 1 and w not in _filler]
-
-                # Skip for time-period queries ("this quarter", "last month", etc.) — let data_query handle those
-                _TIME_WORDS = {
-                    # Time periods
-                    "this", "last", "next", "today", "yesterday",
-                    "week", "weeks", "month", "months", "year", "years",
-                    "quarter", "quarters",
-                    "january", "february", "march", "april", "may", "june",
-                    "july", "august", "september", "october", "november", "december",
-                    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
-                    "q1", "q2", "q3", "q4",
-                    # Quantity/frequency words (not product names)
-                    "more", "than", "once", "twice", "times", "over", "under",
-                    "least", "most", "many", "much", "few", "several",
-                    # Order source/channel words (not product names)
-                    "online", "myshop", "cds", "store", "person",
-                }
-                if terms and all(t in _TIME_WORDS or (len(t) == 4 and t.isdigit()) for t in terms):
-                    _product_term = None
-
-                if _product_term:
-                # Category aliases: map common words to OR-matched product name fragments
-                    _FRAGRANCE_TERMS = ["eau de parfum", "eau de toilette", "cologne spray", "body mist"]
-                    _CATEGORY_MAP = {
-                        "perfume":   _FRAGRANCE_TERMS,
-                        "fragrance": _FRAGRANCE_TERMS,
-                        "cologne":   _FRAGRANCE_TERMS,
-                        "parfum":    _FRAGRANCE_TERMS,
-                    }
-                    _category_key = _product_term.lower().strip()
-                    _or_terms = _CATEGORY_MAP.get(_category_key) or _CATEGORY_MAP.get(_category_key.rstrip("s"))
-
-                if _product_term and terms:
-                    with tx() as (conn, cur):
-                        if _or_terms:
-                            results = find_customers_by_category(cur, consultant_id=consultant_id, or_terms=_or_terms)
-                        else:
-                            results = find_customers_by_product(cur, consultant_id=consultant_id, terms=terms)
-                    state["pending"] = None
-                    save_session_state(state, session_id=sid)
-                    return ChatReply(format_customers_by_product(results, _product_term))
+                return ChatReply(format_customers_by_product(results, _product_term))
 
         # -------------------------
         # CRM quick lookup: recent orders lookup (no LLM call)
@@ -4983,14 +4304,9 @@ class MKChatEngine:
             save_session_state(state, session_id=sid)
             return ChatReply(ui["canceled"])
 
-        # App install help
-        if intent_result.intent == "edit_request":
-            return ChatReply(
-                'Changes or updates to customer information must currently be done from '
-                '<a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. '
-                'The changes will then show in MyPinkAssistant on the next sync.'
-            )
+        # (edit_request handled earlier, next to the other redirect rules)
 
+        # App install help
         if intent_result.intent == "app_help":
             return ChatReply(_APP_HELP_HTML)
 
