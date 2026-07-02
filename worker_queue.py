@@ -174,10 +174,13 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
             pass
         conn.close()
 
-def retention_cleanup(redact_hours: int = 24, delete_days: int = 90):
+def retention_cleanup(redact_hours: int = 24, delete_days: int = 90,
+                      intent_redact_days: int = 30):
     """
     Redact PII after `redact_hours`.
     Delete old jobs entirely after `delete_days`.
+    Clear chat text (message_text/response_text) from intent_logs after
+    `intent_redact_days` — rows are kept forever for intent analytics.
 
     Safe for both SQLite and Postgres.
     """
@@ -213,6 +216,19 @@ def retention_cleanup(redact_hours: int = 24, delete_days: int = 90):
             """, (int(delete_days),))
 
             deleted = cur.rowcount
+
+            # ---------------------------
+            # REDACT intent_logs (Postgres)
+            # ---------------------------
+            cur.execute("""
+                UPDATE intent_logs
+                SET message_text = NULL,
+                    response_text = NULL
+                WHERE (message_text IS NOT NULL OR response_text IS NOT NULL)
+                  AND created_at < (NOW() - make_interval(days => %s))
+            """, (int(intent_redact_days),))
+
+            intents_redacted = cur.rowcount
 
         else:
             # ---------------------------
@@ -251,9 +267,24 @@ def retention_cleanup(redact_hours: int = 24, delete_days: int = 90):
 
             deleted = cur.rowcount
 
+            # ---------------------------
+            # REDACT intent_logs (SQLite)
+            # ---------------------------
+            cur.execute("""
+                UPDATE intent_logs
+                SET message_text=NULL,
+                    response_text=NULL
+                WHERE (message_text IS NOT NULL OR response_text IS NOT NULL)
+                  AND (
+                      strftime('%s','now') - strftime('%s', created_at)
+                  ) > ?
+            """, (intent_redact_days * 24 * 3600,))
+
+            intents_redacted = cur.rowcount
+
         conn.commit()
-        if redacted or deleted:
-            print(f"[Retention] Redacted: {redacted} | Deleted: {deleted}")
+        if redacted or deleted or intents_redacted:
+            print(f"[Retention] Redacted: {redacted} | Deleted: {deleted} | Intent logs cleared: {intents_redacted}")
 
     except Exception as e:
         try:

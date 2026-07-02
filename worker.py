@@ -374,23 +374,34 @@ def main():
                     else:
                         friendly = "Something unexpected happened. Please try again."
 
-                    # Silently retry transient login errors once before failing
+                    # Silently retry transient login errors once before failing.
+                    # Login runs before any job is claimed for this consultant, so
+                    # there is no job to requeue — gate the retry on the consultant's
+                    # consecutive_login_failures instead and leave the jobs queued.
+                    # (A successful login resets the counter via _reset_login_failures.)
                     _transient = ("ERR_ABORTED", "net::", "ERR_CONNECTION", "ERR_TIMED_OUT",
                                   "ERR_NAME_NOT_RESOLVED", "is interrupted", "Timeout")
                     if any(s in err for s in _transient):
                         try:
                             _ln_conn = connect()
                             _ln_cur = _ln_conn.cursor()
-                            _ln_cur.execute(f"SELECT attempts FROM jobs WHERE id={PH_W}", (job_id,))
+                            _ln_cur.execute(
+                                f"SELECT consecutive_login_failures FROM consultants WHERE id={PH_W}",
+                                (cid,),
+                            )
                             _ln_row = _ln_cur.fetchone()
-                            _ln_attempts = int(_ln_row[0]) if _ln_row else 99
+                            if _ln_row is None:
+                                _ln_failures = 99
+                            else:
+                                _ln_val = _ln_row.get("consecutive_login_failures") if isinstance(_ln_row, dict) else _ln_row[0]
+                                _ln_failures = int(_ln_val or 0)
                             _ln_conn.close()
                         except Exception:
-                            _ln_attempts = 99
-                        if _ln_attempts <= 1:
-                            print(f"[Worker] Login transient error on job {job_id} (attempt {_ln_attempts}) — requeueing for retry.")
-                            requeue_job(job_id, "Queued")
-                            continue  # _RequeueSilently here is not caught at this level — use continue instead
+                            _ln_failures = 99
+                        if _ln_failures == 0:
+                            _record_login_failure(cid)
+                            print(f"[Worker] Login transient error for consultant_id={cid} — leaving jobs queued to retry next pass.")
+                            continue  # finally block closes browser + releases lock; jobs stay queued
 
                     _record_login_failure(cid)
 

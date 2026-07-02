@@ -6,6 +6,7 @@
 # Safe to run manually for testing.
 
 import os
+from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -16,6 +17,26 @@ PH = "%s" if is_postgres() else "?"
 
 # Suppress scheduling for consultants with this many consecutive login failures
 LOGIN_FAILURE_LIMIT = 2
+
+# ...but retry them anyway once their last failure is older than this, so a
+# transient lockout (e.g. an InTouch maintenance night) can't exclude a
+# consultant from nightly syncs forever. Each failed retry refreshes the
+# timestamp, so a truly broken account costs one login attempt per cooldown.
+LOGIN_FAILURE_RETRY_DAYS = 3
+
+
+def _login_failure_recent(last_failure_at) -> bool:
+    """True if the last login failure is within the retry cooldown window."""
+    if not last_failure_at:
+        return False
+    if isinstance(last_failure_at, str):
+        try:
+            last_failure_at = datetime.fromisoformat(last_failure_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+    if last_failure_at.tzinfo is None:
+        last_failure_at = last_failure_at.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - last_failure_at) < timedelta(days=LOGIN_FAILURE_RETRY_DAYS)
 
 SKIP_INVENTORY_IMPORT: set = set()
 
@@ -51,7 +72,7 @@ def run() -> None:
     try:
         cur.execute(
             f"""
-            SELECT id, email, consecutive_login_failures
+            SELECT id, email, consecutive_login_failures, last_login_failure_at
             FROM consultants
             WHERE billing_status IN ('active', 'trialing')
               AND intouch_username != ''
@@ -69,14 +90,19 @@ def run() -> None:
                 cid = row["id"]
                 email = row["email"]
                 failures = int(row.get("consecutive_login_failures") or 0)
+                last_failure_at = row.get("last_login_failure_at")
             else:
                 cid, email, failures = row[0], row[1], int(row[2] or 0)
+                last_failure_at = row[3]
 
-            # Skip consultants with too many consecutive login failures
+            # Skip consultants with too many consecutive login failures,
+            # but retry once the cooldown has passed since the last failure
             if failures >= LOGIN_FAILURE_LIMIT:
-                print(f"[Scheduler] Skipping {email} — {failures} consecutive login failure(s)")
-                skipped_failures += 1
-                continue
+                if _login_failure_recent(last_failure_at):
+                    print(f"[Scheduler] Skipping {email} — {failures} consecutive login failure(s)")
+                    skipped_failures += 1
+                    continue
+                print(f"[Scheduler] Retrying {email} after cooldown — {failures} failure(s), last at {last_failure_at}")
 
             if _has_pending_job(cur, cid, "FULL_SYNC"):
                 skipped_pending += 1
