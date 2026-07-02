@@ -83,9 +83,12 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         return IntentResult(intent="chat_help", confidence=1.0, raw_text=msg)
 
     # app installation help
+    # Only unambiguous install phrasing stands alone; device words (phone, ipad,
+    # tablet) require the word "app" too — bare "phone" appears in customer
+    # lookups and new-customer entries far more often than app questions.
     _app_word = bool(re.search(r'\bapp\b', lowered))
-    _app_context = any(t in lowered for t in ("phone", "home screen", "home scrn", "ipad", "tablet", "device", "install", "download", "add to home"))
-    if lowered in ("app", "install", "the app", "app help", "help app") or _app_context or (_app_word and any(t in lowered for t in ("add", "save", "put", "get", "help", "screen", "phone", "install", "download"))):
+    _app_context = any(t in lowered for t in ("home screen", "home scrn", "add to home", "install"))
+    if lowered in ("app", "install", "the app", "app help", "help app") or _app_context or (_app_word and any(t in lowered for t in ("add", "save", "put", "get", "help", "screen", "phone", "ipad", "tablet", "device", "install", "download"))):
         return IntentResult(intent="app_help", confidence=1.0, raw_text=msg)
 
     # inventory
@@ -323,6 +326,15 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if re.search(r'\badd\s+(?:this\s+)?(address|phone|email|birthday|birthdate)\b', lowered):
         return IntentResult(intent="edit_request", confidence=0.95, raw_text=msg)
 
+    # "new/add/place/start order for X" or bare "order for X" → new_order
+    # Must run BEFORE edit_request: product names like "repair set" contain the
+    # edit verb "set", which was misrouting real orders to edit_request.
+    # (Also must check before new_customer.)
+    if re.search(r'\badd\s+an?\s+order\b', lowered):
+        return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
+    if re.match(r'^(new\s+|add\s+|place\s+|start\s+(?:an?\s+)?)?order\s+for\b', lowered):
+        return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
+
     # edit_request — someone trying to update customer info or an order
     # Must come before customer_info; exclude "set up/new" to avoid catching new_customer phrases
     _has_edit_verb  = bool(re.search(r"\b(update|change|edit|fix|correct|set|modify)\b", lowered))
@@ -334,12 +346,6 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # "ingredients in X" → always product_lookup (must come before customer_info catch-all)
     if re.search(r"\bingredients?\b", lowered):
         return IntentResult(intent="product_lookup", confidence=0.95, raw_text=msg)
-
-    # "new/add/place/start order for X" or bare "order for X" → new_order (must check before new_customer)
-    if re.search(r'\badd\s+an?\s+order\b', lowered):
-        return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
-    if re.match(r'^(new\s+|add\s+|place\s+|start\s+(?:an?\s+)?)?order\s+for\b', lowered):
-        return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
 
     # "create X" without "order" → new customer (e.g. "create nichole giveaway")
     if lowered.startswith("create ") and "order" not in lowered:
