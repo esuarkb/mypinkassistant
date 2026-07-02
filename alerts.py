@@ -19,7 +19,9 @@ def send_failure_text(message):
         "Content-Type": "application/json"
     }
 
-    r = requests.post(url, json=payload, headers=headers)
-
-    if r.status_code != 200:
-        print("Failed to send alert:", r.text)
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=10)
+        if r.status_code != 200:
+            print("Failed to send alert:", r.text)
+    except Exception as e:
+        print("Failed to send alert:", e)

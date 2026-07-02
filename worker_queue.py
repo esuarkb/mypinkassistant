@@ -166,7 +166,7 @@ def reap_stale_running_jobs_and_locks(ttl_seconds: int = LOCK_TTL_SECONDS) -> No
                 retention_cleanup()
             except Exception as e:
                 print(f"[Retention ERROR - non-fatal] {e}")
-        _last_retention_run = now
+            _last_retention_run = now
     finally:
         try:
             cur.close()
@@ -324,19 +324,65 @@ def claim_next_consultant() -> Optional[int]:
     try:
         _begin(cur)
 
-        # Find the next consultant who has queued jobs.
+        # Find the next consultant who has queued jobs and is NOT currently
+        # locked by another worker. Without the lock filter, every free worker
+        # keeps re-selecting the same top (locked) consultant, returning None,
+        # and other consultants' jobs wait even though workers are idle.
+        # A lock counts as active if it's within TTL, or if the consultant has
+        # a long-running job type still running (same rule as the lock reaper).
         # MAX(priority) DESC ensures high-priority jobs (interactive orders) jump ahead of
         # low-priority ones (overnight syncs). MIN(id) ASC breaks ties by arrival order.
-        cur.execute(
-            """
-            SELECT consultant_id
-            FROM jobs
-            WHERE status='queued' AND consultant_id IS NOT NULL
-            GROUP BY consultant_id
-            ORDER BY MAX(priority) DESC, MIN(id) ASC
-            LIMIT 1
-            """
-        )
+        long_types_sql = ",".join(f"'{t}'" for t in _LONG_RUNNING_JOB_TYPES)
+        if is_postgres():
+            cur.execute(
+                f"""
+                SELECT j.consultant_id
+                FROM jobs j
+                WHERE j.status='queued' AND j.consultant_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM consultant_locks cl
+                      WHERE cl.consultant_id = j.consultant_id
+                        AND (
+                            cl.locked_at >= (NOW() - (%s * INTERVAL '1 second'))
+                            OR EXISTS (
+                                SELECT 1 FROM jobs j2
+                                WHERE j2.consultant_id = cl.consultant_id
+                                  AND j2.status = 'running'
+                                  AND j2.type IN ({long_types_sql})
+                            )
+                        )
+                  )
+                GROUP BY j.consultant_id
+                ORDER BY MAX(j.priority) DESC, MIN(j.id) ASC
+                LIMIT 1
+                """,
+                (LOCK_TTL_SECONDS,),
+            )
+        else:
+            cur.execute(
+                f"""
+                SELECT j.consultant_id
+                FROM jobs j
+                WHERE j.status='queued' AND j.consultant_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM consultant_locks cl
+                      WHERE cl.consultant_id = j.consultant_id
+                        AND (
+                            (strftime('%s','now') - strftime('%s', cl.locked_at)) <= ?
+                            OR EXISTS (
+                                SELECT 1 FROM jobs j2
+                                WHERE j2.consultant_id = cl.consultant_id
+                                  AND j2.status = 'running'
+                                  AND j2.type IN ({long_types_sql})
+                            )
+                        )
+                  )
+                GROUP BY j.consultant_id
+                ORDER BY MAX(j.priority) DESC, MIN(j.id) ASC
+                LIMIT 1
+                """,
+                (LOCK_TTL_SECONDS,),
+            )
         row = cur.fetchone()
         if not row:
             conn.commit()
