@@ -80,7 +80,10 @@ The longer a consultant uses the app, the smarter it gets for them specifically.
 ## Tech Stack
 - **Backend:** Python, FastAPI
 - **Frontend:** Vanilla JS, HTML/CSS (no framework)
-- **AI:** OpenAI via mk_chat_core.py (natural language order + CRM interface)
+- **AI:** OpenAI (gpt-5-mini as of 2026-07) — model chosen in ONE place:
+  `llm_config.py` (env-overridable via MK_OPENAI_MODEL). To change models,
+  follow the checklist in that file's docstring — never hardcode a model
+  name at a call site
 - **Automation:** Playwright (headless browser against InTouch portal)
 - **Billing:** Stripe (subscriptions, webhooks)
 - **Email:** Resend API

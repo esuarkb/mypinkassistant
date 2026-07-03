@@ -3,8 +3,20 @@
 Render worker autoscaler — scales the background worker service up or down
 via the Render API based on job queue depth.
 
-Scale-up threshold: QUEUE_SCALE_UP_AT queued jobs → spin up WORKER_MAX instances.
-Scale-down: called directly by worker.py after a job completes and queue is empty.
+Scale-up triggers (both call check_and_scale_up):
+  1. insert_job (mk_chat_core/jobs.py) — the moment a realtime job is queued
+  2. worker.py claim-time recheck — every time a worker claims a consultant,
+     so a backlog self-heals even if the insert-time call missed (API blip,
+     scale-down cooldown)
+Scale-down: worker.py after a job completes and the queue is fully empty.
+
+Instance bounds come from system_settings with the module constants as
+fallback: "worker_max" (cap) and "worker_min" (floor — raise it to keep
+extra workers running, e.g. through the overnight sync window; scale-down
+targets it, so no code change is needed).
+
+The automatic hooks NO-OP when running on local SQLite so dev testing can
+never scale the production service (manual CLI up/down still works).
 
 Required env vars:
   RENDER_API_KEY              — Render API key (Account Settings → API Keys)
@@ -24,9 +36,11 @@ _SERVICE_ID = os.getenv("RENDER_WORKER_SERVICE_ID", "")
 WORKER_MIN = 1  # baseline — always running
 WORKER_MAX = 3  # cap for now; raise as subscriber count grows
 
-# Real-time job types (exclude FULL_SYNC — it's low priority and runs nightly)
-_REALTIME_TYPES = ("NEW_ORDER_ROW", "NEW_CUSTOMER", "INITIAL_SYNC",
-                   "IMPORT_CUSTOMERS", "IMPORT_INVENTORY_ORDERS", "IMPORT_ORDER_HISTORY")
+# Real-time job types (exclude FULL_SYNC — it's low priority and runs nightly).
+# THE canonical list — mk_chat_core/jobs.py imports it for the insert_job hook,
+# so a new realtime job type only ever needs to be added here.
+REALTIME_TYPES = ("NEW_ORDER_ROW", "NEW_CUSTOMER", "INITIAL_SYNC",
+                  "IMPORT_CUSTOMERS", "IMPORT_INVENTORY_ORDERS", "IMPORT_ORDER_HISTORY")
 
 
 def _headers() -> dict:
@@ -51,13 +65,13 @@ def _scale(num_instances: int) -> bool:
 
 
 def scale_up() -> bool:
-    """Scale to WORKER_MAX instances."""
-    return _scale(WORKER_MAX)
+    """Scale to the configured max instances (system_settings worker_max)."""
+    return _scale(_get_worker_max())
 
 
 def scale_down() -> bool:
-    """Scale back to WORKER_MIN instances."""
-    return _scale(WORKER_MIN)
+    """Scale back to the configured min instances (system_settings worker_min)."""
+    return _scale(_get_worker_min())
 
 
 def current_instance_count() -> int | None:
@@ -83,16 +97,21 @@ def _waiting_consultant_count() -> int:
     with tx() as (conn, cur):
         is_sqlite = "sqlite" in type(cur).__module__.lower()
         PH = "?" if is_sqlite else "%s"
-        placeholders = ", ".join([PH] * len(_REALTIME_TYPES))
+        placeholders = ", ".join([PH] * len(REALTIME_TYPES))
+        # NOT EXISTS, not NOT IN: a single NULL consultant_id on any running
+        # job would make NOT IN evaluate unknown for every row and silently
+        # report 0 waiting (= scale-up disabled with no error anywhere).
         cur.execute(
-            f"""SELECT COUNT(DISTINCT consultant_id) FROM jobs
-                WHERE status = {PH}
-                  AND type IN ({placeholders})
-                  AND consultant_id IS NOT NULL
-                  AND consultant_id NOT IN (
-                      SELECT DISTINCT consultant_id FROM jobs WHERE status = {PH}
+            f"""SELECT COUNT(DISTINCT j.consultant_id) FROM jobs j
+                WHERE j.status = {PH}
+                  AND j.type IN ({placeholders})
+                  AND j.consultant_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM jobs r
+                      WHERE r.status = {PH}
+                        AND r.consultant_id = j.consultant_id
                   )""",
-            ("queued", *_REALTIME_TYPES, "running"),
+            ("queued", *REALTIME_TYPES, "running"),
         )
         row = cur.fetchone()
         return int(row[0] if not isinstance(row, dict) else list(row.values())[0]) if row else 0
@@ -135,6 +154,19 @@ def _get_worker_max() -> int:
         return WORKER_MAX
 
 
+def _get_worker_min() -> int:
+    """Read WORKER_MIN from system_settings ("worker_min"), fallback to the
+    module constant. Scale-down never goes below this, so raising it (e.g.
+    to keep 2 workers through the overnight sync window as subscriber count
+    grows) is just a settings write — no code change needed here."""
+    try:
+        from db import get_system_setting
+        val = get_system_setting("worker_min", str(WORKER_MIN))
+        return max(1, int(val or WORKER_MIN))
+    except Exception:
+        return WORKER_MIN
+
+
 _SCALE_DOWN_COOLDOWN = 60  # seconds to suppress scale-up after a scale-down
 
 
@@ -155,12 +187,28 @@ def _record_scale_down() -> None:
         pass
 
 
+def _is_local_env() -> bool:
+    """True when running against local SQLite (dev iMac). The automatic
+    hooks must never scale the PROD worker from a local test run — the
+    queue they inspect is the local one, but the Render API call would
+    hit production. Manual CLI commands (up/down) are not guarded."""
+    try:
+        from db import is_postgres
+        return not is_postgres()
+    except Exception:
+        return False
+
+
 def check_and_scale_up() -> bool:
     """
     Called when a new real-time job is enqueued (from app.py).
     Scales up the moment any consultant is waiting for a free worker.
     Suppressed during cooldown after a recent scale-down.
     """
+    if _is_local_env():
+        print("[Autoscaler] skipped — local SQLite environment, not touching prod scaling")
+        return False
+
     elapsed = time.time() - _get_last_scale_down()
     if elapsed < _SCALE_DOWN_COOLDOWN:
         print(f"[Autoscaler] scale-up suppressed — {int(_SCALE_DOWN_COOLDOWN - elapsed)}s cooldown remaining")
@@ -185,12 +233,17 @@ def check_and_scale_down() -> bool:
     Scales down only when no jobs are queued or running at all.
     Records timestamp so scale-up is suppressed during Render's termination window.
     """
+    if _is_local_env():
+        print("[Autoscaler] skipped — local SQLite environment, not touching prod scaling")
+        return False
+
     active = _any_jobs_active()
     print(f"[Autoscaler] check_and_scale_down: {'jobs still active' if active else 'queue empty'}")
     if not active:
+        worker_min = _get_worker_min()
         current = current_instance_count()
-        if current is not None and current > WORKER_MIN:
-            if _scale(WORKER_MIN):
+        if current is not None and current > worker_min:
+            if _scale(worker_min):
                 _record_scale_down()
                 return True
     return False

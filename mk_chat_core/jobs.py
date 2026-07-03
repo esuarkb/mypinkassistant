@@ -32,14 +32,13 @@ def insert_job(job_type: str, payload: dict, consultant_id: int, priority: int =
 
         conn.commit()
 
-        _AUTOSCALER_REALTIME = ("NEW_ORDER_ROW", "NEW_CUSTOMER", "INITIAL_SYNC",
-                                "IMPORT_CUSTOMERS", "IMPORT_INVENTORY_ORDERS", "IMPORT_ORDER_HISTORY")
-        if job_type in _AUTOSCALER_REALTIME:
-            try:
-                from autoscaler import check_and_scale_up
+        try:
+            # REALTIME_TYPES lives in autoscaler.py — the one canonical list
+            from autoscaler import REALTIME_TYPES, check_and_scale_up
+            if job_type in REALTIME_TYPES:
                 check_and_scale_up()
-            except Exception as _ae:
-                print(f"[Autoscaler] scale-up hook error: {_ae}")
+        except Exception as _ae:
+            print(f"[Autoscaler] scale-up hook error: {_ae}")
 
         return int(job_id)
     finally:

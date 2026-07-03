@@ -7,7 +7,7 @@ import re
 
 from openai import OpenAI
 
-from .config import MODEL
+from .config import MODEL, model_kwargs
 from .types import ChatReply
 from .ui_text import UI_EN
 
@@ -75,6 +75,9 @@ Rules:
 - When counting or summing, return a single row with a descriptive column alias
 - To count how many times a customer has ordered, count rows in the orders table (each order = one row). Do NOT join order_items to determine order frequency — that counts line items, not orders.
 - When grouping customers, always include c.id in the GROUP BY clause (e.g. GROUP BY c.id, c.first_name, c.last_name) to correctly handle customers with the same name.
+- "Who buys X" / "who uses X" / "X users" mean the same as "who ordered X": join order_items and filter product_name by X, returning distinct customers.
+- Only filter by date when the question includes a timeframe (this year, last month, in May, ...). Questions like "who buys X" or "who ordered X" with no timeframe mean ALL TIME — no date filter.
+- For ALL order/revenue aggregates (e.g. "total sales this year", "how many orders in June"), join customers and count only orders belonging to c.source_status = 'active' customers — orders from removed/archived customers are excluded from every total and search, same as the customers themselves.
 - Keep queries simple and readable"""
 
 
@@ -139,7 +142,7 @@ def _handle_data_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
     client = OpenAI()
     try:
         resp = client.responses.create(
-            model=MODEL,
+            **model_kwargs(effort="low"),
             input=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": f"Question: {_msg_for_query}"},

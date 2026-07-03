@@ -11,7 +11,7 @@ from openai import OpenAI
 from rapidfuzz import fuzz, process
 
 from .catalog import fmt_price
-from .config import MATCH_LIMIT, MODEL
+from .config import MATCH_LIMIT, MODEL, model_kwargs
 
 
 def _extract_order_name_hint(message: str) -> tuple[str, str]:
@@ -94,7 +94,7 @@ def llm_pick_from_candidates(client: OpenAI, item_text: str, candidates: List[di
 
     try:
         resp = client.responses.create(
-            model=MODEL,
+            **model_kwargs(),
             input=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -176,6 +176,16 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         "  }\n"
         "}\n\n"
         "Rules:\n"
+        # Decision rules added 2026-07-03 for the gpt-5-mini migration: the old
+        # model inferred customer-vs-order on its own; gpt-5 models need it
+        # stated. Real failure cases these fix: "La tavia ford- charcoal mask,
+        # rollup bag" (parsed as customer), "New customer order for Linda
+        # Stewart 2 TimeWise serum" (customer), "Order Jennifer green, X and Y"
+        # ("green" became an item).
+        "- FIRST decide the type. If the message contains contact details (phone, email, address, birthday, tags, referred by), it is a NEW CUSTOMER — a real new-customer message never includes items to buy, so if products are also mentioned, ignore them and extract only the customer fields. If the message mentions products or items being bought, ordered, or wanted WITHOUT contact details, it is an ORDER — even when it starts with a person's name, says 'new customer order', or uses words like 'purchased', 'bought', 'sold', 'wants'.\n"
+        "- A person's name directly followed by a product list (e.g. 'NAME- item, item' or 'NAME: item, item' or 'NAME item item') is an ORDER for that customer.\n"
+        "- The customer name is only the person's first and last name (1-3 words at the start). Words after the name belong to the items, never to the name — and name words never belong to the items (e.g. 'Order Jennifer green, confidently you and true optimum' → customer_first 'Jennifer', customer_last 'green', items 'confidently you' and 'true optimum').\n"
+        "- When a person's name has three or more words (e.g. 'La Tavia Ford'), the FINAL word is the last name and everything before it is the first name (First Name 'La Tavia', Last Name 'Ford') — for both customers and orders.\n"
         "- State must be full name (e.g., Alabama).\n"
         "- Street is the street number and name only. Put apt/unit/suite/lot/# info in Street2.\n"
         "- Extract comma-separated tags from 'tag:' or 'tags:' keyword into Tags as a plain comma-separated string.\n"
@@ -200,7 +210,7 @@ def parse_with_openai(client: OpenAI, text: str, last_customer: Optional[str]) -
         last_ctx = f"Last customer: {last_customer.strip()}\n"
 
     resp = client.responses.create(
-        model=MODEL,
+        **model_kwargs(),
         input=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": last_ctx + text},

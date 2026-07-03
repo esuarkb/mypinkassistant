@@ -6,7 +6,7 @@ import re
 
 from openai import OpenAI
 
-from .config import MODEL
+from .config import MODEL, model_kwargs
 from .types import ChatReply
 from .ui_text import UI_EN
 
@@ -122,6 +122,7 @@ Rules:
 - Never use COUNT(*). For ALL "how many" questions, return the full list (SELECT first_name, last_name, consultant_number, career_level_desc, activity_status with the appropriate WHERE filter). The formatter shows the count in the header automatically.
 - In JOIN queries, always qualify consultant_id with the table alias (e.g., um.consultant_id = 1) to avoid ambiguity — do NOT use a table alias prefix when querying a single table with no JOIN
 - When querying unit_star_tracking, always include level_name in the SELECT — show the consultant's current star level even when the question is about progress toward the next level
+- "On target for Great Start" / "doing Great Start" / "in Great Start" means currently in the promotion window: promotion_end_date on or after today. Do NOT require total_bundles > 0 — new consultants still working toward their first bundle count.
 - Keep queries simple and readable"""
 
 _UNIT_SQL_USER = "Question: {msg}"
@@ -181,7 +182,7 @@ def _handle_unit_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
     client = OpenAI()
     try:
         resp = client.responses.create(
-            model=MODEL,
+            **model_kwargs(effort="low"),
             input=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

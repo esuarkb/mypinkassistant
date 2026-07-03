@@ -177,7 +177,8 @@ SUPPORTED_INTENTS = set(INTENT_REGISTRY)
 
 _LLM_ALLOWED_INTENTS = [name for name, meta in INTENT_REGISTRY.items() if meta["llm_allowed"]]
 
-MODEL = "gpt-4.1-mini"
+# Model choice lives in llm_config.py — one place for the whole app.
+from llm_config import OPENAI_MODEL as MODEL, model_kwargs  # noqa: F401
 
 load_dotenv()
 _client = OpenAI()
@@ -1085,7 +1086,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
 
     try:
         resp = _client.responses.create(
-            model=MODEL,
+            **model_kwargs(),
             input=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

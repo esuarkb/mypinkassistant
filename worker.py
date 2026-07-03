@@ -305,6 +305,17 @@ def main():
                 time.sleep(1)
                 continue
 
+            # Claim-time scale-up recheck: this worker is about to go busy on
+            # one consultant — if OTHERS are still waiting, bring up more
+            # instances now. Complements the insert_job hook (which can miss:
+            # API blip, cooldown), so a backlog self-heals on every claim
+            # instead of waiting for the next job insert.
+            try:
+                from autoscaler import check_and_scale_up
+                check_and_scale_up()
+            except Exception as _ae:
+                print(f"[Autoscaler] claim-time recheck error: {_ae}")
+
             browser = None
             context = None
 
