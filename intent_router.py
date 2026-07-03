@@ -15,27 +15,38 @@ When a consultant types a message, exactly three things happen:
          .slots    — parsed details, e.g. {"product_text": "charcoal mask"}
          .raw_text — the cleaned-up message text handlers should use
     2. handle_message writes one row to intent_logs (the analytics table).
-    3. handle_message finds the block matching that intent name and runs it.
-       The blocks only fetch data and build the reply — they never decide
-       whether they should run. That decision was already made in step 1.
+    3. handle_message looks the intent up in its dispatch table
+       (_INTENT_DISPATCH in mk_chat_core/engine.py) and runs that one
+       handler method. Handlers only fetch data and build the reply — they
+       never decide whether they should run. That decision was already made
+       in step 1 (and by the interrupts_pending policy, see below).
 
 So: if a message goes to the WRONG feature, fix it in THIS file.
-If the RIGHT feature gives a wrong answer, fix its handler in mk_chat_core.py.
+If the RIGHT feature gives a wrong answer, fix its handler method in
+mk_chat_core/engine.py.
 
 TO ADD A NEW INTENT (recipe)
 ============================
 Say you want a new chat feature "team_birthdays":
     1. Add an entry to INTENT_REGISTRY below:
-         "team_birthdays": {"llm_allowed": False, "description": "..."}
+         "team_birthdays": {"llm_allowed": False, "interrupts_pending": False,
+                            "description": "..."}
        (llm_allowed=False means the OpenAI fallback never returns it — use
-       False for anything a keyword/regex rule will always catch.)
+       False for anything a keyword/regex rule will always catch.
+       interrupts_pending=False means it politely waits while the consultant
+       is mid-flow — order confirm, picker, etc. Use False unless you have a
+       reason; True is for utility commands like "look book".)
     2. Add a rule inside route() that returns
          _claim("team_birthdays", {...slots...})
        Put it at the right spot in the chain — rules higher up win. Read the
        precedence list below and the comments around each rule.
-    3. In mk_chat_core.handle_message, add a dispatch block:
-         if intent_result.intent == "team_birthdays":
+    3. In mk_chat_core/engine.py, add a handler method on MKChatEngine:
+         def _intent_team_birthdays(self, ctx) -> Optional[ChatReply]:
              ...fetch data, return ChatReply(...)
+       and wire it into the _INTENT_DISPATCH table at the bottom of the
+       class:  "team_birthdays": "_intent_team_birthdays",
+       (Copy any existing small handler, e.g. _intent_referral, as a
+       template — the first lines unpack what you need from ctx.)
     4. Add cases to test_intent_golden.py (ROUTE_CASES for route() rules)
        and run:  python test_intent_golden.py
        It must pass before deploying. That's the whole process.
@@ -66,13 +77,18 @@ ROUTING PRECEDENCE (route() evaluates in exactly this order)
 
 PENDING-FLOW INTERACTION
 ========================
-route() receives session state and applies each rule's pending guard exactly
-as the old inline code did: rules marked "not pending" below do not claim a
-message while a pending flow (order confirm, customer picker, ...) is active,
-so the pending flow gets to consume the reply instead. Rules without the
-guard claim the message even mid-flow (e.g. look book, inventory count).
-This is TODAY'S exact behavior, preserved rule-by-rule; rationalizing it into
-an explicit interruption policy is a planned later step.
+Two layers decide what happens to a message while a pending flow (order
+confirm, customer picker, ...) is active:
+    1. route() applies each rule's pending guard exactly as the old inline
+       code did: rules marked "not pending" below do not claim a message
+       mid-flow, so the base intent (often from the LLM) flows through.
+    2. The engine then consults the intent's interrupts_pending flag in
+       INTENT_REGISTRY: True = the handler answers even mid-flow (look book,
+       inventory commands, cancel, help); False = the handler yields and the
+       pending flow consumes the message.
+Both layers were copied 1:1 from the pre-consolidation behavior. To change
+whether an intent can interrupt, flip its interrupts_pending flag AND check
+the route() rule's guard — then golden suite + a mid-flow smoke test.
 
 Regression gate: python test_intent_golden.py  (run before every deploy)
 """
@@ -100,52 +116,61 @@ class IntentResult:
 # llm_allowed: whether the OpenAI fallback may return this intent
 # (deterministic-only intents are always claimed by rules before the
 # LLM is consulted, so the LLM never needs their names).
+# interrupts_pending: whether the ENGINE may run this intent's handler
+# while a mid-conversation flow ("pending" state — order confirm,
+# pickers, inventory confirms) is open. False = the handler yields and
+# the pending flow consumes the message instead. This is the engine's
+# dispatch policy; route() ALSO declines to claim many intents mid-flow
+# (see the per-rule pending guards in route()), so an intent only truly
+# interrupts when both layers allow it. Flags were copied 1:1 from the
+# engine's old inline `if not pending` guards — change one only with a
+# golden-suite run and a mid-flow smoke test.
 # NOTE: registry order defines the order of the LLM prompt's allowed
 # list — keep the llm_allowed entries in this order (prompt is pinned
 # byte-identical to the pre-registry version).
 # =====================================================================
 INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     # --- LLM-allowed classification intents (order matters — see NOTE) ---
-    "cancel":            {"llm_allowed": True,  "description": "cancel / start over"},
-    "customer_info":     {"llm_allowed": True,  "description": "look up one customer's card (email, phone, address, birthday)"},
-    "customers_by_city": {"llm_allowed": True,  "description": "customers in/from a city or state"},
-    "data_query":        {"llm_allowed": True,  "description": "aggregate / cross-customer question (text-to-SQL)"},
-    "recent_orders":     {"llm_allowed": True,  "description": "a named customer's order history"},
-    "customer_spend":    {"llm_allowed": True,  "description": "how much a named customer spent"},
-    "leaderboard":       {"llm_allowed": True,  "description": "top customers / PCP / who spent the most"},
-    "lapsed_customers":  {"llm_allowed": True,  "description": "who hasn't ordered lately"},
-    "new_customer":      {"llm_allowed": True,  "description": "create a customer"},
-    "new_order":         {"llm_allowed": True,  "description": "create an order"},
-    "order_add":         {"llm_allowed": True,  "description": "add an item to the order being built"},
-    "order_remove":      {"llm_allowed": True,  "description": "remove an item from the order being built"},
-    "product_lookup":    {"llm_allowed": True,  "description": "price/info for a catalog product"},
-    "top_sellers":       {"llm_allowed": True,  "description": "consultant's best-selling products"},
-    "unit_query":        {"llm_allowed": True,  "description": "team/unit member question (director text-to-SQL)"},
-    "unknown":           {"llm_allowed": True,  "description": "could not classify"},
+    "cancel":            {"llm_allowed": True,  "interrupts_pending": True,  "description": "cancel / start over"},  # handler itself defers when a delete-customer confirm is pending
+    "customer_info":     {"llm_allowed": True,  "interrupts_pending": False, "description": "look up one customer's card (email, phone, address, birthday)"},
+    "customers_by_city": {"llm_allowed": True,  "interrupts_pending": False, "description": "customers in/from a city or state"},
+    "data_query":        {"llm_allowed": True,  "interrupts_pending": False, "description": "aggregate / cross-customer question (text-to-SQL)"},
+    "recent_orders":     {"llm_allowed": True,  "interrupts_pending": False, "description": "a named customer's order history"},
+    "customer_spend":    {"llm_allowed": True,  "interrupts_pending": False, "description": "how much a named customer spent"},
+    "leaderboard":       {"llm_allowed": True,  "interrupts_pending": False, "description": "top customers / PCP / who spent the most"},
+    "lapsed_customers":  {"llm_allowed": True,  "interrupts_pending": False, "description": "who hasn't ordered lately"},
+    "new_customer":      {"llm_allowed": True,  "interrupts_pending": False, "description": "create a customer"},
+    "new_order":         {"llm_allowed": True,  "interrupts_pending": False, "description": "create an order"},
+    "order_add":         {"llm_allowed": True,  "interrupts_pending": False, "description": "add an item to the order being built"},
+    "order_remove":      {"llm_allowed": True,  "interrupts_pending": False, "description": "remove an item from the order being built"},
+    "product_lookup":    {"llm_allowed": True,  "interrupts_pending": True,  "description": "price/info for a catalog product"},  # source="intent" additionally requires no pending (guard inside the handler)
+    "top_sellers":       {"llm_allowed": True,  "interrupts_pending": True,  "description": "consultant's best-selling products"},
+    "unit_query":        {"llm_allowed": True,  "interrupts_pending": False, "description": "team/unit member question (director text-to-SQL)"},
+    "unknown":           {"llm_allowed": True,  "interrupts_pending": False, "description": "could not classify"},
     # --- keyword-only classification intents ---
-    "app_help":          {"llm_allowed": False, "description": "how to install / add the app to a device"},
-    "chat_help":         {"llm_allowed": False, "description": "what can I say — chat cheat sheet"},
-    "edit_request":      {"llm_allowed": False, "description": "customer info edit — redirected to MyCustomers"},
-    "inventory":         {"llm_allowed": False, "description": "generic inventory mention (always refined to a specific inventory_* intent by the hijack chain)"},
-    "car_program":       {"llm_allowed": False, "description": "career car / co-pay questions (director feature)"},
+    "app_help":          {"llm_allowed": False, "interrupts_pending": True,  "description": "how to install / add the app to a device"},
+    "chat_help":         {"llm_allowed": False, "interrupts_pending": True,  "description": "what can I say — chat cheat sheet"},
+    "edit_request":      {"llm_allowed": False, "interrupts_pending": True,  "description": "customer info edit — redirected to MyCustomers"},
+    "inventory":         {"llm_allowed": False, "interrupts_pending": False, "description": "generic inventory mention (always refined to a specific inventory_* intent by the hijack chain)"},
+    "car_program":       {"llm_allowed": False, "interrupts_pending": False, "description": "career car / co-pay questions (director feature)"},
     # --- heuristic-claimed intents (hijack chain / handler-position rules) ---
-    "show_all_products":     {"llm_allowed": False, "description": "'show all <term>' product list expansion (UI tap)"},
-    "look_book":             {"llm_allowed": False, "description": "current Look Book PDF link"},
-    "inventory_guardrail":   {"llm_allowed": False, "description": "inventory-style write missing the word 'inventory' — coach the phrasing"},
-    "inventory_print":       {"llm_allowed": False, "description": "inventory print / PDF report link"},
-    "inventory_count":       {"llm_allowed": False, "description": "how many X do I have on hand"},
-    "inventory_show":        {"llm_allowed": False, "description": "show the full inventory list"},
-    "inventory_low_stock":   {"llm_allowed": False, "description": "what am I low on / need to reorder"},
-    "inventory_threshold":   {"llm_allowed": False, "description": "set desired on-hand level (par/minimum)"},
-    "inventory_write":       {"llm_allowed": False, "description": "add/remove/set inventory quantity"},
-    "inventory_help":        {"llm_allowed": False, "description": "mentioned inventory but no command parsed — show help"},
-    "delete_customer":       {"llm_allowed": False, "description": "delete a customer (local only, confirm flow)"},
-    "submitted_order_edit":  {"llm_allowed": False, "description": "add/remove against an already-submitted order — educate: change it in MyCustomers, syncs back"},
-    "referral":              {"llm_allowed": False, "description": "consultant's referral link"},
-    "pcp_list":              {"llm_allowed": False, "description": "PCP enrolled customer list"},
-    "birthday_lookup":       {"llm_allowed": False, "description": "birthdays today/this week/this month/..."},
-    "followup":              {"llm_allowed": False, "description": "2+2+2 follow-up cards"},
-    "customers_by_product":  {"llm_allowed": False, "description": "customers who bought/use a product"},
+    "show_all_products":     {"llm_allowed": False, "interrupts_pending": True,  "description": "'show all <term>' product list expansion (UI tap)"},  # answered before intent logging — special-cased in handle_message, not dispatched
+    "look_book":             {"llm_allowed": False, "interrupts_pending": True,  "description": "current Look Book PDF link"},
+    "inventory_guardrail":   {"llm_allowed": False, "interrupts_pending": True,  "description": "inventory-style write missing the word 'inventory' — coach the phrasing"},
+    "inventory_print":       {"llm_allowed": False, "interrupts_pending": True,  "description": "inventory print / PDF report link"},
+    "inventory_count":       {"llm_allowed": False, "interrupts_pending": True,  "description": "how many X do I have on hand"},
+    "inventory_show":        {"llm_allowed": False, "interrupts_pending": True,  "description": "show the full inventory list"},
+    "inventory_low_stock":   {"llm_allowed": False, "interrupts_pending": True,  "description": "what am I low on / need to reorder"},
+    "inventory_threshold":   {"llm_allowed": False, "interrupts_pending": True,  "description": "set desired on-hand level (par/minimum)"},
+    "inventory_write":       {"llm_allowed": False, "interrupts_pending": True,  "description": "add/remove/set inventory quantity"},
+    "inventory_help":        {"llm_allowed": False, "interrupts_pending": True,  "description": "mentioned inventory but no command parsed — show help"},
+    "delete_customer":       {"llm_allowed": False, "interrupts_pending": True,  "description": "delete a customer (local only, confirm flow)"},  # route() never claims this mid-flow, so in practice it can't interrupt; True mirrors the old engine dispatch exactly
+    "submitted_order_edit":  {"llm_allowed": False, "interrupts_pending": True,  "description": "add/remove against an already-submitted order — educate: change it in MyCustomers, syncs back"},
+    "referral":              {"llm_allowed": False, "interrupts_pending": True,  "description": "consultant's referral link"},
+    "pcp_list":              {"llm_allowed": False, "interrupts_pending": True,  "description": "PCP enrolled customer list"},
+    "birthday_lookup":       {"llm_allowed": False, "interrupts_pending": True,  "description": "birthdays today/this week/this month/..."},
+    "followup":              {"llm_allowed": False, "interrupts_pending": True,  "description": "2+2+2 follow-up cards"},
+    "customers_by_product":  {"llm_allowed": False, "interrupts_pending": True,  "description": "customers who bought/use a product"},
 }
 
 SUPPORTED_INTENTS = set(INTENT_REGISTRY)

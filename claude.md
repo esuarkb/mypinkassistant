@@ -109,7 +109,11 @@ matters more than perfect parity.
 - `auth_core.py` — Password hashing, Fernet encryption, consultant CRUD
 - `mk_chat_core/` — AI chat engine PACKAGE (split from one 6,100-line file
   2026-07-02). Intent handlers only — no routing decisions. Map:
-  - `engine.py` — MKChatEngine.handle_message: dispatch + handlers + pending flows
+  - `engine.py` — MKChatEngine. handle_message is ~60 lines: route → log →
+    dispatch via the _INTENT_DISPATCH table (one `_intent_*` method per
+    intent) → `_handle_pending` (mid-flow confirms/pickers) → `_normal_parse`
+    (OpenAI order/customer parser). Handlers return None to decline and let
+    the message keep falling through
   - `ui_text.py` — every user-facing string, EN + ES (keep both dicts in sync)
   - `render.py` — HTML: pickers, proposals, inventory lists, help pages
   - `catalog.py` — catalog loading, product matching/formatting
@@ -148,30 +152,35 @@ matters more than perfect parity.
 
 ## How Chat Messages Are Routed (since 2026-07-02)
 Every chat message goes through exactly three steps in
-`MKChatEngine.handle_message` (mk_chat_core.py):
+`MKChatEngine.handle_message` (mk_chat_core/engine.py):
 
 1. **Route** — `intent_router.route(message, state, catalog)` decides which
    feature answers. It returns an IntentResult with `.intent` (feature name),
    `.slots` (parsed details like product name or quantity), and `.raw_text`
    (the cleaned-up message handlers must use).
 2. **Log** — one row goes to intent_logs with that intent name.
-3. **Dispatch** — handle_message runs the block matching the intent name.
-   Handler blocks only fetch data and build replies; they never decide
-   whether they should run.
+3. **Dispatch** — handle_message looks the intent up in `_INTENT_DISPATCH`
+   (bottom of MKChatEngine) and runs that one `_intent_*` handler method.
+   Handlers only fetch data and build replies; they never decide whether
+   they should run. A handler returns None to decline, and the message keeps
+   falling through: pending flow (`_handle_pending`) → OpenAI order/customer
+   parser (`_normal_parse`).
 
 Rules of thumb:
 - Message goes to the WRONG feature → fix intent_router.py (the rule order
   in `route()` is documented at the top of that file).
-- RIGHT feature, wrong answer → fix that handler in mk_chat_core.py.
+- RIGHT feature, wrong answer → fix that `_intent_*` method in
+  mk_chat_core/engine.py.
 - Adding a new chat feature → follow the "TO ADD A NEW INTENT" recipe in the
-  intent_router.py docstring (registry entry → route() rule → dispatch block
-  → golden suite case).
+  intent_router.py docstring (registry entry → route() rule → handler method
+  + `_INTENT_DISPATCH` entry → golden suite case).
 - ALWAYS run `python test_intent_golden.py` before deploying routing/chat
   changes. It replays real production phrasings and fails on regressions.
-- Mid-conversation flows ("pending" state — order confirms, pickers): route()
-  already applies each rule's pending guard, so most rules step aside and let
-  the pending flow consume the reply. A few (look book, inventory commands,
-  cancel, help) intentionally work even mid-flow.
+- Mid-conversation flows ("pending" state — order confirms, pickers): the
+  `interrupts_pending` flag on each INTENT_REGISTRY entry says whether an
+  intent may answer mid-flow (look book, inventory commands, cancel, help)
+  or must yield to the pending flow (everything else). route() additionally
+  applies per-rule pending guards, so both layers must agree.
 
 ## ⚠️ Playwright Scripts — Handle With Extreme Care
 The Playwright scripts are the most fragile and most valuable part of the 

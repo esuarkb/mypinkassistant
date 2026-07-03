@@ -7,7 +7,10 @@ External code keeps importing exactly what it always did:
     from mk_chat_core import MKChatEngine, insert_job, normalize_state, ...
 
 Package map (what lives where):
-    engine.py         MKChatEngine.handle_message — dispatch + handlers + pending flows
+    engine.py         MKChatEngine — handle_message routes/logs then dispatches
+                      via _INTENT_DISPATCH (one _intent_* method per intent),
+                      then _handle_pending (mid-flow confirms/pickers), then
+                      _normal_parse (OpenAI order/customer parser)
     types.py          ChatReply
     config.py         BASE_DIR, CATALOG_DIR, MODEL, MATCH_LIMIT, TOP5
     dbutil.py         PH placeholder, db_connect

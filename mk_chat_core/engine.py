@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from crm_store import find_customers_by_name, format_customer_card, get_recent_orders_for_customer
 from intent_router import (
     route,
+    INTENT_REGISTRY,
     parse_intent,
     best_matches,
     _looks_like_full_customer_entry,
@@ -104,6 +105,43 @@ from .unit_query import _handle_unit_query
 from .types import ChatReply
 from .ui_text import UI_EN, UI_ES
 
+
+# ---------------------------------------------------------------------
+# Step 4 (2026-07-03): dispatch-table plumbing.
+# _HandlerCtx carries the per-message locals that handle_message used to
+# share with its inline intent blocks; each _intent_* handler method
+# unpacks what it needs. Handlers return a ChatReply, or None to decline
+# ("didn't handle — keep falling through").
+# ---------------------------------------------------------------------
+class _HandlerCtx:
+    __slots__ = (
+        "message", "msg", "lowered", "sid", "state", "consultant",
+        "consultant_id", "session_id", "user_agent", "language", "ui",
+        "catalog", "last_customer", "pending", "intent_result", "show_scores",
+    )
+
+    def __init__(self, **kw):
+        for k in self.__slots__:
+            setattr(self, k, kw[k])
+
+
+def _interrupts_pending(intent: str) -> bool:
+    """Engine dispatch policy: may this intent's handler run while a
+    pending flow is open? Declared per-intent in INTENT_REGISTRY
+    (intent_router.py) — the one place intents are described."""
+    return bool(INTENT_REGISTRY.get(intent, {}).get("interrupts_pending"))
+
+
+def _resolve_pronoun_guess(guess: str, state: dict) -> str:
+    g = (guess or "").strip().lower()
+
+    if g in ("she", "her", "he", "him", "they", "them"):
+        name = (state.get("last_ref_customer_name") or "").strip()
+        if name:
+            return name
+
+    return guess
+
 # -------------------------
 # Chat Engine
 # -------------------------
@@ -191,21 +229,51 @@ class MKChatEngine:
         except Exception:
             pass
 
-        def _resolve_pronoun_guess(guess: str, state: dict) -> str:
-            g = (guess or "").strip().lower()
-
-            if g in ("she", "her", "he", "him", "they", "them"):
-                name = (state.get("last_ref_customer_name") or "").strip()
-                if name:
-                    return name
-
-            return guess
 
         if not msg:
             return ChatReply(ui["empty_prompt"])
         
         lowered = msg.lower()
-        
+
+        # -----------------------------------------------------------------
+        # Dispatch (step 4) — one handler method per intent, wired in
+        # _INTENT_DISPATCH below. While a pending flow is open, only intents
+        # whose INTENT_REGISTRY entry has interrupts_pending=True may answer
+        # (this is the explicit policy that used to be ~20 scattered inline
+        # `if not pending` guards). A handler returning None means "didn't
+        # handle — keep falling through", exactly like the old inline blocks.
+        # -----------------------------------------------------------------
+        ctx = _HandlerCtx(
+            message=message, msg=msg, lowered=lowered, sid=sid, state=state,
+            consultant=consultant, consultant_id=consultant_id,
+            session_id=session_id, user_agent=user_agent, language=language,
+            ui=ui, catalog=catalog, last_customer=last_customer,
+            pending=pending, intent_result=intent_result, show_scores=show_scores,
+        )
+
+        _handler_name = self._INTENT_DISPATCH.get(intent_result.intent)
+        if _handler_name is not None and (not pending or _interrupts_pending(intent_result.intent)):
+            _reply = getattr(self, _handler_name)(ctx)
+            if _reply is not None:
+                return _reply
+
+        # Pending flows consume the message next (order confirm, pickers, ...)
+        if pending:
+            _reply = self._handle_pending(ctx)
+            if _reply is not None:
+                return _reply
+
+        # Nothing claimed it — OpenAI order/customer parser
+        return self._normal_parse(ctx)
+
+    def _intent_look_book(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        lowered = ctx.lowered
+        language = ctx.language
+        intent_result = ctx.intent_result
+
         # -------------------------
         # Look Book — works even mid-order
         # -------------------------
@@ -222,6 +290,13 @@ class MKChatEngine:
                 f'Here\'s the <a href="{lb_url}" class="inapp-overlay-link">{lb_label}</a>&nbsp; '
                 f'<button class="fdp-copy copy-link-btn" data-copy="{lb_url}">Copy Link</button>'
             )
+        return None
+
+    def _intent_inventory_guardrail(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        intent_result = ctx.intent_result
 
         # -------------------------
         # Bare inventory-style write guardrail
@@ -234,7 +309,15 @@ class MKChatEngine:
                 "• remove 1 satin hands from inventory\n"
                 "• set satin hands inventory to 5"
             )
-        
+        return None
+
+    def _intent_inventory_print(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        ui = ctx.ui
+        intent_result = ctx.intent_result
+
         # -------------------------
         # Inventory: print / PDF report
         # -------------------------
@@ -243,6 +326,18 @@ class MKChatEngine:
             base_url = (os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
             link = f"{base_url}/inventory/print" if base_url else "/inventory/print"
             return ChatReply(ui["inventory_report"].format(link=link))
+        return None
+
+    def _intent_product_lookup(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        catalog = ctx.catalog
+        pending = ctx.pending
+        intent_result = ctx.intent_result
+        import re
+        import re as _re
 
         # -------------------------
         # Exact product name match — handles data-send clicks from multi-result lists
@@ -301,6 +396,41 @@ class MKChatEngine:
                     return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
 
         # -------------------------
+        # Product price lookup (intent-based fallback)
+        # -------------------------
+        if not pending and intent_result.intent == "product_lookup" and intent_result.slots.get("source") == "intent":
+            product_text = intent_result.slots.get("product_query") or _parse_product_price_query_text(msg)
+            if re.search(r',', product_text):
+                return ChatReply("I can look up one product at a time — try searching for each one separately.")
+            matches = best_matches(catalog, product_text, limit=3, min_score=50)
+            if not matches:
+                return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
+            top = matches[0]
+            top_score = int(top.get("score") or 0)
+            runner_up_score = int(matches[1].get("score") or 0) if len(matches) > 1 else 0
+            confident = len(matches) == 1 or (top_score >= 80 and (top_score - runner_up_score) >= 15)
+            if confident:
+                return ChatReply(_fmt_product_lookup_single(top))
+            lines = ["<strong>Product Look Up</strong>"]
+            for m in matches:
+                lines.append(_fmt_product_list_item(m))
+            return ChatReply("\n".join(lines))
+        return None
+
+    def _intent_inventory_count(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        catalog = ctx.catalog
+        intent_result = ctx.intent_result
+        from db import tx
+
+        # -------------------------
         # Inventory: quantity count query ("how many X do I have")
         # -------------------------
         if intent_result.intent == "inventory_count":
@@ -329,6 +459,16 @@ class MKChatEngine:
                 with tx() as (conn, cur):
                     row = get_inventory_item(cur, consultant_id=consultant_id, sku=sku)
                 return ChatReply(_format_inventory_item(row, chosen, product_text))
+        return None
+
+    def _intent_inventory_show(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        consultant_id = ctx.consultant_id
+        catalog = ctx.catalog
+        intent_result = ctx.intent_result
+        from db import tx
 
         # -------------------------
         # Inventory: show full list
@@ -337,6 +477,16 @@ class MKChatEngine:
             with tx() as (conn, cur):
                 rows = list_inventory(cur, consultant_id=consultant_id)
             return ChatReply(_format_inventory_list(rows, catalog))
+        return None
+
+    def _intent_inventory_low_stock(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        consultant_id = ctx.consultant_id
+        catalog = ctx.catalog
+        intent_result = ctx.intent_result
+        from db import tx
 
         # -------------------------
         # Inventory: low stock / what should I order
@@ -351,6 +501,20 @@ class MKChatEngine:
                     )
                 rows = list_low_stock(cur, consultant_id=consultant_id)
             return ChatReply(_format_low_stock_list(rows, catalog))
+        return None
+
+    def _intent_inventory_threshold(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        catalog = ctx.catalog
+        intent_result = ctx.intent_result
+        from db import tx
 
         # -------------------------
         # Inventory: set desired on-hand threshold
@@ -389,6 +553,20 @@ class MKChatEngine:
                         low_stock_threshold=int(qty),
                     )
                 return ChatReply(ui["low_stock_set"].format(product=product_name, qty=qty))
+        return None
+
+    def _intent_inventory_write(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        catalog = ctx.catalog
+        intent_result = ctx.intent_result
+        from db import tx
 
         # -------------------------
         # Inventory commands (add/remove/set)
@@ -469,15 +647,33 @@ class MKChatEngine:
                         )
 
                 return ChatReply(reply)
+        return None
+
+    def _intent_inventory_help(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        intent_result = ctx.intent_result
 
         # Mentioned inventory but nothing above parsed a command — show help
         if intent_result.intent == "inventory_help":
             return ChatReply(_inventory_help_text())
+        return None
 
+    def _intent_delete_customer(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        intent_result = ctx.intent_result
         import re
-        from crm_store import find_customers_by_name, get_customer_by_id, count_orders_for_customer, delete_customer_local
-
-    
+        from db import tx
+        from crm_store import find_customers_by_name
+        from crm_store import get_customer_by_id
+        from crm_store import count_orders_for_customer
 
         # (_looks_like_full_customer_entry moved to intent_router.py — imported at top)
 
@@ -565,6 +761,15 @@ class MKChatEngine:
                 save_session_state(state, session_id=sid)
 
                 return ChatReply(render_customer_delete_picker(top, recent_orders_map))
+        return None
+
+    def _intent_referral(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        consultant_id = ctx.consultant_id
+        intent_result = ctx.intent_result
+        import os as _os
 
         ##
         # -------------------------
@@ -587,7 +792,14 @@ class MKChatEngine:
                     f'<button class="fdp-copy copy-link-btn" data-copy="{_ref_link}">Copy Link</button>'
                 )
             return ChatReply('Find your referral link in <a href="/settings">Settings</a>.')
+        return None
 
+    def _intent_submitted_order_edit(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        ui = ctx.ui
+        intent_result = ctx.intent_result
 
         # -------------------------
         # Add/remove against an already-submitted order — can't be changed from
@@ -597,12 +809,28 @@ class MKChatEngine:
             if intent_result.slots.get("action") == "add":
                 return ChatReply(ui["submitted_order_add"])
             return ChatReply(ui["submitted_order_edit"])
+        return None
+
+    def _intent_order_remove(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        ui = ctx.ui
+        pending = ctx.pending
+        intent_result = ctx.intent_result
 
         # LLM-classified remove-from-order with no draft open — same reply.
         # (Previously fell through to the normal parse, which started a
         # phantom order draft — live incident 2026-07-02.)
         if not pending and intent_result.intent == "order_remove":
             return ChatReply(ui["submitted_order_edit"])
+        return None
+
+    def _intent_edit_request(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        intent_result = ctx.intent_result
 
         # -------------------------
         # Customer edit requests — not supported, redirect to InTouch
@@ -614,6 +842,15 @@ class MKChatEngine:
                 '<a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. '
                 'The changes will then show in MyPinkAssistant on the next sync.'
             )
+        return None
+
+    def _intent_pcp_list(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        consultant_id = ctx.consultant_id
+        intent_result = ctx.intent_result
+        from db import tx
 
         # PCP enrolled list (no LLM call)
         # -------------------------
@@ -628,6 +865,19 @@ class MKChatEngine:
             _pcp_pending = len([c for c in _pcp_customers if c.get("id") not in _pcp_done_ids])
             _pcp_header = f"<strong>PCP List</strong> ({_pcp_pending} remaining · {len(_pcp_customers)} total)"
             return ChatReply(_pcp_header + "\n" + _render_pcp(_pcp_customers, _pcp_done_ids, _pcp_quarter))
+        return None
+
+    def _intent_leaderboard(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        lowered = ctx.lowered
+        consultant_id = ctx.consultant_id
+        pending = ctx.pending
+        intent_result = ctx.intent_result
+        import re
+        from db import tx
 
         ##
         # -------------------------
@@ -686,6 +936,15 @@ class MKChatEngine:
                     )
 
                 return ChatReply(format_leaderboard(rows, title))
+        return None
+
+    def _intent_top_sellers(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        consultant_id = ctx.consultant_id
+        intent_result = ctx.intent_result
+        from db import tx
 
         # -------------------------
         # Top sellers
@@ -722,6 +981,16 @@ class MKChatEngine:
             for i, r in enumerate(rows, 1):
                 lines.append(f"{i}. {r['product_name']} — {r['total_qty']} units")
             return ChatReply("<br>".join(lines))
+        return None
+
+    def _intent_birthday_lookup(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        lowered = ctx.lowered
+        consultant_id = ctx.consultant_id
+        intent_result = ctx.intent_result
+        from db import tx
 
         # -------------------------
         # Lapsed customers (no LLM call)
@@ -771,6 +1040,20 @@ class MKChatEngine:
                 _show_all = lowered.startswith("show all birthdays")
                 _limit = None if _show_all else 5
                 return ChatReply(_header + "\n" + _rbsc(_bday_results, _consultant_first, limit=_limit, period_label=_period_label, scope=_bday_scope))
+        return None
+
+    def _intent_lapsed_customers(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        lowered = ctx.lowered
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        pending = ctx.pending
+        intent_result = ctx.intent_result
+        import re
+        from db import tx
 
         # -------------------------
         # Lapsed customers (route() maps "show all lapsed N days" here too and
@@ -817,6 +1100,18 @@ class MKChatEngine:
                 return ChatReply("\n".join(lines))
 
             return ChatReply(format_lapsed_customers(result, _days))
+        return None
+
+    def _intent_customers_by_city(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        lowered = ctx.lowered
+        consultant_id = ctx.consultant_id
+        pending = ctx.pending
+        intent_result = ctx.intent_result
+        import re
+        from db import tx
 
         # -------------------------
         # Customers by city
@@ -878,27 +1173,17 @@ class MKChatEngine:
                         if _prod_rows:
                             return ChatReply(format_customers_by_product(_prod_rows, _city_part))
                 return ChatReply(format_city_customers(rows, _city_part, show_all=_show_all_city))
+        return None
 
-        # -------------------------
-        # Product price lookup (intent-based fallback)
-        # -------------------------
-        if not pending and intent_result.intent == "product_lookup" and intent_result.slots.get("source") == "intent":
-            product_text = intent_result.slots.get("product_query") or _parse_product_price_query_text(msg)
-            if re.search(r',', product_text):
-                return ChatReply("I can look up one product at a time — try searching for each one separately.")
-            matches = best_matches(catalog, product_text, limit=3, min_score=50)
-            if not matches:
-                return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
-            top = matches[0]
-            top_score = int(top.get("score") or 0)
-            runner_up_score = int(matches[1].get("score") or 0) if len(matches) > 1 else 0
-            confident = len(matches) == 1 or (top_score >= 80 and (top_score - runner_up_score) >= 15)
-            if confident:
-                return ChatReply(_fmt_product_lookup_single(top))
-            lines = ["<strong>Product Look Up</strong>"]
-            for m in matches:
-                lines.append(_fmt_product_list_item(m))
-            return ChatReply("\n".join(lines))
+    def _intent_followup(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        intent_result = ctx.intent_result
+        from db import tx
 
         # -------------------------
         # Follow-up trigger (2+2+2)
@@ -920,6 +1205,17 @@ class MKChatEngine:
             state["followup_offset"] = _offset + len(_order_followups)
             save_session_state(state, session_id=sid)
             return ChatReply(render_followup_cards(_followups, _consultant_first))
+        return None
+
+    def _intent_customers_by_product(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        intent_result = ctx.intent_result
+        from db import tx
 
         # -------------------------
         # Customer search by product — phrase parsing lives in route(); the
@@ -941,6 +1237,23 @@ class MKChatEngine:
                 state["pending"] = None
                 save_session_state(state, session_id=sid)
                 return ChatReply(format_customers_by_product(results, _product_term))
+        return None
+
+    def _intent_recent_orders(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        lowered = ctx.lowered
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        pending = ctx.pending
+        intent_result = ctx.intent_result
+        import re
+        from db import tx
+        from crm_store import find_customers_by_name
 
         # -------------------------
         # CRM quick lookup: recent orders lookup (no LLM call)
@@ -1098,7 +1411,24 @@ class MKChatEngine:
                         )
 
                     return ChatReply(format_recent_orders(customer_name, orders, period_label=_period_label))
-        
+        return None
+
+    def _intent_customer_spend(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        lowered = ctx.lowered
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        pending = ctx.pending
+        intent_result = ctx.intent_result
+        import re
+        from db import tx
+        from crm_store import find_customers_by_name
+
         # -------------------------
         # CRM quick lookup: customer spending (no LLM call)
         # -------------------------
@@ -1198,6 +1528,17 @@ class MKChatEngine:
                         period = f"{m.group(1)} {m.group(2)} days"
 
                 return ChatReply(ui["customer_spent"].format(name=customer_name, total=f"{total_spent:,.2f}", period=period))
+        return None
+
+    def _intent_cancel(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        sid = ctx.sid
+        state = ctx.state
+        ui = ctx.ui
+        pending = ctx.pending
+        intent_result = ctx.intent_result
 
         # Cancel command (intent-driven)
         if intent_result.intent == "cancel" and not (
@@ -1209,12 +1550,29 @@ class MKChatEngine:
             state["last_customer"] = None
             save_session_state(state, session_id=sid)
             return ChatReply(ui["canceled"])
+        return None
+
+    def _intent_app_help(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        intent_result = ctx.intent_result
 
         # (edit_request handled earlier, next to the other redirect rules)
 
         # App install help
         if intent_result.intent == "app_help":
             return ChatReply(_APP_HELP_HTML)
+        return None
+
+    def _intent_chat_help(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        consultant_id = ctx.consultant_id
+        language = ctx.language
+        intent_result = ctx.intent_result
+        from db import tx
 
         # Chat help — what can I do
         if intent_result.intent == "chat_help":
@@ -1225,18 +1583,56 @@ class MKChatEngine:
                 )
                 has_team = cur.fetchone() is not None
             return ChatReply(_build_chat_help_html(has_team, lang=language))
+        return None
+
+    def _intent_unit_query(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        pending = ctx.pending
+        intent_result = ctx.intent_result
 
         # -------------------------
         # Unit query (team/unit member text-to-SQL)
         # -------------------------
         if not pending and intent_result.intent == "unit_query":
             return _handle_unit_query(msg, consultant_id, ui=ui)
+        return None
+
+    def _intent_car_program(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        consultant_id = ctx.consultant_id
+        pending = ctx.pending
+        intent_result = ctx.intent_result
 
         # -------------------------
         # Car program status (director feature)
         # -------------------------
         if not pending and intent_result.intent == "car_program":
             return _handle_car_program(consultant_id, msg=msg)
+        return None
+
+    def _intent_customer_info(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        pending = ctx.pending
+        intent_result = ctx.intent_result
+        import re
+        from db import tx
+        from crm_store import find_customers_by_name
+        from crm_store import format_customer_card
 
         # -------------------------
         # CRM quick lookup: customer info lookup (no LLM call)
@@ -1410,6 +1806,27 @@ class MKChatEngine:
                         _insert = picker_html.rfind("</div>")
                         picker_html = picker_html[:_insert] + "".join(_extra_rows) + picker_html[_insert:]
                     return ChatReply(picker_html)
+        return None
+
+    def _handle_pending(self, ctx) -> Optional[ChatReply]:
+        """Mid-conversation flows (order confirm, pickers, inventory
+        confirms, ...) — body moved verbatim from handle_message (step 4).
+        Returns None to fall through to normal parse, as before."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        catalog = ctx.catalog
+        last_customer = ctx.last_customer
+        pending = ctx.pending
+        show_scores = ctx.show_scores
+        import re
+        from db import tx
+        from crm_store import format_customer_card
+        from crm_store import count_orders_for_customer
+        from crm_store import delete_customer_local
 
         # -------------------------
         # Pending flows
@@ -2326,12 +2743,40 @@ class MKChatEngine:
                     return ChatReply(ui["order_reject"])
 
                 return ChatReply(ui["reply_yes_no_adjust"])
+        return None
+
+    def _intent_data_query(self, ctx) -> Optional[ChatReply]:
+        """Handler body moved verbatim from handle_message (step 4).
+        Returns None to decline — fall through to pending flow / normal parse."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        pending = ctx.pending
+        intent_result = ctx.intent_result
 
         # -------------------------
         # CRM data query (text-to-SQL fallback for cross-customer searches)
         # -------------------------
         if not pending and intent_result.intent == "data_query":
             return _handle_data_query(msg, consultant_id, ui=ui)
+        return None
+
+    def _normal_parse(self, ctx) -> ChatReply:
+        """Nothing claimed the message — OpenAI order/customer parser.
+        Body moved verbatim from handle_message (step 4). Always replies."""
+        # (step 4) generated unpack of shared per-message context
+        msg = ctx.msg
+        lowered = ctx.lowered
+        sid = ctx.sid
+        state = ctx.state
+        consultant_id = ctx.consultant_id
+        ui = ctx.ui
+        catalog = ctx.catalog
+        last_customer = ctx.last_customer
+        import re as _re
+        from db import tx
+        from crm_store import find_customers_by_name
 
         # -------------------------
         # Normal parse
@@ -2604,6 +3049,48 @@ class MKChatEngine:
             )
 
         return ChatReply(ui["cant_tell"])
+
+    # ------------------------------------------------------------------
+    # Dispatch table (step 4) — intent name -> handler method name.
+    # One entry per dispatchable intent; intents absent here (new_order,
+    # order_add, new_customer, unknown, ...) fall through to the pending
+    # flow / normal parse. show_all_products is special-cased inline in
+    # handle_message because it answers before intent logging.
+    # ------------------------------------------------------------------
+    _INTENT_DISPATCH = {
+        "look_book": "_intent_look_book",
+        "inventory_guardrail": "_intent_inventory_guardrail",
+        "inventory_print": "_intent_inventory_print",
+        "product_lookup": "_intent_product_lookup",
+        "inventory_count": "_intent_inventory_count",
+        "inventory_show": "_intent_inventory_show",
+        "inventory_low_stock": "_intent_inventory_low_stock",
+        "inventory_threshold": "_intent_inventory_threshold",
+        "inventory_write": "_intent_inventory_write",
+        "inventory_help": "_intent_inventory_help",
+        "delete_customer": "_intent_delete_customer",
+        "referral": "_intent_referral",
+        "submitted_order_edit": "_intent_submitted_order_edit",
+        "order_remove": "_intent_order_remove",
+        "edit_request": "_intent_edit_request",
+        "pcp_list": "_intent_pcp_list",
+        "leaderboard": "_intent_leaderboard",
+        "top_sellers": "_intent_top_sellers",
+        "birthday_lookup": "_intent_birthday_lookup",
+        "lapsed_customers": "_intent_lapsed_customers",
+        "customers_by_city": "_intent_customers_by_city",
+        "followup": "_intent_followup",
+        "customers_by_product": "_intent_customers_by_product",
+        "recent_orders": "_intent_recent_orders",
+        "customer_spend": "_intent_customer_spend",
+        "cancel": "_intent_cancel",
+        "app_help": "_intent_app_help",
+        "chat_help": "_intent_chat_help",
+        "unit_query": "_intent_unit_query",
+        "car_program": "_intent_car_program",
+        "customer_info": "_intent_customer_info",
+        "data_query": "_intent_data_query",
+    }
 
 # Internal helper methods
 # -------------------------
