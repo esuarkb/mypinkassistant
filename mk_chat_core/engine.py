@@ -590,6 +590,21 @@ class MKChatEngine:
 
 
         # -------------------------
+        # Add/remove against an already-submitted order — can't be changed from
+        # chat; educate and point at MyCustomers (syncs back automatically)
+        # -------------------------
+        if intent_result.intent == "submitted_order_edit":
+            if intent_result.slots.get("action") == "add":
+                return ChatReply(ui["submitted_order_add"])
+            return ChatReply(ui["submitted_order_edit"])
+
+        # LLM-classified remove-from-order with no draft open — same reply.
+        # (Previously fell through to the normal parse, which started a
+        # phantom order draft — live incident 2026-07-02.)
+        if not pending and intent_result.intent == "order_remove":
+            return ChatReply(ui["submitted_order_edit"])
+
+        # -------------------------
         # Customer edit requests — not supported, redirect to InTouch
         # (covers both the keyword-classified intent and the text rule)
         # -------------------------

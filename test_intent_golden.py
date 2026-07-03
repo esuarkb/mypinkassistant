@@ -292,11 +292,26 @@ ROUTE_CASES = [
     # answer (identical to pre-consolidation behavior) — both are correct
     ("who are my retinol customers",             None, ("customers_by_product", "customers_by_city")),
     ("how much is the charcoal mask",            None, "product_lookup"),   # price query
+    # submitted-order edits (live incident 2026-07-02, Kimberly/Judy Pasko):
+    # with no draft open, add/remove against an existing order gets the
+    # educate-and-point-at-MyCustomers reply instead of a phantom new order.
+    # First two are her exact messages incl. the iOS curly apostrophe.
+    ("Add raspberry ice to Judy Pasko‘s order", None, "submitted_order_edit"),
+    ("Remove Judy Pasko‘s order for lipstick",  None, "submitted_order_edit"),
+    ("remove july 3 order for lipstick",         None, "submitted_order_edit"),
+    ("add satin hands to her order",             None, "submitted_order_edit"),
+    ("cancel judy's order",                      None, "submitted_order_edit"),
+    ("delete that order from yesterday",         None, "submitted_order_edit"),
+    ("delete judy doe",                          None, "delete_customer"),     # no "order" word — delete flow untouched
     # pending-flow guards: mid-flow, guarded rules must NOT claim the message,
     # so the pending flow consumes it (route falls through to the base intent)
     ("charcoal mask",                            _MID_FLOW, "customer_info"),  # bare-name rule; pending flow eats it
     ("spanish look book",                        _MID_FLOW, "look_book"),      # look book works even mid-order
     ("print my inventory",                       _MID_FLOW, "inventory_print"),
+    # mid-draft add/remove must NOT be claimed by the submitted-order rule —
+    # the pending flow edits the draft (route falls through to the base intent)
+    ("add raspberry ice to the order",           _MID_FLOW, ("order_add", "<llm-skipped>", "unknown")),
+    ("remove the lipstick from judy's order",    _MID_FLOW, ("order_remove", "<llm-skipped>", "unknown")),
 ]
 
 

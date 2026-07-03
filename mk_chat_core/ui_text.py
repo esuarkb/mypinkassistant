@@ -70,6 +70,9 @@ UI_EN = {
     "propose_top": "I think you mean: {line}. Is that right? (yes/no)",
     "render_top5_intro": "Got it \u2014 select the best match (reply {range}), or type different search words and I'll search again:",
 
+    "submitted_order_edit": "Once an order has been sent to MyCustomers I can't currently edit or remove it from chat. You can delete or change the order in MyCustomers, and MyPinkAssistant will get the corrected info on the next sync.",
+    "submitted_order_add": "Heads up: we can't currently add to orders already submitted to MyCustomers. If you add the item to the order in MyCustomers, it will be added to MyPinkAssistant on the next sync.",
+
     # Unit / team query strings
     "unit_no_data": "I don't have team data synced for your account yet. Once a report sync runs, I'll be able to answer questions about your team.",
     "unit_query_rephrase": "I had trouble generating a query. Please try rephrasing your question.",
@@ -150,6 +153,9 @@ UI_ES = {
     "trouble": "Estoy teniendo un pequeño problema ahora mismo, por favor intenta de nuevo en un momento.",
     "customer_not_in_mc": "No encuentro a {name} en MyCustomers. Necesitaremos agregar a {name} como nueva cliente primero.",
     "propose_top": "Creo que te refieres a: {line}. ¿Es correcto? (sí/no)",
+
+    "submitted_order_edit": "Una vez que un pedido se envió a MyCustomers, por el momento no puedo editarlo ni eliminarlo desde el chat. Puedes eliminar o cambiar el pedido en MyCustomers, y MyPinkAssistant recibirá la información corregida en la próxima sincronización.",
+    "submitted_order_add": "Aviso: por el momento no podemos agregar artículos a pedidos ya enviados a MyCustomers. Si agregas el artículo al pedido en MyCustomers, se agregará a MyPinkAssistant en la próxima sincronización.",
 
     # Unit / team query strings
     "unit_no_data": "Aún no tengo datos del equipo sincronizados. Una vez que se realice una sincronización, podré responder preguntas sobre tu equipo.",

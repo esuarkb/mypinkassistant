@@ -140,6 +140,7 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "inventory_write":       {"llm_allowed": False, "description": "add/remove/set inventory quantity"},
     "inventory_help":        {"llm_allowed": False, "description": "mentioned inventory but no command parsed — show help"},
     "delete_customer":       {"llm_allowed": False, "description": "delete a customer (local only, confirm flow)"},
+    "submitted_order_edit":  {"llm_allowed": False, "description": "add/remove against an already-submitted order — educate: change it in MyCustomers, syncs back"},
     "referral":              {"llm_allowed": False, "description": "consultant's referral link"},
     "pcp_list":              {"llm_allowed": False, "description": "PCP enrolled customer list"},
     "birthday_lookup":       {"llm_allowed": False, "description": "birthdays today/this week/this month/..."},
@@ -1255,6 +1256,21 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         if _inv_action and _inv_qty is not None and _inv_text:
             return _claim("inventory_write", {"action": _inv_action, "qty": int(_inv_qty), "product_text": _inv_text})
         return _claim("inventory_help")
+
+    # Add/remove against an ALREADY-SUBMITTED order (not pending). Chat can only
+    # edit an order draft still being built; with no draft open, "add X to
+    # jane's order" / "remove jane's order" refer to an order already sent to
+    # MyCustomers, which chat can't change. Claim and educate instead of falling
+    # into the normal parse — which used to start a phantom new order (live
+    # incident 2026-07-02, and the add-path silently created a separate
+    # one-item order). Must run BEFORE delete_customer ("delete judy's order"
+    # would otherwise start the delete-customer flow).
+    if not pending:
+        if re.search(r"\b(?:remove|delete|cancel|void|take\s+(?:\w+\s+)?off)\b.*\borders?\b", lowered):
+            return _claim("submitted_order_edit", {"action": "remove"})
+        # possessive accepts straight AND iOS curly apostrophes ("judy pasko’s order")
+        if re.search(r"\b(?:add|put|include)\b.*\b(?:to|on|onto|into|in)\s+(?:(?:her|his|their|the|that|my)\s+)?(?:[a-z][\w'’‘-]*(?:\s+[a-z][\w'’‘-]*)?['’‘]s\s+)?(?:last\s+|previous\s+|existing\s+|recent\s+|submitted\s+)?orders?\b", lowered):
+            return _claim("submitted_order_edit", {"action": "add"})
 
     # Delete customer (not pending)
     if not pending:
