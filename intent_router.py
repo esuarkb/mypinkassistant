@@ -872,6 +872,12 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if re.search(r'\bwho\s+(ordered|buys|buy|purchases|purchase|gets|orders)\b', lowered):
         return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
 
+    # "what [product] does [name] use/wear/buy" → that customer's order history.
+    # Seen live 2026-07-02: the LLM split two near-identical phrasings between
+    # product_lookup and recent_orders; this makes it deterministic.
+    if re.search(r"\b(?:what|which)\b.*\bdoes\s+\w+(?:\s+\w+)?\s+(?:use|wear|buy|order)\b", lowered):
+        return IntentResult(intent="recent_orders", confidence=0.95, raw_text=msg)
+
     # recent orders
     if (
         ("order" in lowered or "orders" in lowered or "ordered" in lowered)

@@ -168,6 +168,11 @@ CASES = [
     ("is there another address for lorrie ray", "customer_info",     "kw"),
 
     # --- recent_orders (kw) ---
+    # "what X does [name] use" — live 2026-07-02 (Lark): the LLM split two
+    # near-identical phrasings between product_lookup and recent_orders;
+    # now a deterministic kw rule
+    ("what cleanser does nicole johnstone use", "recent_orders",     "kw"),
+    ("what foundation does jane wear",          "recent_orders",     "kw"),
     ("last order for kimberly moss",            "recent_orders",     "kw"),
     ("jane's orders",                           "recent_orders",     "kw"),
     ("show all of jane's orders",               "recent_orders",     "kw"),

@@ -107,8 +107,20 @@ matters more than perfect parity.
 ## Key Files
 - `app.py` — FastAPI routes, auth, session management, admin panel
 - `auth_core.py` — Password hashing, Fernet encryption, consultant CRUD
-- `mk_chat_core.py` — AI chat engine: intent HANDLERS only (fetch data, build
-  replies, pending flows). Makes no routing decisions (large file)
+- `mk_chat_core/` — AI chat engine PACKAGE (split from one 6,100-line file
+  2026-07-02). Intent handlers only — no routing decisions. Map:
+  - `engine.py` — MKChatEngine.handle_message: dispatch + handlers + pending flows
+  - `ui_text.py` — every user-facing string, EN + ES (keep both dicts in sync)
+  - `render.py` — HTML: pickers, proposals, inventory lists, help pages
+  - `catalog.py` — catalog loading, product matching/formatting
+  - `order_parse.py` — OpenAI order/customer parser + order-text helpers
+  - `normalize.py` — phone/state/city/birthday/address normalizers
+  - `customer_edits.py` — corrections to a pending customer confirm
+  - `session.py` / `jobs.py` — chat session state / job queueing
+  - `unit_query.py`, `data_query.py`, `car_program.py` — text-to-SQL + director handlers
+  - `config.py`, `dbutil.py`, `types.py` — constants, PH/db_connect, ChatReply
+  External imports are unchanged (`from mk_chat_core import MKChatEngine, ...`
+  still works — `__init__.py` re-exports the public API)
 - `intent_router.py` — ALL message routing: `route()` decides which feature
   answers every chat message, in one documented precedence order. Also holds
   INTENT_REGISTRY (the one place intents are declared) and the routing
@@ -215,7 +227,6 @@ PB_CONTACT_ID          # ProjectBroadcast contact for alerts
 - Consolidate `_row_get()` utility (reimplemented in 3 files)
 - Use `tx()` context manager consistently throughout app.py
 - Replace `print()` statements with proper logging module
-- Split mk_chat_core.py into smaller modules (long-term refactor)
 
 ## Conventions & Patterns To Follow
 
