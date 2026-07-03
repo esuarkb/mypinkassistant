@@ -292,6 +292,18 @@ ROUTE_CASES = [
     # answer (identical to pre-consolidation behavior) — both are correct
     ("who are my retinol customers",             None, ("customers_by_product", "customers_by_city")),
     ("how much is the charcoal mask",            None, "product_lookup"),   # price query
+    # catalog-search fixes 2026-07-03 (search_terms aliases + compound-word
+    # normalization + trailing "ingredients" — all were June production failures)
+    ("dwl",                                      None, "product_lookup"),   # search_terms alias
+    ("travel set",                               None, "product_lookup"),   # alias on the Go Sets
+    ("lipgloss",                                 None, "product_lookup"),   # compound-word fix
+    ("Makeup remover ingredients",               None, "product_lookup"),   # trailing "ingredients"
+    ("Facial peel ingredients",                  None, "product_lookup"),
+    # guards: the pre-filter typo fallback must never let non-product words
+    # claim product_lookup outside a product context (they fuzz above 70)
+    ("yes",                                      None, ("customer_info", "unknown", "<llm-skipped>")),
+    ("skip",                                     None, ("customer_info", "unknown", "<llm-skipped>")),
+    ("waterproo",                                None, ("customer_info", "unknown", "<llm-skipped>")),  # half-typed customer search, live 2026-06-28
     # submitted-order edits (live incident 2026-07-02, Kimberly/Judy Pasko):
     # with no draft open, add/remove against an existing order gets the
     # educate-and-point-at-MyCustomers reply instead of a phantom new order.

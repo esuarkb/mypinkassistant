@@ -214,9 +214,26 @@ def should_use_openai_intent_fallback(message: str) -> bool:
 # =====================================================================
 _SEARCH_STOP_WORDS = {"mary", "kay"}
 
-def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int = 30) -> List[dict]:
+# Query-side word-form fixes: consultants write these differently than the
+# official catalog names, which breaks the whole-word pre-filter below.
+# All harvested from production intent_logs (2026-07). Applied to the query
+# only, so every search path (lookup, order lines, inventory) benefits.
+_COMPOUND_WORD_FIXES = [
+    (re.compile(r"\blipgloss\b"), "lip gloss"),
+    (re.compile(r"\blipglosses\b"), "lip glosses"),
+    (re.compile(r"\beyeshadow\b"), "eye shadow"),
+    (re.compile(r"\beye liner\b"), "eyeliner"),
+    (re.compile(r"\btime wise\b"), "timewise"),
+    (re.compile(r"\bnight time\b"), "nighttime"),
+    (re.compile(r"\bclearproof\b"), "clear proof"),
+]
+
+def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int = 30,
+                 prefilter_fallback: bool = True) -> List[dict]:
     q = (query or "").lower().strip()
     q = re.sub(r"\+", " ", q)  # treat + as a space so "ha+ceramide" splits correctly before pre-filter
+    for pat, repl in _COMPOUND_WORD_FIXES:
+        q = pat.sub(repl, q)
     q_compact = re.sub(r"\s+", " ", q)
 
     # Strip noise words that appear in most product names and hurt WRatio scoring
@@ -277,10 +294,21 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
     sig_tokens = [t for t in re.split(r"\s+", q) if len(t) >= 3]
     if sig_tokens:
         pattern = "|".join(re.escape(t) for t in sig_tokens)
-        candidates = [
+        filtered = [
             c for c in candidates
             if re.search(rf"\b(?:{pattern})\b", c["search_string"], re.IGNORECASE)
         ]
+        # A typo in every significant word ("ha ceremide") zeroes the pool;
+        # fall back to unfiltered fuzzy rather than returning no matches at all.
+        # Callers deciding whether a message is about a product AT ALL (the
+        # bare-message product_lookup claim in route()) must pass
+        # prefilter_fallback=False: with the fallback, non-product words like
+        # "yes" or half-typed customer names fuzz above 70 and would hijack
+        # routing. Handlers already inside a product context keep the default.
+        if filtered:
+            candidates = filtered
+        elif not prefilter_fallback:
+            return []
 
     # Normalize conjunctions/symbols to a space so "berry and vanilla" scores the
     # same as "berry & vanilla", and "serum c plus e" matches "Serum C+E".
@@ -290,15 +318,35 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         s = re.sub(r"[+&]", " ", s)
         return re.sub(r"\s+", " ", s).strip()
 
-    names = [c["search_string"] for c in candidates]
-    names_for_score = [_norm_plus(n) for n in names]
+    # Score the product name and each search_terms alias separately and keep
+    # the best. Concatenating aliases into one string inflated scores for
+    # unrelated queries (a "travel set" alias made every Go Set outrank the
+    # one the consultant actually named). Rows without aliases score exactly
+    # as before.
+    texts: List[str] = []
+    owners: List[int] = []
+    for i, c in enumerate(candidates):
+        variants = [c["product_name"]]
+        raw_terms = (c.get("search_terms") or "").strip()
+        if raw_terms:
+            variants.extend(t.strip() for t in raw_terms.split("|") if t.strip())
+        for v in variants:
+            texts.append(_norm_plus(v))
+            owners.append(i)
+
     q_for_score = _norm_plus(q)
-    results = process.extract(q_for_score, names_for_score, scorer=fuzz.WRatio, limit=limit)
+    results = process.extract(q_for_score, texts, scorer=fuzz.WRatio, limit=None)
+
+    best_by_owner: dict = {}
+    for _text, score, ti in results:
+        oi = owners[ti]
+        if score > best_by_owner.get(oi, -1):
+            best_by_owner[oi] = score
 
     q_words = {w for w in re.split(r"\s+", q) if len(w) >= 3}
 
     matches: List[dict] = []
-    for name, score, idx in results:
+    for idx, score in best_by_owner.items():
         if score < min_score:
             continue
         c = candidates[idx]
@@ -314,6 +362,7 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         )
 
     matches.sort(key=lambda m: (m["score"], m["_hits"], -m["_otg"]), reverse=True)
+    matches = matches[:limit]
     for m in matches:
         del m["_hits"]
         del m["_otg"]
@@ -453,6 +502,8 @@ def _parse_product_price_query_text(msg: str) -> str:
         r"(?i)^what does\s+(?:the\s+)?(.+?)\s+cost\s*\??$",
         r"(?i)^what(?:'s| are)? (?:the\s+)?ingredients? (?:in|of|for)\s+(?:the\s+)?(.+?)\s*\??$",
         r"(?i)^ingredients? (?:in|of|for)\s+(?:the\s+)?(.+?)\s*\??$",
+        r"(?i)^(?:can you\s+)?tell me about\s+(?:the\s+)?(.+?)\s*\??$",
+        r"(?i)^(.+?)\s+ingredients?\s*\??$",
     ):
         m = re.match(pattern, s)
         if m:
@@ -1250,7 +1301,7 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 word_matches = [c for c in catalog if _all_words_in_product(product_text, c["product_name"])]
                 if word_matches:
                     return _claim("product_lookup", {"source": "bare", "product_text": product_text})
-                if best_matches(catalog, product_text, limit=3, min_score=70):
+                if best_matches(catalog, product_text, limit=3, min_score=70, prefilter_fallback=False):
                     return _claim("product_lookup", {"source": "bare", "product_text": product_text})
             else:
                 # Explicit price query always claims (handler replies "not found" on a miss)

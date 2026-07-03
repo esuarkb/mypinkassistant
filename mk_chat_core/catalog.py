@@ -125,6 +125,58 @@ def _fmt_product_lookup_single(m: dict) -> str:
     return "<br>".join(parts)
 
 
+def multi_product_lookup(catalog: List[dict], product_text: str) -> Optional[str]:
+    """
+    Fallback for lookups that name several products at once
+    ("how much is the cc cream, lifting serum and night treatment").
+
+    Callers must try the whole string first and only come here when that
+    search was weak. Guard against splitting a single product whose NAME
+    contains "and"/"&" ("berry and vanilla body lotion"): if any one catalog
+    product contains every significant word of the query, this is that
+    product, not a list — never split it.
+    Returns formatted HTML when 2+ parts independently resolve, else None.
+    """
+    text = (product_text or "").strip()
+    if not re.search(r",|\s+and\s+", text, flags=re.IGNORECASE):
+        return None
+
+    sig = [
+        w for w in re.split(r"[^a-z0-9]+", text.lower())
+        if len(w) >= 3 and w not in ("and", "the", "mary", "kay")
+    ]
+    if sig:
+        for c in catalog:
+            s = c["search_string"].lower()
+            if all(re.search(rf"\b{re.escape(w)}\b", s) for w in sig):
+                return None
+
+    parts = [
+        re.sub(r"^(?:the|a|an)\s+", "", p.strip(), flags=re.IGNORECASE)
+        for p in re.split(r",\s*|\s+and\s+", text, flags=re.IGNORECASE)
+    ]
+    parts = [p for p in parts if len(p) >= 3]
+    if len(parts) < 2:
+        return None
+
+    found: List[Tuple[str, Optional[dict]]] = []
+    for p in parts[:6]:
+        # Same threshold the single-product lookup paths use
+        m = best_matches(catalog, p, limit=1, min_score=50)
+        found.append((p, m[0] if m else None))
+
+    if sum(1 for _, f in found if f) < 2:
+        return None
+
+    lines = ["<strong>Product Look Up</strong>"]
+    for p, f in found:
+        if f:
+            lines.append(_fmt_product_list_item(f))
+        else:
+            lines.append(f"• I couldn't find \"{_html.escape(p)}\"")
+    return "<br>".join(lines)
+
+
 # best_matches moved to intent_router.py (routing consolidation 2026-07-02);
 # imported back at the top of this file.
 

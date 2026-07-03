@@ -66,6 +66,7 @@ from .catalog import (
     fmt_price,
     get_catalog_path_for_language,
     load_catalog,
+    multi_product_lookup,
     _find_exact_catalog_match,
     _fmt_product_list_item,
     _fmt_product_lookup_single,
@@ -385,6 +386,11 @@ class MKChatEngine:
                 else:
                     # Explicit price query — fuzzy only
                     matches = best_matches(catalog, product_text, limit=3, min_score=50)
+                    if not matches or float(matches[0].get("score") or 0) < 70:
+                        # Weak whole-string match — the ask may name several products
+                        multi = multi_product_lookup(catalog, product_text)
+                        if multi:
+                            return ChatReply(multi)
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
@@ -400,10 +406,15 @@ class MKChatEngine:
         # -------------------------
         if not pending and intent_result.intent == "product_lookup" and intent_result.slots.get("source") == "intent":
             product_text = intent_result.slots.get("product_query") or _parse_product_price_query_text(msg)
-            if re.search(r',', product_text):
-                return ChatReply("I can look up one product at a time — try searching for each one separately.")
             matches = best_matches(catalog, product_text, limit=3, min_score=50)
+            if not matches or int(matches[0].get("score") or 0) < 70:
+                # Weak whole-string match — the ask may name several products
+                multi = multi_product_lookup(catalog, product_text)
+                if multi:
+                    return ChatReply(multi)
             if not matches:
+                if re.search(r',', product_text):
+                    return ChatReply("I can look up one product at a time — try searching for each one separately.")
                 return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
             top = matches[0]
             top_score = int(top.get("score") or 0)
