@@ -70,8 +70,8 @@ UI_EN = {
     "propose_top": "I think you mean: {line}. Is that right? (yes/no)",
     "render_top5_intro": "Got it \u2014 select the best match (reply {range}), or type different search words and I'll search again:",
 
-    "submitted_order_edit": "Once an order has been sent to MyCustomers I can't currently edit or remove it from chat. You can delete or change the order in MyCustomers, and MyPinkAssistant will get the corrected info on the next sync.",
-    "submitted_order_add": "Heads up: we can't currently add to orders already submitted to MyCustomers. If you add the item to the order in MyCustomers, it will be added to MyPinkAssistant on the next sync.",
+    "submitted_order_edit": "Once an order has been sent to MyCustomers I can't currently edit or remove it from chat. You can delete or change the order in <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, and MyPinkAssistant will get the corrected info on the next sync.",
+    "submitted_order_add": "Heads up: we can't currently add to orders already submitted to MyCustomers. If you add the item to the order in <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, it will be added to MyPinkAssistant on the next sync.",
 
     "notes_educate": "We are working on the ability to add notes to customers. Currently you can log into <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a> to add or edit notes.",
     "mycustomers_link": "Here's the link to <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>&nbsp; <button class=\"fdp-copy copy-link-btn\" data-copy=\"https://apps.marykayintouch.com/customer-list\">Copy Link</button>",
@@ -158,8 +158,8 @@ UI_ES = {
     "customer_not_in_mc": "No encuentro a {name} en MyCustomers. Necesitaremos agregar a {name} como nueva cliente primero.",
     "propose_top": "Creo que te refieres a: {line}. ¿Es correcto? (sí/no)",
 
-    "submitted_order_edit": "Una vez que un pedido se envió a MyCustomers, por el momento no puedo editarlo ni eliminarlo desde el chat. Puedes eliminar o cambiar el pedido en MyCustomers, y MyPinkAssistant recibirá la información corregida en la próxima sincronización.",
-    "submitted_order_add": "Aviso: por el momento no podemos agregar artículos a pedidos ya enviados a MyCustomers. Si agregas el artículo al pedido en MyCustomers, se agregará a MyPinkAssistant en la próxima sincronización.",
+    "submitted_order_edit": "Una vez que un pedido se envió a MyCustomers, por el momento no puedo editarlo ni eliminarlo desde el chat. Puedes eliminar o cambiar el pedido en <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, y MyPinkAssistant recibirá la información corregida en la próxima sincronización.",
+    "submitted_order_add": "Aviso: por el momento no podemos agregar artículos a pedidos ya enviados a MyCustomers. Si agregas el artículo al pedido en <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, se agregará a MyPinkAssistant en la próxima sincronización.",
 
     "notes_educate": "Estamos trabajando en la posibilidad de agregar notas a los clientes. Por ahora puedes iniciar sesión en <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a> para agregar o editar notas.",
     "mycustomers_link": "Aquí está el enlace a <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>&nbsp; <button class=\"fdp-copy copy-link-btn\" data-copy=\"https://apps.marykayintouch.com/customer-list\">Copy Link</button>",

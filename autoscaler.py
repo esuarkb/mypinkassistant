@@ -36,6 +36,15 @@ _SERVICE_ID = os.getenv("RENDER_WORKER_SERVICE_ID", "")
 WORKER_MIN = 1  # baseline — always running
 WORKER_MAX = 3  # cap for now; raise as subscriber count grows
 
+# Nightly FULL_SYNC sweep scaling (2026-07-04): one worker syncs ~50
+# consultants/hour (measured ~55s each), so the sweep stays under ~1 hour at
+# any subscriber count with ceil(queued/50) workers. Cap is separate from the
+# realtime cap; override via system_settings "worker_max_nightly". Extra
+# instances exist only for the sweep — the normal empty-queue scale-down
+# returns to worker_min afterwards.
+WORKER_MAX_NIGHTLY = 4
+FULLSYNC_CONSULTANTS_PER_WORKER = 50
+
 # Real-time job types (exclude FULL_SYNC — it's low priority and runs nightly).
 # THE canonical list — mk_chat_core/jobs.py imports it for the insert_job hook,
 # so a new realtime job type only ever needs to be added here.
@@ -154,6 +163,40 @@ def _get_worker_max() -> int:
         return WORKER_MAX
 
 
+def _get_worker_max_nightly() -> int:
+    """Read the nightly sweep cap from system_settings ("worker_max_nightly"),
+    fallback to the module constant."""
+    try:
+        from db import get_system_setting
+        val = get_system_setting("worker_max_nightly", str(WORKER_MAX_NIGHTLY))
+        return max(1, int(val or WORKER_MAX_NIGHTLY))
+    except Exception:
+        return WORKER_MAX_NIGHTLY
+
+
+def _queued_fullsync_count() -> int:
+    """Count distinct consultants with a queued FULL_SYNC job."""
+    from db import tx
+    with tx() as (conn, cur):
+        is_sqlite = "sqlite" in type(cur).__module__.lower()
+        PH = "?" if is_sqlite else "%s"
+        cur.execute(
+            f"SELECT COUNT(DISTINCT consultant_id) FROM jobs "
+            f"WHERE status = {PH} AND type = {PH} AND consultant_id IS NOT NULL",
+            ("queued", "FULL_SYNC"),
+        )
+        row = cur.fetchone()
+        return int(row[0] if not isinstance(row, dict) else list(row.values())[0]) if row else 0
+
+
+def _nightly_target(queued_fullsync: int, cap: int) -> int:
+    """Workers needed for the sweep: ceil(queued/50), capped. Pure — unit-testable."""
+    if queued_fullsync <= 0:
+        return 0
+    needed = -(-queued_fullsync // FULLSYNC_CONSULTANTS_PER_WORKER)  # ceil
+    return min(needed, max(1, cap))
+
+
 def _get_worker_min() -> int:
     """Read WORKER_MIN from system_settings ("worker_min"), fallback to the
     module constant. Scale-down never goes below this, so raising it (e.g.
@@ -227,6 +270,34 @@ def check_and_scale_up() -> bool:
     return False
 
 
+def check_and_scale_nightly() -> bool:
+    """
+    Scale up for the nightly FULL_SYNC sweep: ceil(queued FULL_SYNCs / 50)
+    workers, capped by worker_max_nightly. Called by the scheduler right after
+    it queues the sweep, and re-checked at worker claim-time (same self-heal
+    pattern as check_and_scale_up). Only ever scales UP — the existing
+    empty-queue scale-down returns to worker_min when the sweep finishes.
+    """
+    if _is_local_env():
+        print("[Autoscaler] skipped — local SQLite environment, not touching prod scaling")
+        return False
+
+    elapsed = time.time() - _get_last_scale_down()
+    if elapsed < _SCALE_DOWN_COOLDOWN:
+        print(f"[Autoscaler] nightly scale-up suppressed — {int(_SCALE_DOWN_COOLDOWN - elapsed)}s cooldown remaining")
+        return False
+
+    queued = _queued_fullsync_count()
+    target = _nightly_target(queued, _get_worker_max_nightly())
+    if target <= 0:
+        return False
+    print(f"[Autoscaler] check_and_scale_nightly: {queued} FULL_SYNC(s) queued → target {target} worker(s)")
+    current = current_instance_count()
+    if current is not None and current < target:
+        return _scale(target)
+    return False
+
+
 def check_and_scale_down() -> bool:
     """
     Called after a worker finishes a job (from worker.py).
@@ -266,5 +337,7 @@ if __name__ == "__main__":
         check_and_scale_up()
     elif cmd == "check-down":
         check_and_scale_down()
+    elif cmd == "check-nightly":
+        check_and_scale_nightly()
     else:
-        print("Usage: python autoscaler.py [up|down|status|check-up|check-down]")
+        print("Usage: python autoscaler.py [up|down|status|check-up|check-down|check-nightly]")

@@ -126,6 +126,16 @@ def run() -> None:
             f"skipped {skipped_pending} (already pending)"
         )
 
+        # Bring up enough workers for the sweep (ceil(queued/50), capped by
+        # worker_max_nightly) — claim-time recheck in worker.py self-heals if
+        # this call misses (cooldown, API blip)
+        if queued > 0:
+            try:
+                from autoscaler import check_and_scale_nightly
+                check_and_scale_nightly()
+            except Exception as _ae:
+                print(f"[Autoscaler] nightly scale-up hook error: {_ae}")
+
     finally:
         conn.close()
 

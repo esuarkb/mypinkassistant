@@ -50,6 +50,10 @@ Log in at **mypinkassistant.com/admin** (any admin-listed email works).
 - The failed job's error now names the exact broken step, e.g.
   `[died at orders/add_to_bag (step 11/17)]` — visible on /admin under "Recent failed"
   and in the alert SMS.
+- **Quick "what changed?" scan:** `python run_ui_recon.py` (or ask a Claude session to
+  run it). Read-only — logs in, inspects the login page, new-customer form, customer
+  detail + address dialog, and order form, and reports exactly which buttons/fields
+  changed vs. the last known-good baseline. Takes ~2 minutes, saves/submits nothing.
 - **If Brian is available:** he takes it from here (diagnostic runners:
   `run_login_test.py`, `run_order_test.py`, `run_new_customer_test.py`).
 - **If Brian is NOT available (Andrea + Claude can do this):** open Claude Code on the

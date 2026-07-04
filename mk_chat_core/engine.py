@@ -3110,7 +3110,8 @@ class MKChatEngine:
             if fulfillment_method == "cds" and not self._customer_has_address(consultant_id, order_draft.get("customer_id")):
                 cust_name = f"{cust_first} {cust_last}".strip()
                 return ChatReply(
-                    f"CDS orders ship directly to the customer, so {cust_name} needs an address on file in MyCustomers before this order can be placed. "
+                    f"CDS orders ship directly to the customer, so {cust_name} needs an address on file in "
+                    f"<a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a> before this order can be placed. "
                     "Please add her address there and try again."
                 )
 
@@ -3380,7 +3381,9 @@ class MKChatEngine:
 
         return (
             "⚠️ This customer may be missing address or name information in MyCustomers. "
-            "If the order fails, please open the customer in MyCustomers, confirm the name and address details, and try again."
+            "If the order fails, please open the customer in "
+            "<a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, "
+            "confirm the name and address details, and try again."
         )
 
     def _get_order_warning_by_customer_id(self, consultant_id: int, customer_id: int | None) -> str:

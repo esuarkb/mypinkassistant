@@ -91,9 +91,11 @@ The longer a consultant uses the app, the smarter it gets for them specifically.
 - **Auth:** Session-based (Starlette SessionMiddleware), PBKDF2 password hashing
 - **InTouch credentials:** Encrypted at rest with Fernet (MK_ENC_KEY)
 - **Worker scaling:** job queue handles concurrent workers correctly with
-  consultant-level locking. Autoscaler cap is WORKER_MAX=3 today (autoscaler.py,
-  overridable via system_settings "worker_max"); FULL_SYNC is deliberately
-  excluded from scale-up and runs on the baseline worker
+  consultant-level locking. Realtime jobs: autoscaler scales to system_settings
+  "worker_max" (module fallback WORKER_MAX=3). Nightly FULL_SYNC sweep: scales
+  to ceil(queued/50) workers capped by "worker_max_nightly" (fallback 4) —
+  one worker syncs ~50 consultants/hour, so the sweep stays under ~1 hour at
+  any subscriber count; scale-down returns to "worker_min" when the queue drains
 
 ## Database Architecture — IMPORTANT
 **Local dev:** SQLite (data/mk.db) — fast, zero setup, no install needed

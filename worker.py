@@ -342,8 +342,9 @@ def main():
             # API blip, cooldown), so a backlog self-heals on every claim
             # instead of waiting for the next job insert.
             try:
-                from autoscaler import check_and_scale_up
+                from autoscaler import check_and_scale_up, check_and_scale_nightly
                 check_and_scale_up()
+                check_and_scale_nightly()
             except Exception as _ae:
                 print(f"[Autoscaler] claim-time recheck error: {_ae}")
 
