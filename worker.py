@@ -65,6 +65,36 @@ def send_failure_text(message: str) -> None:
     except Exception as e:
         print("[Worker] Failed to send PB alert:", e)
 
+
+_last_report_alert_time = 0.0
+_REPORT_ALERT_COOLDOWN_SECONDS = 6 * 3600
+
+
+def _alert_report_fetch_errors(cid: int, summary: dict) -> None:
+    """
+    Report-sync fetches degraded (error ≠ empty — see report_sync._foreposts_get).
+    The job still completes; this sends ONE SMS naming the failing report(s).
+    6h cooldown per worker process so a global FOReports outage during the
+    nightly FULL_SYNC sweep doesn't fire one text per consultant.
+    """
+    global _last_report_alert_time
+    errs = (summary or {}).get("fetch_errors") or []
+    if not errs:
+        return
+    print(f"[ReportSync] fetch errors for consultant_id={cid}: {errs}")
+    now = time.time()
+    if now - _last_report_alert_time < _REPORT_ALERT_COOLDOWN_SECONDS:
+        print("[ReportSync] fetch-error SMS suppressed (6h cooldown)")
+        return
+    _last_report_alert_time = now
+    send_failure_text(
+        "⚠️ MyPinkAssistant Report Sync Degraded\n\n"
+        f"Consultant ID: {cid}\n"
+        "Job completed, but these report fetches FAILED (team data may be stale):\n"
+        + "\n".join(f"• {e}" for e in errs[:6])
+    )
+
+
 from playwright.sync_api import sync_playwright
 
 from auth_core import get_consultant_intouch_creds
@@ -80,6 +110,7 @@ from worker_queue import (
     release_consultant,
 )
 
+from playwright_automation import step_log
 from playwright_automation.login import login_intouch
 from playwright_automation.new_customer import create_customer_basic
 from playwright_automation.orders import process_order_batch, SkuNotCdsEligible
@@ -376,6 +407,10 @@ def main():
                     _reset_login_failures(cid)
                 except Exception as e:
                     err = str(e)
+                    # login_intouch has step markers too — say which login step died
+                    _login_step = step_log.last_step()
+                    if _login_step:
+                        err = f"{err} [died at {_login_step}]"
 
                     if "invalid username or password" in err.lower() or "missing intouch credentials" in err.lower():
                         friendly = (
@@ -500,6 +535,7 @@ def main():
 
                     job_id, job_type, payload_json = claimed
                     last_job_time = time.time()
+                    step_log.set_job(job_id)  # tag step lines + reset last-step for this job
 
                     try:
                         payload = json.loads(payload_json)
@@ -737,6 +773,7 @@ def main():
                                 finally:
                                     conn.close()
                                 print(f"[FullSync] Report sync: {_rs}")
+                                _alert_report_fetch_errors(cid, _rs)
                             except Exception as _re:
                                 print(f"[FullSync] Report sync failed (non-fatal): {_re}")
                             # Inventory last (skipped for accounts sharing InTouch creds)
@@ -817,6 +854,7 @@ def main():
                                 conn.commit()
                             finally:
                                 conn.close()
+                            _alert_report_fetch_errors(cid, summary)
                             _member_count = summary["members"]
                             mark_job_done(job_id, f"{_member_count} unit members." if _member_count else "0 unit members.")
 
@@ -831,6 +869,13 @@ def main():
 
                     except Exception as e:
                         raw_err = str(e)
+                        # Step-level context (playwright_automation/step_log.py):
+                        # name the exact script step that was running so the jobs
+                        # table + SMS alert say WHERE the script died, not just
+                        # a bare locator traceback
+                        _last_step = step_log.last_step()
+                        if _last_step:
+                            raw_err = f"{raw_err} [died at {_last_step}]"
 
                         # Auto-retry transient InTouch timeouts (up to 3 attempts total)
                         # Exclude post-save/post-confirm timeouts — job already completed in InTouch
@@ -1164,6 +1209,7 @@ def main():
 
             finally:
                 # Always clean up and release the consultant lock
+                step_log.clear()
                 try:
                     if context is not None:
                         context.close()

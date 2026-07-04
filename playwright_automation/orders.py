@@ -2,6 +2,8 @@
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
+from playwright_automation.step_log import step
+
 
 CUSTOMER_LIST_URL = "https://apps.marykayintouch.com/customer-list"
 
@@ -40,14 +42,17 @@ def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment
     full_name = f"{first} {last}"
 
     #go to customer list and wait for load
+    step("orders", 1, 17, "open_customer_list", "navigating to customer list, waiting for 'New Order' button")
     open_customer_list(page)
     page.wait_for_timeout(3000)
 
     # Search customer, small wait for search results to populate
+    step("orders", 2, 17, "search_customer", f"searching for '{full_name}'")
     page.get_by_role("searchbox", name="Note Title").fill(full_name)
     page.wait_for_timeout(500)
 
     # Existence check (duplicate-safe)
+    step("orders", 3, 17, "verify_customer_exists", f"waiting for '{full_name}' in results")
     try:
         page.get_by_text(full_name).first.wait_for(timeout=3000)
     except PlaywrightTimeoutError:
@@ -57,15 +62,18 @@ def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment
         )
 
     # Select customer from search results (first match if duplicates), loads customer page
+    step("orders", 4, 17, "select_customer", f"clicking '{full_name}'")
     page.get_by_text(full_name).first.click()
     page.wait_for_timeout(1000)
 
     # Click New Order Button and load order page
+    step("orders", 5, 17, "click_add_order", "clicking 'Add Order'")
     page.get_by_role("button", name="Add Order").click()
     page.wait_for_timeout(3000)
 
     # Set order date if provided (field is pre-filled with today — only override if specified)
     if order_date:
+        step("orders", 6, 17, "set_order_date", f"setting order date {order_date}")
         try:
             date_input = page.locator("input[id^='order-date']").first
             date_input.wait_for(state="visible", timeout=5000)
@@ -76,8 +84,10 @@ def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment
 
     # Select fulfillment method
     if fulfillment_method == "cds":
+        step("orders", 7, 17, "select_fulfillment_method", "clicking 'Customer Delivery Service'")
         page.get_by_text("Customer Delivery Service").click()
     else:
+        step("orders", 7, 17, "select_fulfillment_method", "clicking 'My Inventory'")
         page.get_by_text("My Inventory").click()
     page.wait_for_timeout(1200)
 
@@ -97,19 +107,23 @@ class SkuNotCdsEligible(Exception):
 
 def add_sku_to_bag(page: Page, sku: str, fulfillment_method: str = "inventory") -> None:
     # search for SKU and wait for results to populate
+    step("orders", 8, 17, "search_sku", f"searching for SKU {sku}")
     page.get_by_role("searchbox", name="Note Title").fill(sku)
     # waits for the SKU to appear in search results
+    step("orders", 9, 17, "wait_sku_result", f"waiting for SKU {sku} in results")
     page.locator(f"text={sku}").first.wait_for(timeout=12000)
     page.wait_for_timeout(500)
 
     # check for no-CDS chip before attempting to add (CDS orders only)
     if fulfillment_method == "cds":
+        step("orders", 10, 17, "check_cds_eligibility", f"checking no-CDS chip for SKU {sku}")
         no_cds = page.locator('img[src*="noCdsChip"]')
         if no_cds.count() > 0:
             raise SkuNotCdsEligible(f"SKU {sku} is not available for CDS orders (expired or out of stock).")
 
     # click Add to Bag and give the UI a brief moment to update
     # waits for the Add to Bag button to be enabled for the SKU
+    step("orders", 11, 17, "add_to_bag", f"clicking 'Add to Bag' for SKU {sku}")
     page.get_by_role("button", name="Add to Bag").wait_for(timeout=12000)
     # click the Add to Bag button for the SKU
     page.get_by_role("button", name="Add to Bag").click()
@@ -145,6 +159,7 @@ def fill_discount_fields(page: Page, discount_amount: float = 0.0, tax_amount: f
     has been added to the bag.
     """
     if discount_amount > 0:
+        step("orders", 12, 17, "fill_discount_tax", f"filling discount ${discount_amount:.2f}" + (f" / tax ${tax_amount:.2f}" if tax_amount > 0 else ""))
         try:
             _lwc_fill(page, page.locator("input[name='discount']").first, f"{discount_amount:.2f}")
         except Exception as e:
@@ -171,6 +186,7 @@ def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code
     from mk_chat_core import normalize_state
     state = normalize_state(state)
     page.wait_for_timeout(1500)
+    step("orders.cds_address", 1, 5, "open_address_dialog", "clicking 'Add New Address' (up to 4 attempts)")
     add_address_btn = page.get_by_role("button", name="Add New Address").first
     first_name_field = page.locator('[id^="AddressFirstName-"]')
     for _ in range(4):
@@ -185,6 +201,7 @@ def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code
     else:
         raise RuntimeError("CDS address dialog failed to open after 4 attempts.")
 
+    step("orders.cds_address", 2, 5, "fill_address_fields", "filling name/street/city/postal fields")
     first_name_field.fill(first_name)
     page.wait_for_timeout(100)
     page.locator('[id^="AddressLastName-"]').fill(last_name)
@@ -196,13 +213,16 @@ def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code
     page.locator('[id^="PostalCode-"]').fill(postal_code)
     page.wait_for_timeout(100)
 
+    step("orders.cds_address", 3, 5, "select_state", f"selecting state '{state}' from dropdown")
     dialog = page.get_by_role("dialog")
     dialog.get_by_role("button", name="Select an option").click()
     page.wait_for_timeout(700)
     dialog.get_by_role("option", name=state, exact=True).click()
     page.wait_for_timeout(700)
 
+    step("orders.cds_address", 4, 5, "submit_address_dialog", "clicking dialog 'Add New Address'")
     page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
+    step("orders.cds_address", 5, 5, "wait_dialog_closed", "waiting for address dialog to close")
     try:
         first_name_field.wait_for(state="hidden", timeout=10000)
     except PlaywrightTimeoutError:
@@ -217,12 +237,14 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         fill_discount_fields(page, discount_amount=discount_amount, tax_amount=tax_amount)
 
     # save and review order
+    step("orders", 13, 17, "click_save_and_review", "clicking 'Save and Review'")
     page.get_by_role("button", name="Save and Review").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Save and Review").click()
     print(f"[Orders] Save and Review clicked")
 
     if leave_pending:
         # Wait for success (order-details URL) or any InTouch error toast
+        step("orders", 14, 17, "wait_order_outcome", "waiting for order-details URL or InTouch error toast")
         page.wait_for_function(
             "() => window.location.href.includes('order-details') || "
             "document.body.innerText.toLowerCase().includes('error')",
@@ -254,9 +276,11 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
             except PlaywrightTimeoutError:
                 pass
             page.wait_for_timeout(500)
+            step("orders", 13, 17, "click_save_and_review", "clicking 'Save and Review' (retry after CDS address fill)")
             page.get_by_role("button", name="Save and Review").wait_for(state="visible", timeout=15000)
             page.get_by_role("button", name="Save and Review").click()
             print(f"[Orders] Save and Review clicked (retry after address fill)")
+            step("orders", 14, 17, "wait_order_outcome", "waiting for order-details URL (retry after CDS address fill)")
             page.wait_for_function("() => window.location.href.includes('order-details')", timeout=20000)
             return
 
@@ -264,6 +288,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
 
     # Process order: confirm delivery status change
     # Retry once — InTouch can be slow to render this button after Save and Review
+    step("orders", 15, 17, "change_to_processed", "waiting for + clicking 'Change To Processed'")
     try:
         page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
     except PlaywrightTimeoutError:
@@ -273,8 +298,10 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
         page.get_by_role("button", name="Change To Processed").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Change To Processed").click()
     print(f"[Orders] Change To Processed clicked")
+    step("orders", 16, 17, "yes_confirm", "waiting for + clicking 'Yes, Confirm'")
     page.get_by_role("button", name="Yes, Confirm").wait_for(state="visible", timeout=15000)
     page.get_by_role("button", name="Yes, Confirm").click()
+    step("orders", 17, 17, "post_confirm_ready", "waiting for orders page ready after confirm")
     try:
         ensure_orders_ready(page)
     except RuntimeError as e:

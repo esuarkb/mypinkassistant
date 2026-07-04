@@ -3,10 +3,15 @@ Runs the inventory import for a single consultant locally.
 Pulls latest cosmetic orders from InTouch and updates local inventory.
 
 Usage:
+    python run_inventory_import.py [consultant_id]
+        — credentials from INTOUCH_USER / INTOUCH_PASS in .env (like the other runners)
+
     python run_inventory_import.py <intouch_username> <intouch_password> [consultant_id]
+        — explicit credentials override
 
     consultant_id defaults to 2 (Andrea)
 """
+import os
 import sys
 from dotenv import load_dotenv
 load_dotenv()
@@ -18,12 +23,20 @@ from inventory_import_store import ensure_import_table
 
 ensure_import_table()
 
-username = sys.argv[1] if len(sys.argv) > 1 else None
-password = sys.argv[2] if len(sys.argv) > 2 else None
-consultant_id = int(sys.argv[3]) if len(sys.argv) > 3 else 2
+# 2+ args = explicit creds form; 0-1 args = env form ([consultant_id] only).
+# Unambiguous even when a consultant number is all digits.
+args = sys.argv[1:]
+if len(args) >= 2:
+    username, password = args[0], args[1]
+    consultant_id = int(args[2]) if len(args) > 2 else 2
+else:
+    username = os.environ.get("INTOUCH_USER")
+    password = os.environ.get("INTOUCH_PASS")
+    consultant_id = int(args[0]) if args else 2
 
 if not username or not password:
-    print("Usage: python run_inventory_import.py <username> <password> [consultant_id]")
+    print("Usage: python run_inventory_import.py [consultant_id]  (creds from .env)")
+    print("   or: python run_inventory_import.py <username> <password> [consultant_id]")
     sys.exit(1)
 
 print(f"\nRunning inventory import for consultant_id={consultant_id}...")

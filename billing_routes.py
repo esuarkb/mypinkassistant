@@ -408,8 +408,13 @@ def billing_start(request: Request):
         except Exception:
             ref_id_int = 0
 
-        # If no referral on the account yet, check session (covers back-out + referral link scenario)
-        if ref_id_int == 0:
+        # If no referral on the account yet, check session (covers back-out + referral link scenario).
+        # Guard (2026-07-03, Kimberly/Debbie incident): only for accounts that aren't already
+        # subscribed — an existing active/trialing consultant who clicks someone's /r/ link
+        # must NOT become their retroactive "referral" (and trigger a reward) just by
+        # visiting the billing page. Lapsed/canceled accounts still qualify: a win-back
+        # via a friend's link is a real referral.
+        if ref_id_int == 0 and billing_status not in ("active", "trialing"):
             session_ref_code = (request.session.get("referral_code") or "").strip()
             if session_ref_code:
                 from app import apply_referral

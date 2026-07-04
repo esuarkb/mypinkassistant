@@ -11,14 +11,14 @@ load_dotenv()
 from playwright.sync_api import sync_playwright
 from playwright_automation.login import login_intouch
 
-USERNAME = "6933JE"
-PASSWORD = "Medication1!"
+USERNAME = os.environ["INTOUCH_USER"]
+PASSWORD = os.environ["INTOUCH_PASS"]
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=False, slow_mo=100)
     page = browser.new_page()
 
-    print("Logging in as Angie Carter...")
+    print("Logging in as INTOUCH_USER from .env...")
     try:
         login_intouch(page, USERNAME, PASSWORD)
         print("Login succeeded — no popup blocked it.")

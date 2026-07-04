@@ -13,6 +13,8 @@ from playwright.sync_api import Page
 
 import requests
 
+from playwright_automation.step_log import step
+
 _CONSULTANT_LIST_URL = "https://mk.marykayintouch.com/s/consultant-list"
 _AURA_FRAGMENT = "sfsites/aura"
 _FOREPORTS_BASE = "https://applications.marykayintouch.com/FOReports/api"
@@ -123,7 +125,15 @@ def _get_cookies_dict(page: Page, target_host: str = "applications.marykayintouc
 # FOReports API helper
 # ---------------------------------------------------------------------------
 
-def _foreposts_get(cookies: dict, report_id: str, parameters: dict) -> list[dict]:
+def _foreposts_get(cookies: dict, report_id: str, parameters: dict, errors: list | None = None) -> list[dict]:
+    """
+    Fetch one FOReports report. ERROR IS NOT THE SAME AS EMPTY (2026-07-03):
+    a successful response with no rows (consultant has no team / slow month)
+    returns [] silently — normal. A FAILED fetch (timeout, HTTP error, or a
+    non-list response meaning MK changed/renamed the report) also returns []
+    so the rest of the sync continues, but records what broke in `errors` so
+    the caller can alert instead of silently serving stale data.
+    """
     params_encoded = urllib.parse.quote(json.dumps(parameters))
     url = f"{_FOREPORTS_BASE}/report?id={report_id}&parameters={params_encoded}"
     try:
@@ -133,9 +143,13 @@ def _foreposts_get(cookies: dict, report_id: str, parameters: dict) -> list[dict
         if isinstance(data, list):
             return data
         print(f"[ReportSync] {report_id} unexpected response type: {type(data)}")
+        if errors is not None:
+            errors.append(f"{report_id}: unexpected response type {type(data).__name__} (report renamed/changed by MK?)")
         return []
     except Exception as e:
         print(f"[ReportSync] {report_id} fetch error: {e}")
+        if errors is not None:
+            errors.append(f"{report_id}: {e}")
         return []
 
 
@@ -455,11 +469,12 @@ def _upsert_rise_radiate(cur, records: list[dict], ph: str) -> int:
     return len(records)
 
 
-def _fetch_seminar_event_key(cookies: dict) -> tuple[int | None, str | None, str | None]:
+def _fetch_seminar_event_key(cookies: dict, errors: list | None = None) -> tuple[int | None, str | None, str | None]:
     """
     Fetch the upcoming Seminar event key from registration-events.
     Returns (event_key, event_name, begin_date_iso) for the next in-person Seminar,
-    or (None, None, None) if not found.
+    or (None, None, None) if not found. A FAILED fetch (vs. genuinely no
+    upcoming seminar) is recorded in `errors` — see _foreposts_get.
     """
     url = f"{_FOREPORTS_BASE}/report?id=registration-events"
     try:
@@ -467,6 +482,8 @@ def _fetch_seminar_event_key(cookies: dict) -> tuple[int | None, str | None, str
         resp.raise_for_status()
         events = resp.json()
         if not isinstance(events, list):
+            if errors is not None:
+                errors.append(f"registration-events: unexpected response type {type(events).__name__}")
             return None, None, None
         today = date.today().isoformat()
         # Find the next in-person Seminar (eventCode "SM") with a future or current begin date
@@ -481,6 +498,8 @@ def _fetch_seminar_event_key(cookies: dict) -> tuple[int | None, str | None, str
             return s["eventKey"], s["eventName"], str(s["beginDate"])[:10]
     except Exception as e:
         print(f"[ReportSync] registration-events fetch error: {e}")
+        if errors is not None:
+            errors.append(f"registration-events: {e}")
     return None, None, None
 
 
@@ -640,20 +659,36 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
     Run a full report sync for one consultant. Assumes login_intouch() already ran.
     Returns a summary dict with counts.
     """
+    fetch_errors: list[str] = []
+
     # Step 1: unit members (Aura interception)
+    step("report_sync", 1, 11, "fetch_unit_members", "capturing Aura consultant-list response")
     raw_members = fetch_unit_members(page)
     if not raw_members:
-        return {"members": 0, "great_start": 0, "star_tracking": 0}
+        # Distinguish "not a director / no team" (normal, stay silent forever)
+        # from "the intercept broke" — directors don't lose their whole unit
+        # overnight, so members-in-DB-but-none-fetched is alert-worthy.
+        cur.execute(f"SELECT COUNT(*) FROM unit_members WHERE consultant_id = {ph}", (consultant_id,))
+        _row = cur.fetchone()
+        _existing = int(_row[0]) if _row else 0
+        if _existing > 0:
+            fetch_errors.append(
+                f"unit_members: Aura returned no members but {_existing} exist in DB — intercept/login likely broke"
+            )
+        return {"members": 0, "great_start": 0, "star_tracking": 0, "fetch_errors": fetch_errors}
 
+    step("report_sync", 2, 11, "upsert_unit_members", f"upserting {len(raw_members)} members")
     mapped_members = [_map_unit_member(r, consultant_id) for r in raw_members]
     members_count = _upsert_unit_members(cur, mapped_members, ph)
     print(f"[ReportSync] Upserted {members_count} unit_members")
 
     # Snapshot current-month activity for historical tracking
+    step("report_sync", 3, 11, "snapshot_activity", "snapshotting current-month member activity")
     _snapshot_unit_member_activity(cur, mapped_members, ph)
 
     # Mark personal recruits: look up the consultant's own email, then flag anyone
     # whose recruiter_info contains that email address (reliable structured match).
+    step("report_sync", 4, 11, "mark_personal_recruits", "flagging personal recruits by recruiter email")
     from db import connect as _connect
     _email_conn = _connect()
     try:
@@ -682,37 +717,43 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
     # Step 2: extract session cookies for FOReports calls
     # Domain-filtered to only cookies valid for applications.marykayintouch.com,
     # preventing host-specific cookies from other subdomains clobbering the right values
+    step("report_sync", 5, 11, "extract_cookies", "reading session cookies for FOReports calls")
     cookies = _get_cookies_dict(page)
 
     # Step 3: great start (new-consultant-promotion-unit)
+    step("report_sync", 6, 11, "fetch_great_start", "FOReports: new-consultant-promotion-unit")
     month_key = _current_production_month()
-    raw_gs = _foreposts_get(cookies, "new-consultant-promotion-unit", {"productionMonth": month_key})
+    raw_gs = _foreposts_get(cookies, "new-consultant-promotion-unit", {"productionMonth": month_key}, errors=fetch_errors)
     mapped_gs = [_map_great_start(r, consultant_id, month_key) for r in raw_gs]
     mapped_gs = [r for r in mapped_gs if r["consultant_number"]]
     gs_count = _upsert_great_start(cur, mapped_gs, ph)
     print(f"[ReportSync] Upserted {gs_count} unit_great_start records")
 
     # Step 4: star tracking (ladder-of-success-current-quarter-unit)
+    step("report_sync", 7, 11, "fetch_star_tracking", "FOReports: ladder-of-success-current-quarter-unit")
     quarter_date = _current_quarter_date()
-    raw_star = _foreposts_get(cookies, "ladder-of-success-current-quarter-unit", {"productionQuarter": quarter_date})
+    raw_star = _foreposts_get(cookies, "ladder-of-success-current-quarter-unit", {"productionQuarter": quarter_date}, errors=fetch_errors)
     mapped_star = [_map_star_tracking(r, consultant_id) for r in raw_star]
     mapped_star = [r for r in mapped_star if r["consultant_number"]]
     star_count = _upsert_star_tracking(cur, mapped_star, ph)
     print(f"[ReportSync] Upserted {star_count} unit_star_tracking records")
 
     # Step 5: Rise + Radiate IBC selling challenge
-    raw_rr = _foreposts_get(cookies, "rise-and-radiate-challenge-unit", {})
+    step("report_sync", 8, 11, "fetch_rise_radiate", "FOReports: rise-and-radiate-challenge-unit")
+    raw_rr = _foreposts_get(cookies, "rise-and-radiate-challenge-unit", {}, errors=fetch_errors)
     mapped_rr = [_map_rise_radiate(r, consultant_id) for r in raw_rr]
     mapped_rr = [r for r in mapped_rr if r["consultant_number"]]
     rr_count = _upsert_rise_radiate(cur, mapped_rr, ph)
     print(f"[ReportSync] Upserted {rr_count} unit_rise_radiate records")
 
     # Step 6: seminar registration — find current Seminar event, then pull unit registrations
+    step("report_sync", 9, 11, "fetch_seminar_event", "FOReports: registration-events")
     reg_count = 0
-    event_key, event_name, event_begin = _fetch_seminar_event_key(cookies)
+    event_key, event_name, event_begin = _fetch_seminar_event_key(cookies, errors=fetch_errors)
     if event_key:
         print(f"[ReportSync] Fetching registrations for {event_name} (key={event_key})")
-        raw_reg = _foreposts_get(cookies, "registration-unit", {"EventKey": event_key})
+        step("report_sync", 10, 11, "fetch_registrations", f"FOReports: registration-unit ({event_name})")
+        raw_reg = _foreposts_get(cookies, "registration-unit", {"EventKey": event_key}, errors=fetch_errors)
         now = datetime.utcnow().isoformat()
         mapped_reg = []
         for r in raw_reg:
@@ -739,7 +780,8 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
         print("[ReportSync] No upcoming Seminar event found — skipping registration sync")
 
     # Step 7: car award tracking (director-car-program-tracking-personal)
-    raw_car = _foreposts_get(cookies, "director-car-program-tracking-personal", {})
+    step("report_sync", 11, 11, "fetch_car_award", "FOReports: director-car-program-tracking-personal")
+    raw_car = _foreposts_get(cookies, "director-car-program-tracking-personal", {}, errors=fetch_errors)
     car_synced = 0
     if raw_car and isinstance(raw_car, list) and raw_car[0].get("carAward"):
         mapped_car = _map_car_award(raw_car[0], consultant_id)
@@ -757,4 +799,5 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
         "rise_radiate": rr_count,
         "registrations": reg_count,
         "car_award": car_synced,
+        "fetch_errors": fetch_errors,
     }

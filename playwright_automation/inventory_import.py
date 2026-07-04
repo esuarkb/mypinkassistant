@@ -13,6 +13,8 @@ from typing import List, Dict
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
+from playwright_automation.step_log import step
+
 ORDER_SITE_BASE = "https://order.marykayintouch.com"
 
 # orderType param that corresponds to "Cosmetic only" in the UI filter.
@@ -38,23 +40,35 @@ def login_order_site(page: Page, username: str, password: str) -> None:
     Navigate to the InTouch order site and log in if needed.
     The order site uses the same consultant number + password as MyCustomers.
     """
+    step("inventory.login", 1, 4, "goto_order_history", "navigating to InTouch order site")
     page.goto(_order_history_url(), wait_until="domcontentloaded")
     page.wait_for_timeout(2000)
 
-    # If redirected to a login page, fill credentials
+    # If redirected to a login page, fill credentials.
+    # Detection is separated from the login actions (2026-07-03): only "the form
+    # never appeared" means already-authenticated. A failure while actually
+    # logging in (e.g. MK renames the 'Log In' button) must raise, not be
+    # silently swallowed — proceeding unauthenticated can never succeed and
+    # used to surface later as a misleading empty-order-list failure.
+    step("inventory.login", 2, 4, "check_login_form", "checking for login form (absent = already authenticated)")
+    num_field = page.get_by_role("textbox", name="Consultant Number")
+    login_form_present = True
     try:
-        num_field = page.get_by_role("textbox", name="Consultant Number")
         num_field.wait_for(state="visible", timeout=4000)
+    except PlaywrightTimeoutError:
+        # No login form — already authenticated (cookies shared with MyCustomers session)
+        login_form_present = False
+
+    if login_form_present:
+        step("inventory.login", 3, 4, "submit_login", "filling credentials + clicking 'Log In'")
         num_field.fill(username)
         page.get_by_role("textbox", name="Password").fill(password)
         page.wait_for_timeout(200)
         page.get_by_text("Log In").click()
         page.wait_for_timeout(3000)
-    except PlaywrightTimeoutError:
-        # No login form — already authenticated (cookies shared with MyCustomers session)
-        pass
 
     # Handle Salesforce "click to continue" interstitial if present
+    step("inventory.login", 4, 4, "continue_interstitial", "checking for 'Click to continue' interstitial (optional)")
     try:
         continue_btn = page.get_by_role("button", name="Click to continue")
         continue_btn.wait_for(state="visible", timeout=3000)
@@ -224,8 +238,10 @@ def import_inventory_orders(
     )
     ensure_order_items_table()
 
+    step("inventory", 1, 4, "login_order_site", "logging into order site (see inventory.login steps)")
     login_order_site(page, username, password)
 
+    step("inventory", 2, 4, "fetch_order_links", f"loading Cosmetic order list ({date_range})")
     order_links = fetch_cosmetic_order_links(page, date_range)
 
     imported_orders = []
@@ -269,6 +285,7 @@ def import_inventory_orders(
             )
             continue
 
+        step("inventory", 3, 4, "scrape_order_detail", f"scraping detail page for order {order_no}")
         detail = scrape_order_detail(page, link["href"])
 
         # Belt-and-suspenders: verify type and source from the detail page too
@@ -314,6 +331,7 @@ def import_inventory_orders(
 
     # Apply inventory additions for all new orders in one transaction
     if sku_totals:
+        step("inventory", 4, 4, "apply_inventory_deltas", f"adding {len(sku_totals)} SKU(s) to inventory")
         conn = connect()
         try:
             cur = conn.cursor()
