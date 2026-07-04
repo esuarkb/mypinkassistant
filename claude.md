@@ -90,8 +90,10 @@ The longer a consultant uses the app, the smarter it gets for them specifically.
 - **Job Queue:** Custom PostgreSQL/SQLite job queue (worker.py + worker_queue.py)
 - **Auth:** Session-based (Starlette SessionMiddleware), PBKDF2 password hashing
 - **InTouch credentials:** Encrypted at rest with Fernet (MK_ENC_KEY)
-- **Worker scaling:** Render supports up to 100 workers, job queue handles 
-  concurrent workers correctly with consultant-level locking
+- **Worker scaling:** job queue handles concurrent workers correctly with
+  consultant-level locking. Autoscaler cap is WORKER_MAX=3 today (autoscaler.py,
+  overridable via system_settings "worker_max"); FULL_SYNC is deliberately
+  excluded from scale-up and runs on the baseline worker
 
 ## Database Architecture — IMPORTANT
 **Local dev:** SQLite (data/mk.db) — fast, zero setup, no install needed

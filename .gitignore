@@ -38,3 +38,10 @@ chatbot/
 playwright-report/
 test-results/
 
+
+# One-off recon/preview artifacts — keep local, never track (2026-07-04)
+dump_nc_*.html
+explore_output.txt
+followup_texts_review.csv
+icon_preview*.html
+reports_page.png
