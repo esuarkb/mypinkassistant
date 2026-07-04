@@ -143,6 +143,38 @@ def _resolve_pronoun_guess(guess: str, state: dict) -> str:
 
     return guess
 
+
+# Word-salad guard (2026-07-03): the customer-name-guess fallback in
+# _intent_recent_orders / _intent_customer_spend / _intent_customer_info takes
+# the last 1-2 tokens left after stripping each site's own stop_words set. That
+# set was hand-picked per site and didn't cover every common English function
+# word or verb, so a stray sentence like "...can you calculate totals or
+# discounts?" left "or discounts" as the "name", and "...so the total was
+# $52.60" left "the was" — both then produced a nonsense
+# "I couldn't find {name} in your saved customers" reply (live production,
+# 2026-06-27/29). This is a small, shared blocklist layered on TOP of each
+# site's existing stop_words (not a replacement) — smallest fix, no parser
+# restructuring. Apply via _is_plausible_name_guess() before using a guess.
+_NAME_GUESS_BLOCKLIST = {
+    "the", "a", "an", "this", "that", "these", "those",
+    "or", "and", "so", "was", "were", "am", "is", "are", "be", "been", "being",
+    "to", "of", "in", "on", "at", "by", "with", "from", "as", "it", "its",
+    "your", "you", "my", "her", "his", "their", "our", "we", "he", "she", "they",
+    "gave", "give", "so", "totals", "total", "discount", "discounts",
+    "account", "calculate", "calculating",
+}
+
+def _is_plausible_name_guess(guess: str) -> bool:
+    """Reject a customer-name guess made up entirely of common English
+    function words / verbs — those are stray leftovers, not a name."""
+    g = (guess or "").strip()
+    if not g:
+        return False
+    words = g.lower().split()
+    if not words:
+        return False
+    return not all(w in _NAME_GUESS_BLOCKLIST for w in words)
+
 # -------------------------
 # Chat Engine
 # -------------------------
@@ -642,20 +674,11 @@ class MKChatEngine:
                     current_qty = int((row or {}).get("qty_on_hand") or 0)
 
                     if action == "add":
-                        reply = (
-                            f"Added {qty} of {product_name} to your inventory. "
-                            f"You currently have {current_qty} on hand."
-                        )
+                        reply = ui["inventory_added"].format(qty=qty, product=product_name, current=current_qty)
                     elif action == "remove":
-                        reply = (
-                            f"Removed {qty} of {product_name} from your inventory. "
-                            f"You currently have {current_qty} on hand."
-                        )
+                        reply = ui["inventory_removed"].format(qty=qty, product=product_name, current=current_qty)
                     else:
-                        reply = (
-                            f"Set {product_name} inventory to {qty}. "
-                            f"You currently have {current_qty} on hand."
-                        )
+                        reply = ui["inventory_set"].format(product=product_name, qty=qty, current=current_qty)
 
                 return ChatReply(reply)
         return None
@@ -853,6 +876,36 @@ class MKChatEngine:
                 '<a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. '
                 'The changes will then show in MyPinkAssistant on the next sync.'
             )
+        return None
+
+    def _intent_notes_educate(self, ctx) -> Optional[ChatReply]:
+        """'add a note to X' — notes aren't supported yet; redirect to MyCustomers."""
+        ui = ctx.ui
+        intent_result = ctx.intent_result
+
+        if intent_result.intent == "notes_educate":
+            return ChatReply(ui["notes_educate"])
+        return None
+
+    def _intent_mycustomers_link(self, ctx) -> Optional[ChatReply]:
+        """'link to mycustomers' / 'mycustomers link' / 'link to intouch' /
+        'open mycustomers' — the clickable MyCustomers link, styled like look_book."""
+        ui = ctx.ui
+        intent_result = ctx.intent_result
+
+        if intent_result.intent == "mycustomers_link":
+            return ChatReply(ui["mycustomers_link"])
+        return None
+
+    def _intent_bulk_text_educate(self, ctx) -> Optional[ChatReply]:
+        """'send a reminder text to Liz Mayo, Dana Smith, ...' — MPA can't send
+        texts to customers; point at the follow-up / lapsed-customer lists'
+        tap-to-text buttons instead."""
+        ui = ctx.ui
+        intent_result = ctx.intent_result
+
+        if intent_result.intent == "bulk_text_educate":
+            return ChatReply(ui["bulk_text_educate"])
         return None
 
     def _intent_pcp_list(self, ctx) -> Optional[ChatReply]:
@@ -1388,7 +1441,15 @@ class MKChatEngine:
                             tokens.append(t)
 
                     guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
-                    guess = _resolve_pronoun_guess(guess, state) or (state.get("last_ref_customer_name") or "").strip() or msg
+                    if not _is_plausible_name_guess(guess):
+                        guess = ""
+                    guess = _resolve_pronoun_guess(guess, state) or (state.get("last_ref_customer_name") or "").strip()
+                    if not guess:
+                        # No plausible name left after filtering stopwords/verbs
+                        # (e.g. "what was the last foundation ordered?" with no
+                        # name) and no pronoun context to fall back on — ask
+                        # instead of guessing the whole message as a "name".
+                        return ChatReply(ui["who_is_customer"])
 
                     with tx() as (conn, cur):
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
@@ -1477,7 +1538,15 @@ class MKChatEngine:
                         tokens.append(t)
 
                 guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
-                guess = _resolve_pronoun_guess(guess, state)
+                if not _is_plausible_name_guess(guess):
+                    guess = ""
+                guess = _resolve_pronoun_guess(guess, state) or (state.get("last_ref_customer_name") or "").strip()
+                if not guess:
+                    # No plausible name left after filtering stopwords/verbs
+                    # (e.g. "can you calculate totals or discounts?") and no
+                    # pronoun context to fall back on — ask instead of guessing
+                    # the whole message as a "name".
+                    return ChatReply(ui["who_is_customer"])
 
                 start_date, end_date = parse_time_filter_from_text(msg)
 
@@ -1684,6 +1753,8 @@ class MKChatEngine:
                             tokens.append(t)
 
                     guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
+                    if not _is_plausible_name_guess(guess):
+                        guess = ""
                     guess = _resolve_pronoun_guess(guess, state)
                     if not guess:
                         return ChatReply(ui['who_is_customer'])
@@ -2439,9 +2510,7 @@ class MKChatEngine:
 
                 new_matches = best_matches(catalog, msg, limit=MATCH_LIMIT)
                 if not new_matches:
-                    return ChatReply(
-                        "No close matches. Try different search words, or say <strong>skip</strong> to move on."
-                    )
+                    return ChatReply(ui["no_matches"])
 
                 state["pending"] = {
                     "kind": "order_line_pick_top5_or_search",
@@ -3084,6 +3153,9 @@ class MKChatEngine:
         "submitted_order_edit": "_intent_submitted_order_edit",
         "order_remove": "_intent_order_remove",
         "edit_request": "_intent_edit_request",
+        "notes_educate": "_intent_notes_educate",
+        "mycustomers_link": "_intent_mycustomers_link",
+        "bulk_text_educate": "_intent_bulk_text_educate",
         "pcp_list": "_intent_pcp_list",
         "leaderboard": "_intent_leaderboard",
         "top_sellers": "_intent_top_sellers",

@@ -40,6 +40,8 @@ _UNIT_SCHEMA = {
     ),
     "unit_great_start": (
         "Great Start bundle tracking for new consultants (current month). "
+        "\"GSQ\" (Great Start Qualification) is Mary Kay's abbreviation for this same Great Start bundle program — "
+        "treat \"GSQ\", \"Great Start Qualification\", and \"Great Start\" as referring to this table. "
         "Columns: consultant_id, consultant_number, total_bundles, needed_next_bundle ($ still needed for next bundle — NULL means window expired), "
         "promotion_end_date (when the Great Start window closes), total_production, rsks_bundles, rsks_production_left, "
         "production_month_key, synced_at. "

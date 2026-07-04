@@ -171,6 +171,9 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "birthday_lookup":       {"llm_allowed": False, "interrupts_pending": True,  "description": "birthdays today/this week/this month/..."},
     "followup":              {"llm_allowed": False, "interrupts_pending": True,  "description": "2+2+2 follow-up cards"},
     "customers_by_product":  {"llm_allowed": False, "interrupts_pending": True,  "description": "customers who bought/use a product"},
+    "notes_educate":         {"llm_allowed": False, "interrupts_pending": False, "description": "'add a note to X' — notes aren't supported yet, redirect to MyCustomers"},
+    "mycustomers_link":      {"llm_allowed": False, "interrupts_pending": True,  "description": "'link to mycustomers' — the clickable MyCustomers link"},
+    "bulk_text_educate":     {"llm_allowed": False, "interrupts_pending": False, "description": "'text/remind several customers' — not supported, point at follow-up/lapsed lists' tap-to-text buttons"},
 }
 
 SUPPORTED_INTENTS = set(INTENT_REGISTRY)
@@ -416,6 +419,26 @@ def _looks_like_new_order_entry(text: str) -> bool:
     return score >= 2
 
 
+# "add a note to Meghan Froemke" / "note for X: ..." — notes aren't supported
+# yet (notes_educate intent). Must yield when the message also carries real
+# order signal, e.g. "Misty Cameron add a note, wants pink prism shimmer eye
+# stick, barrier restore 1-1-3, foundation primer" — that's an order with
+# "add a note" as filler, not a notes request. Reuses _looks_like_new_order_entry's
+# scoring so the two guards stay in sync.
+_NOTE_PHRASE_RE = re.compile(r"\b(?:add|leave|put|write)\s+(?:a\s+)?note\b|\bnotes?\s+for\b", re.IGNORECASE)
+
+def _looks_like_notes_request(text: str) -> bool:
+    t = (text or "").strip()
+    if not _NOTE_PHRASE_RE.search(t):
+        return False
+    # Yield to order parsing when the message also has order signal (quantities,
+    # comma-separated items, product words) — that's a real order with "add a
+    # note" as filler, not a request to use the notes feature.
+    if _looks_like_new_order_entry(t):
+        return False
+    return True
+
+
 def _looks_like_full_customer_entry(text: str) -> bool:
     t = (text or "").strip()
 
@@ -437,6 +460,76 @@ def _looks_like_full_customer_entry(text: str) -> bool:
 
     # if it looks like a bundle of customer fields, treat it as a customer entry
     return score >= 2
+
+
+# "Can you send a reminder text to Liz Mayo, ..." — MPA can't send texts to
+# customers. What we do instead (owner decisions 2026-07-03):
+#   • ONE recognizable name  -> show that customer's card (it has the phone
+#     number to text from) by routing to customer_info with the name as raw_text
+#   • 2+ names, or "my customers"/"everyone" -> bulk_text_educate reply
+# Lowercase names are fine when they follow "to" ("send a text to jane doe" —
+# live local-test miss 2026-07-03: it fell through to the customer parser and
+# proposed CREATING Jane Doe). Without a "to" tail we require a capitalized
+# First Last pair so ordinary sentences never claim. Non-outreach messages
+# don't match the verb pattern at all.
+_BULK_TEXT_VERB_RE = re.compile(
+    r"\b(?:send|text|message)\b.{0,20}\b(?:text|message|reminder)\b"
+    r"|\b(?:text|message)\s+(?:a\s+)?reminder\b"
+    r"|\bremind\b.{0,20}\bcustomers?\b",
+    re.IGNORECASE,
+)
+
+_SEND_TEXT_STOP = {
+    "my", "the", "a", "an", "all", "each", "every", "our", "please",
+    "her", "him", "them", "me", "us", "can", "you",
+    "text", "texts", "message", "messages", "reminder", "reminders",
+    "send", "remind", "about", "previous", "order", "orders", "list",
+    "today", "tomorrow", "now",
+}
+
+_CAP_WORD_RE = re.compile(r"^[A-Z][a-zA-Z'\-]*$")
+
+def _cap_name_pairs(words: List[str]) -> List[str]:
+    """Consecutive Capitalized-Word pairs ("Liz Mayo", "Dana Smith") — one
+    name each, tolerant of missing commas between pasted names."""
+    pairs, i = [], 0
+    while i < len(words) - 1:
+        if _CAP_WORD_RE.match(words[i]) and _CAP_WORD_RE.match(words[i + 1]):
+            pairs.append(f"{words[i]} {words[i + 1]}")
+            i += 2
+        else:
+            i += 1
+    return pairs
+
+def _parse_send_text_target(text: str) -> Optional[tuple]:
+    """For a send-a-text ask, return (name_count, first_name); else None.
+    name_count 0 means "their whole list" (customers/everyone)."""
+    t = (text or "").strip()
+    if not t or not _BULK_TEXT_VERB_RE.search(t):
+        return None
+
+    m = re.search(r"\bto\b\s+(.*)$", t, re.IGNORECASE)
+    if m:
+        tail = m.group(1)
+        if re.search(r"\b(?:customers|clients|everyone|everybody)\b", tail, re.IGNORECASE):
+            return (0, "")
+        # "…to jane doe about her order" — the recipient ends at "about"
+        tail = re.split(r"\babout\b", tail, flags=re.IGNORECASE)[0]
+        groups = []
+        for g in re.split(r",\s*|\s+and\s+", tail):
+            toks = [w for w in re.findall(r"[A-Za-z'\-]+", g) if w.lower() not in _SEND_TEXT_STOP]
+            if toks:
+                groups.append(" ".join(toks[:4]))
+        if not groups:
+            return None
+        count = max(len(groups), len(_cap_name_pairs([w for w in re.split(r"[,\s]+", tail) if w])))
+        return (count, groups[0])
+
+    # No "to" tail — conservative: only capitalized First Last pairs count
+    pairs = _cap_name_pairs([w for w in re.split(r"[,\s]+", t) if w])
+    if not pairs:
+        return None
+    return (len(pairs), pairs[0])
 
 
 def _normalize_inventory_command_text(msg: str) -> str:
@@ -826,7 +919,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "my team", "my unit", "my consultants", "my downline",
         "my personal team", "personal team", "my personal recruits", "personal recruits",
         "team member", "unit member",
-        "great start", "star consultant", "star tracking", "star status",
+        "great start", "gsq", "star consultant", "star tracking", "star status",
         "myshop", "my shop",
         "who is inactive", "who are inactive", "inactive consultant",
         "who is active", "who are active", "active consultant",
@@ -879,6 +972,15 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     )
     if any(t in lowered for t in _lapsed_triggers):
         return IntentResult(intent="lapsed_customers", confidence=0.95, raw_text=msg)
+
+    # 2+2+2 follow-ups — deterministic keyword claim (after lapsed so genuine
+    # lapsed phrasings keep precedence). Without this, "do i have any followups"
+    # reached the LLM, and an LLM answer of "lapsed_customers" won in route()
+    # (its lapsed claim runs before its followup heuristic) — a coin flip on a
+    # phrase our own bulk-text educate copy tells consultants to type.
+    _followup_kw = ("follow up", "follow-up", "followup", "follow ups", "followups")
+    if any(t in lowered for t in _followup_kw):
+        return IntentResult(intent="followup", confidence=0.95, raw_text=msg)
 
     # leaderboard
     if (
@@ -1359,8 +1461,50 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
     if not pending and any(t in lowered for t in ("referral code", "referral link", "my referral", "refer a friend", "refer someone")):
         return _claim("referral")
 
+    # MyCustomers link (not pending) — "link to mycustomers", "mycustomers link",
+    # "link to intouch", "open mycustomers". Requires link-ish context, not just
+    # the word "mycustomers": messages like "add a note to X in mycustomers" or
+    # "update her address in mycustomers" must keep falling through to the more
+    # helpful notes_educate / edit_request replies below (which include the same
+    # link anyway).
+    _LINKISH_RE = r"\b(?:link|open|log\s*in|login|url|website|go\s+to|take\s+me)\b"
+    if not pending and (
+        ("mycustomers" in lowered and re.search(_LINKISH_RE, lowered))
+        or re.search(r"\blink\s+to\s+intouch\b", lowered)
+    ) and not re.search(r"\bnew\s+customer\b", lowered):
+        return _claim("mycustomers_link")
+
+    # Notes — not supported yet (not pending). Must run before the general
+    # edit_request check below and yield to real order entry (see
+    # _looks_like_notes_request's guard against order signal, e.g. "Misty
+    # Cameron add a note, wants pink prism shimmer eye stick, ...").
+    if not pending and _looks_like_notes_request(msg):
+        return _claim("notes_educate")
+
+    # Send-a-text asks — MPA can't text customers (not pending). One name →
+    # show that customer's card (it has the phone number to text from);
+    # several names or the whole list → bulk_text_educate reply.
+    if not pending:
+        _stt = _parse_send_text_target(msg)
+        if _stt is not None:
+            _n_names, _first_name = _stt
+            if _n_names == 1 and _first_name:
+                return IntentResult(intent="customer_info", confidence=1.0,
+                                    slots={"source": "send_text"}, raw_text=_first_name)
+            return _claim("bulk_text_educate")
+
     # Customer edit requests — not supported, redirect to InTouch (not pending)
     _EDIT_FIELD_RE = r"\b(address|phone|email|birthday|birthdate|city|state|zip|postal)\b"
+    # Bare edit phrasings with no field named ("edit this customer", "edit her
+    # info", "update this customer") — conservative: requires an edit verb +
+    # a customer-ish object word, and must not steal order-edit phrasings
+    # (those belong to submitted_order_edit, handled earlier in the chain).
+    _EDIT_BARE_OBJECT_RE = r"\b(this\s+customer|her\s+info|his\s+info|their\s+info|this\s+client|that\s+customer|customer\s+info)\b"
+    _edit_bare = (
+        any(lowered.startswith(p) for p in ("update ", "change ", "edit ", "modify "))
+        and re.search(_EDIT_BARE_OBJECT_RE, lowered)
+        and "order" not in lowered
+    )
     _edit_not_supported = (
         not pending
         and (
@@ -1376,6 +1520,10 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 r"^add\s+(an?\s+)?(address|phone|email|birthday|birthdate|phone\s+number|email\s+address)\b",
                 lowered,
             ))
+            # bare "edit this customer" / "edit her info" (owner-approved
+            # 2026-07-03) — same educate reply as field-named edits; becomes
+            # the entry point for the real customer-edit feature when built
+            or _edit_bare
         )
     )
     if _edit_not_supported:

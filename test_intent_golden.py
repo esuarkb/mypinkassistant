@@ -227,6 +227,33 @@ CASES = [
     ("remove ultimate mascara",                 "order_remove",      "llm"),
     ("remove 2 honey and luster",               "order_remove",      "llm"),
     ("remove one makeup remover",               "order_remove",      "llm"),
+
+    # NOTE: notes_educate / mycustomers_link / bulk_text_educate are implemented
+    # as route()-level rules (context/precedence-sensitive, like most of the
+    # hijack chain), not in parse_intent()'s keyword tables — so their positive
+    # and negative cases live in ROUTE_CASES / NEGATIVE_GUARD_CASES below, not here.
+
+    # --- unit_query GSQ synonym (kw, in parse_intent's _unit_triggers) — added 2026-07-03 ---
+    ("who is close to their gsq",               "unit_query",        "kw"),
+    ("gsq status for my team",                  "unit_query",        "kw"),
+]
+
+# Messages that must NEVER be claimed by a given intent (regardless of what
+# they DO route to). Distinct from CASES because these aren't asserting a
+# single correct destination — some genuinely land on different intents call
+# to call across repeated runs (e.g. LLM nondeterminism on order-ish text) —
+# only that the new rule added on 2026-07-03 doesn't steal them.
+# (message, forbidden_intent, note)
+NEGATIVE_GUARD_CASES = [
+    ("Misty Cameron add a note,  wants pink prism shimmer eye stick, barrier restore 1-1-3, foundation primer, translucent powder",
+     "notes_educate",
+     "filler 'add a note' inside a real order entry must still be parsed as an order"),
+    ("text liz mayo a reminder", "bulk_text_educate", "single name must not be claimed"),
+    ("send a reminder text to liz mayo", "bulk_text_educate", "single name must not be claimed"),
+    ("can you create a text message so i can send out to previous orders?",
+     "bulk_text_educate", "non-outreach phrasing must not be claimed"),
+    ("Edit Bobbie hinski order to add 25% off", "edit_request",
+     "order-edit phrasing must not be caught by the bare edit_request widening"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -324,6 +351,35 @@ ROUTE_CASES = [
     # the pending flow edits the draft (route falls through to the base intent)
     ("add raspberry ice to the order",           _MID_FLOW, ("order_add", "<llm-skipped>", "unknown")),
     ("remove the lipstick from judy's order",    _MID_FLOW, ("order_remove", "<llm-skipped>", "unknown")),
+
+    # --- notes_educate / mycustomers_link / bulk_text_educate — added 2026-07-03 ---
+    ("can you add a note to meghan froemke",     None, "notes_educate"),
+    ("link to mycustomers",                      None, "mycustomers_link"),
+    ("open mycustomers",                         None, "mycustomers_link"),
+    # "mycustomers" mentioned in a non-link context must NOT be claimed by the
+    # link rule — the specialized educate replies are more helpful (both carry
+    # the same link anyway)
+    ("add a note to meghan in mycustomers",      None, "notes_educate"),
+    ("update her address in mycustomers",        None, "edit_request"),
+    ("Can you send a reminder text to Liz Mayo, Dana Smith Laura Miller Jessica Beazley, Amie Cauley, Sherry Golden Mackenzie Cox", None, "bulk_text_educate"),
+    # single-name text asks show that customer's card — it has the phone number
+    # to text from (owner decision 2026-07-03); multi-name stays on the educate reply
+    ("Send a reminder text to Jane Doe",          None, "customer_info"),
+    ("send a text to jane doe",                   None, "customer_info"),
+    ("send a text to all my customers",           None, "bulk_text_educate"),
+    # the exact phrase the bulk_text_educate copy tells consultants to type must
+    # route deterministically to followup (was an LLM coin-flip vs lapsed_customers)
+    ("do i have any followups",                   None, "followup"),
+    ("Do I have any follow ups",                  None, "followup"),
+
+    # --- edit_request bare-form widening — added 2026-07-03, owner-approved ---
+    ("edit this customer",                       None, "edit_request"),
+    ("edit her info",                             None, "edit_request"),
+    ("update this customer",                      None, "edit_request"),
+    # negative guard: order-edit phrasings must still go to edit_request via
+    # the pre-existing submitted-order-edit-adjacent path, NOT be broken by
+    # the new bare-form widening (this is the exact live-incident phrasing)
+    ("Edit Bobbie hinski order to add 25% off",  None, ("order_add", "order_adjust", "submitted_order_edit", "<llm-skipped>", "unknown")),
 ]
 
 
@@ -412,6 +468,17 @@ def main():
             failures.append((msg, "/".join(accepted), r.intent, "route"))
         _pend = " [mid-flow]" if (st or {}).get("pending") else ""
         print(f"{(msg + _pend)[:W]:<{W}} {'/'.join(accepted)[:17]:<18} {r.intent:<18} route {'PASS' if ok else 'FAIL'}")
+
+    print("\n--- negative guards (must NEVER be claimed by the named intent) ---")
+    for msg, forbidden, note in NEGATIVE_GUARD_CASES:
+        r = intent_router.route(msg, {}, _catalog)
+        ok = r.intent != forbidden
+        if ok:
+            passed += 1
+        else:
+            failed += 1
+            failures.append((msg, f"NOT {forbidden}", r.intent, "neg-guard"))
+        print(f"{msg[:W]:<{W}} forbidden={forbidden:<16} got {r.intent:<14} {'PASS' if ok else 'FAIL'}  ({note})")
 
     print("\n--- known bugs (do not fail while still broken) ---")
     fixed_bugs = []
