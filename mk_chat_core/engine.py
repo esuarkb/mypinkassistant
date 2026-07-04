@@ -372,6 +372,28 @@ class MKChatEngine:
         import re
         import re as _re
 
+        # Name+items order entries sometimes classify as product_lookup — an
+        # LLM coin-flip (live 2026-07-03: "Elvia G… eyeliner, sponge, mascara,
+        # …" got the one-product-at-a-time coaching and the order was never
+        # placed, while the identical shape routed new_order earlier that day).
+        # If the message LEADS with a saved customer's name AND reads like an
+        # order entry, decline — it falls through to the order parser, which
+        # handles name+items correctly.
+        if (
+            not pending
+            and intent_result.slots.get("source") in ("intent", "price")
+            and _looks_like_new_order_entry(msg)
+        ):
+            _nm = re.match(r"^([A-Za-z][a-z'\-]+ [A-Za-z][a-z'\-]+)\b", msg.strip())
+            if _nm:
+                from db import tx
+                from crm_store import find_customers_by_name
+                consultant_id = ctx.consultant_id
+                with tx() as (conn, cur):
+                    _hits = find_customers_by_name(cur, consultant_id=consultant_id, name=_nm.group(1), limit=1)
+                if _hits:
+                    return None  # let the order parser take it
+
         # -------------------------
         # Exact product name match — handles data-send clicks from multi-result lists
         # -------------------------
@@ -1205,6 +1227,14 @@ class MKChatEngine:
                     city = _cm2.group(1).strip().title()
 
             if not city:
+                return ChatReply("This looks like a city/state lookup. Try \"customers in Madison\" or \"customers in Madison, WI\"")
+
+            # Guard: the LLM sometimes hands over a garbage "city" extracted
+            # from a non-city question ("Who Are My" — live 2026-07-03, echoed
+            # back as 'No customers found in Who Are My.'). If the city
+            # contains obvious question/name words, coach instead of querying.
+            _CITY_GARBAGE = {"who", "are", "my", "name", "named", "customer", "customers", "the", "with"}
+            if any(w in _CITY_GARBAGE for w in city.lower().split()):
                 return ChatReply("This looks like a city/state lookup. Try \"customers in Madison\" or \"customers in Madison, WI\"")
 
             _city_part, _state_abbr, _state_display = parse_city_state(city)

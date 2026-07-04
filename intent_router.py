@@ -577,7 +577,11 @@ _PRODUCT_QUERY_SYNONYMS: dict = {
 
 def _looks_like_product_price_query(msg: str) -> bool:
     s = (msg or "").strip().lower()
-    if any(s.startswith(p) for p in ("how much is ", "how much does ", "price of ", "price check ", "what does ", "what's the price", "what is the price")):
+    # "what does " alone is NOT a price signal — it claimed "What does par mean
+    # on the inventory spreadsheet" at conf 1.0 (live 2026-07-03); require "cost"
+    if any(s.startswith(p) for p in ("how much is ", "how much does ", "price of ", "price check ", "what's the price", "what is the price")):
+        return True
+    if re.search(r"^what does\b.{0,60}\bcost\b", s):
         return True
     if re.search(r"\bhow much\b.{0,30}\bcost\b", s):
         return True
@@ -620,6 +624,10 @@ def _looks_like_inventory_count(msg: str) -> bool:
     if "do i have" in s and "inventory" in s:
         return True
     if "in my inventory" in s:
+        return True
+    # "what foundations do I have in stock" (live 2026-07-03: answered with a
+    # catalog price list instead of her inventory)
+    if "in stock" in s and "do i have" in s and not any(w in s for w in _NOT_INVENTORY):
         return True
     return False
 
@@ -702,6 +710,11 @@ def _parse_inventory_lookup_text(msg: str) -> str:
         return m.group(1).strip()
 
     m = re.match(r"^\s*how\s+many\s+(.+?)\s+do\s+i\s+have\s*$", s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    # "what foundations do I have in stock" (live 2026-07-03)
+    m = re.match(r"^\s*(?:what|which|how\s+many)\s+(.+?)\s+do\s+i\s+have\s+in\s+stock\s*\??$", s, re.IGNORECASE)
     if m:
         return m.group(1).strip()
 
@@ -1117,6 +1130,18 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         and not any(t in lowered for t in ("new", "order", "add", "cancel", "tag", "note"))
     )
 
+    # "customers named X" / "customers with the name X" — a NAME-list search,
+    # not a city lookup. Must run BEFORE the city rules: the LLM sent these to
+    # customers_by_city (conf 0.02) and echoed "No customers found in Who Are
+    # My." (live 2026-07-03, 10-message struggle). Routes to customer_info with
+    # the extracted name as raw_text — the existing fuzzy picker shows all
+    # matches, same UX as typing the bare name.
+    _named_m = re.search(r"customers?\s+(?:with\s+the\s+name,?\s+|named\s+|by\s+the\s+name\s+of\s+|called\s+)(.+)$", lowered)
+    if _named_m:
+        _name = _named_m.group(1).strip().rstrip(" ?.!,")
+        if _name:
+            return IntentResult(intent="customer_info", confidence=0.95, raw_text=_name)
+
     # customers by city — check before customer_info to avoid bare-name collision
     # Pattern 1: "customers in/from [city]" — unambiguous, no exclusions needed
     # Skip if this looks like a new customer entry
@@ -1372,6 +1397,12 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
     # Inventory print / PDF report (claims even mid-flow)
     if _looks_like_inventory_print(msg):
         return _claim("inventory_print")
+
+    # "what does par mean ..." — a question about the inventory report's par
+    # column (live 2026-07-03: claimed as a PRICE lookup at conf 1.0, answered
+    # with Go Sets). Tight phrase match → the inventory cheat sheet.
+    if "what does par mean" in lowered:
+        return _claim("inventory_help")
 
     # Exact product name match — handles data-send clicks from multi-result lists (not pending)
     if not pending:
@@ -1712,4 +1743,8 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         return IntentResult(intent="unknown", confidence=base.confidence,
                             slots={"suppressed": "lapsed_customers"}, raw_text=msg)
 
-    return IntentResult(intent=base.intent, confidence=base.confidence, slots=base.slots, raw_text=msg)
+    # Honor a raw_text the classifier extracted (the "customers named X" rule
+    # passes just the name so the customer_info handler shows the name picker).
+    # Every other parse_intent rule sets raw_text=msg, so this is neutral.
+    return IntentResult(intent=base.intent, confidence=base.confidence, slots=base.slots,
+                        raw_text=(base.raw_text or msg))

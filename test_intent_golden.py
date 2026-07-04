@@ -135,6 +135,12 @@ CASES = [
     ("how much have i sold this month",         "data_query",        "llm"),
     ("which of my customers use the clearproof set", "data_query",   "llm"),
 
+    # --- customers by NAME (kw) — added 2026-07-04, live incident: LLM sent
+    # these to customers_by_city and echoed "No customers found in Who Are My."
+    ("who are my customers with the name, brenda?", "customer_info",  "kw"),
+    ("customers named brenda",                  "customer_info",     "kw"),
+    ("customers called brenda",                 "customer_info",     "kw"),
+
     # --- customers_by_city (kw) ---
     ("customers in ogden",                      "customers_by_city", "kw"),
     ("who are my customers in huntsville",      "customers_by_city", "kw"),
@@ -319,6 +325,10 @@ ROUTE_CASES = [
     # answer (identical to pre-consolidation behavior) — both are correct
     ("who are my retinol customers",             None, ("customers_by_product", "customers_by_city")),
     ("how much is the charcoal mask",            None, "product_lookup"),   # price query
+    # --- weed-garden fixes 2026-07-04 (all live incidents from 7/03 logs) ---
+    ("what does the charcoal mask cost",         None, "product_lookup"),   # cost-anchored form must keep working
+    ("What does par mean on the inventory spreadsheet", None, "inventory_help"),  # was product_lookup conf 1.0
+    ("what foundations do i have in stock",      None, "inventory_count"),  # was a catalog price list
     # catalog-search fixes 2026-07-03 (search_terms aliases + compound-word
     # normalization + trailing "ingredients" — all were June production failures)
     ("dwl",                                      None, "product_lookup"),   # search_terms alias
