@@ -199,6 +199,15 @@ app.add_middleware(
 app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    # Safari (and legacy browsers) request /favicon.ico at the domain root and
+    # don't support SVG favicons — without this route the address bar showed a
+    # placeholder cube (2026-07-05)
+    from fastapi.responses import FileResponse
+    return FileResponse(str(WEB_DIR / "favicon.ico"), media_type="image/x-icon")
+
+
 # -------------------------
 # Security headers (simple + production-friendly)
 # -------------------------

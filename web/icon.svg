@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#e91e63"/>
-  <text x="16" y="22.5" text-anchor="middle" font-family="system-ui,-apple-system,Helvetica,Arial,sans-serif" font-weight="800" font-size="13" fill="white">MPA</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- MPA mark: hand-pathed bold M (no font dependency) — 2026-07-05 -->
+  <rect width="64" height="64" rx="14" fill="#e91e63"/>
+  <polygon points="14,47 14,17 23,17 32,35.5 41,17 50,17 50,47 43,47 43,28.5 35.5,44 28.5,44 21,28.5 21,47" fill="#fff"/>
 </svg>
