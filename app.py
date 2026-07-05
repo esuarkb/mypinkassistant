@@ -1424,6 +1424,7 @@ def app_page(request: Request):
                 '<div class="msg bot">'
                 "<strong>¡Bienvenida a MyPinkAssistant! 🎉</strong><br><br>"
                 "Tus datos de clientes casi terminan de sincronizarse desde MyCustomers — ¡solo tomará un momento más!<br><br>"
+                "📱 Escribe <strong>app</strong> y te mostraré cómo instalar MyPinkAssistant en tu teléfono.<br><br>"
                 "Mientras tanto, escribe <strong><em>ayuda</em></strong> para ver lo que puedes hacer en el chat, "
                 "o visita la <a href='/help'>página de ayuda</a> o las <a href='/faq'>preguntas frecuentes</a>."
                 '</div>'
@@ -1433,6 +1434,7 @@ def app_page(request: Request):
                 '<div class="msg bot">'
                 "<strong>Welcome to MyPinkAssistant! 🎉</strong><br><br>"
                 "Your customer data is almost done syncing from MyCustomers — should only be another minute or two!<br><br>"
+                "📱 Type <strong>app</strong> and I'll show you how to install MyPinkAssistant on your phone.<br><br>"
                 "In the meantime, type <strong>help</strong> to see things you can do in chat, "
                 "or check out the <a href='/help'>Help page</a> or <a href='/faq'>FAQ</a>."
                 '</div>'
