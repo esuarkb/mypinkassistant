@@ -125,10 +125,27 @@ def _check_stale_jobs() -> None:
         logging.error("[Watchdog] Error during stale job check: %s", repr(e))
 
 
+def _heartbeat_scale_down() -> None:
+    """Scale-down safety net (2026-07-05). The worker's scale-down hook only
+    fires when a job completes — a missed one (observed: Render's own scale
+    operation SIGTERM'd the instance whose hook would have run) leaves a paid
+    idle instance until the NEXT job completes. This gives scale-down a pulse:
+    check_and_scale_down() no-ops unless the queue is fully empty AND the
+    instance count is above worker_min, and its local-env guard means dev
+    machines never touch prod scaling. Needs RENDER_API_KEY +
+    RENDER_WORKER_SERVICE_ID on the web service (added 2026-07-05)."""
+    try:
+        from autoscaler import check_and_scale_down
+        check_and_scale_down()
+    except Exception as e:
+        logging.error("[Watchdog] heartbeat scale-down error: %s", repr(e))
+
+
 async def _watchdog_loop() -> None:
     await asyncio.sleep(300)  # wait 5 min after startup before first check
     while True:
         _check_stale_jobs()
+        _heartbeat_scale_down()
         await asyncio.sleep(300)
 
 

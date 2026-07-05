@@ -92,8 +92,12 @@ def main() -> int:
         print("\n=== SURFACE 1: login / customer list ===")
         login_intouch(page, USERNAME, PASSWORD)
         page.wait_for_timeout(2000)
+        # The sort-column toggle flips its label ("First Name"/"Last Name")
+        # with the list's sort state — session noise, not an MK change
+        # (false alarm 2026-07-05). Exclude it from the diff.
+        _SORT_TOGGLE_LABELS = {"First Name", "Last Name"}
         snapshot["customer_list"] = {
-            "buttons": visible_buttons(page),
+            "buttons": [b for b in visible_buttons(page) if b not in _SORT_TOGGLE_LABELS],
             "probes": {
                 "search box ('Note Title' searchbox)": probe(
                     page, "search box ('Note Title' searchbox)",

@@ -7,6 +7,7 @@
 # Call run_report_sync(page, cur, consultant_id) after login_intouch() has run.
 
 import json
+import re
 import urllib.parse
 from datetime import date, datetime
 from playwright.sync_api import Page
@@ -125,6 +126,37 @@ def _get_cookies_dict(page: Page, target_host: str = "applications.marykayintouc
 # FOReports API helper
 # ---------------------------------------------------------------------------
 
+# Friendly names for alert texts — Brian shouldn't have to decode report ids
+_REPORT_FRIENDLY = {
+    "new-consultant-promotion-unit": "Great Start",
+    "ladder-of-success-current-quarter-unit": "Star tracking",
+    "rise-and-radiate-challenge-unit": "Rise + Radiate",
+    "registration-events": "Seminar events",
+    "registration-unit": "Seminar registrations",
+    "director-car-program-tracking-personal": "Car program",
+}
+
+
+def _short_fetch_error(report_id: str, exc: Exception) -> str:
+    """One readable line per failure — no URLs, no OIDC state tokens.
+    (2026-07-05: the first live degraded-alert SMS was two giant texts of
+    logout-redirect URLs. Never again.)"""
+    name = _REPORT_FRIENDLY.get(report_id, report_id)
+    s = str(exc)
+    if "401" in s and "mklogout" in s.lower():
+        # FOReports bounced the session to its logout page — this consultant's
+        # login has no access to director reports (chronic for non-directors)
+        return f"{name}: no FOReports access (401)"
+    if "timed out" in s.lower() or "timeout" in s.lower():
+        return f"{name}: timed out — MK report server slow/unreachable"
+    if "Max retries" in s or "Connection" in s:
+        return f"{name}: could not connect to MK report server"
+    m = re.search(r"\b([45]\d\d)\s+(?:Client|Server)\s+Error", s)
+    if m:
+        return f"{name}: HTTP {m.group(1)} from MK report server"
+    return f"{name}: {s[:90]}"
+
+
 def _foreposts_get(cookies: dict, report_id: str, parameters: dict, errors: list | None = None) -> list[dict]:
     """
     Fetch one FOReports report. ERROR IS NOT THE SAME AS EMPTY (2026-07-03):
@@ -149,7 +181,7 @@ def _foreposts_get(cookies: dict, report_id: str, parameters: dict, errors: list
     except Exception as e:
         print(f"[ReportSync] {report_id} fetch error: {e}")
         if errors is not None:
-            errors.append(f"{report_id}: {e}")
+            errors.append(_short_fetch_error(report_id, e))
         return []
 
 
@@ -499,7 +531,7 @@ def _fetch_seminar_event_key(cookies: dict, errors: list | None = None) -> tuple
     except Exception as e:
         print(f"[ReportSync] registration-events fetch error: {e}")
         if errors is not None:
-            errors.append(f"registration-events: {e}")
+            errors.append(_short_fetch_error("registration-events", e))
     return None, None, None
 
 
@@ -792,6 +824,28 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
     else:
         print("[ReportSync] No car award data found — skipping")
 
+    # Chronic vs anomalous 401s (2026-07-05, "Amy Correa" case): a consultant
+    # who has NEVER had FOReports data gets 401→logout on every report, every
+    # night — she simply isn't entitled to director reports. Alerting on that
+    # is cry-wolf. But a 401 for a consultant WITH report history (Andrea)
+    # means access/cookies broke — that one must stay loud.
+    _access_errs = [e for e in fetch_errors if "no FOReports access" in e]
+    access_denied: list[str] = []
+    if _access_errs:
+        cur.execute(
+            f"SELECT (SELECT COUNT(*) FROM unit_great_start WHERE consultant_id = {ph})"
+            f"     + (SELECT COUNT(*) FROM unit_star_tracking WHERE consultant_id = {ph})"
+            f"     + (SELECT COUNT(*) FROM unit_rise_radiate WHERE consultant_id = {ph})",
+            (consultant_id, consultant_id, consultant_id),
+        )
+        _row = cur.fetchone()
+        _has_history = int(_row[0]) > 0 if _row else False
+        if not _has_history:
+            access_denied = _access_errs
+            fetch_errors = [e for e in fetch_errors if e not in _access_errs]
+            print(f"[ReportSync] no FOReports access and no report history — "
+                  f"not alert-worthy ({len(access_denied)} report(s) skipped silently)")
+
     return {
         "members": members_count,
         "great_start": gs_count,
@@ -800,4 +854,5 @@ def run_report_sync(page: Page, cur, consultant_id: int, ph: str = "?") -> dict:
         "registrations": reg_count,
         "car_award": car_synced,
         "fetch_errors": fetch_errors,
+        "access_denied": access_denied,
     }
