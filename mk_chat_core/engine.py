@@ -3567,7 +3567,7 @@ class MKChatEngine:
                 out.append(ui["estimated_total"].format(total=f"${total:.2f}"))
 
         if fulfillment == "cds":
-            out.append("\nReminder: you will need to finalize this CDS order on InTouch by navigating to Orders and completing the order.")
+            out.append(ui["cds_finalize_reminder"])
 
         out.append(ui["order_confirm_q"])
         return "\n".join(out) + _QR_YN

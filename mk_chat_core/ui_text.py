@@ -22,6 +22,7 @@ UI_EN = {
     "order_intro": "Okay — I have this order for {first} {last}:",
     "estimated_total": "Estimated retail total: {total}",
     "order_confirm_q": "Does that sound right? (yes/no)",
+    "cds_finalize_reminder": "\nReminder: after confirming, you will need to finalize this CDS order on InTouch by navigating to <a href=\"https://apps.marykayintouch.com/order-list\" target=\"_blank\">Orders</a> and completing the order.\n",
 
     "need_customer_for_order": "Who is this order for? Please tell me the customer name and the products they ordered.",
     "need_customer_info": "Okay, tell me the customer's name and information.",
@@ -153,6 +154,7 @@ UI_ES = {
     "order_intro": "Perfecto — tengo este pedido para {first} {last}:",
     "estimated_total": "Total estimado (precio): {total}",
     "order_confirm_q": "¿Suena bien? (sí/no)",
+    "cds_finalize_reminder": "\nRecordatorio: después de confirmar, deberás finalizar este pedido CDS en InTouch entrando a <a href=\"https://apps.marykayintouch.com/order-list\" target=\"_blank\">Pedidos</a> (Orders) y completando el pedido.\n",
 
     "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y los productos que ordenó.",
     "need_customer_info": "Perfecto, dime el nombre del cliente y su información.",
