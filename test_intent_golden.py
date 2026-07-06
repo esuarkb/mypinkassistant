@@ -227,7 +227,11 @@ CASES = [
     # --- order_add (llm only — no keyword rule; mid-order these are usually
     #     caught by the pending flow before intent matters). Bare "add X" with
     #     no conversation context is genuinely ambiguous — see CONTEXT_CASES. ---
-    ("now add a translucent powder",            "order_add",         "llm"),
+    # LLM splits order_add/new_order/unknown on this phrasing (drifted further
+    # when inventory_help joined the classifier prompt 2026-07-06). VERIFIED
+    # equivalent: all three produce the identical "Who is this order for?"
+    # reply — the order parser catches it either way.
+    ("now add a translucent powder",            ("order_add", "new_order", "unknown"), "llm"),
 
     # --- order_remove (llm only) ---
     ("remove ultimate mascara",                 "order_remove",      "llm"),
@@ -328,6 +332,26 @@ ROUTE_CASES = [
     # --- weed-garden fixes 2026-07-04 (all live incidents from 7/03 logs) ---
     ("what does the charcoal mask cost",         None, "product_lookup"),   # cost-anchored form must keep working
     ("What does par mean on the inventory spreadsheet", None, "inventory_help"),  # was product_lookup conf 1.0
+    # --- feature-help gate 2026-07-06: HOW-a-feature-works questions get the
+    # help bubble, not the action (live: "How do I add inventory?" ×2 → unknown;
+    # "how does inventory work" → dumped the full inventory list) ---
+    ("how does inventory work",                  None, "inventory_help"),
+    ("How do I add inventory?",                  None, "inventory_help"),
+    ("what can the inventory do",                None, "inventory_help"),
+    # action guards for the gate (siblings already pinned above/elsewhere):
+    ("what do i need to reorder",                None, "inventory_low_stock"),
+    # --- feature-help topics round 2 (2026-07-06, Brian-approved bubbles) ---
+    ("how do orders work",                       None, "order_help"),
+    ("how do i place an order",                  None, "order_help"),
+    ("how do i cancel this order",               None, "order_help"),      # order beats billing
+    ("how do followups work",                    None, "followup_help"),
+    ("what are follow ups",                      None, "followup_help"),
+    ("how does the sync work",                   None, "sync_help"),
+    ("how do i cancel my subscription",          None, "billing_help"),
+    ("is my data safe",                          None, "privacy_help"),
+    # guards: actions/data-questions must never become help bubbles
+    ("do i have any followups",                  None, "followup"),
+    ("what is my referral link",                 None, "referral"),
     ("what foundations do i have in stock",      None, "inventory_count"),  # was a catalog price list
     # catalog-search fixes 2026-07-03 (search_terms aliases + compound-word
     # normalization + trailing "ingredients" — all were June production failures)

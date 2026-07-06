@@ -77,6 +77,48 @@ UI_EN = {
     "mycustomers_link": "Here's the link to <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>&nbsp; <button class=\"fdp-copy copy-link-btn\" data-copy=\"https://apps.marykayintouch.com/customer-list\">Copy Link</button>",
     "bulk_text_educate": "I can't send texts directly to customers, but if you say <strong>Do I have any followups</strong> you can click the tap-to-text button to text a followup message directly from your phone.",
 
+    # Migrated from hardcoded engine/render strings 2026-07-06 (bundle E slice) —
+    # EN text byte-identical to the originals
+    "app_help": (
+        "<strong>Add MPA to your home screen</strong>\n\n"
+        "<strong>iPhone / iPad (Safari):</strong>\n"
+        "1. Tap the <strong>Share</strong> button (box with arrow) at the bottom of the screen\n"
+        "2. Scroll down and tap <strong>Add to Home Screen</strong>\n"
+        "3. Tap <strong>Add</strong> — done!\n\n"
+        "<strong>Android (Chrome):</strong>\n"
+        "1. Tap the <strong>⋮ menu</strong> in the top-right corner\n"
+        "2. Tap <strong>Add to Home Screen</strong> or <strong>Install App</strong>\n"
+        "3. Tap <strong>Add</strong> — done!\n\n"
+        "Once installed it opens full-screen with no browser bar, just like a real app."
+    ),
+    "inventory_help": (
+        "Here are a few inventory things you can say:\n"
+        "\n"
+        "📦 View & update quantities:\n"
+        "• show my inventory\n"
+        "• how many charcoal masks do I have\n"
+        "• add 3 satin hands to inventory\n"
+        "• remove 1 charcoal mask from inventory\n"
+        "• set satin hands inventory to 5\n"
+        "\n"
+        "🎯 Set a desired quantity (your 'always keep on hand' level):\n"
+        "• set charcoal mask par to 3\n"
+        "\n"
+        "📋 Check what to reorder:\n"
+        "• what am I low on\n"
+        "• what should I order\n"
+        "\n"
+        "🖨️ Print your inventory:\n"
+        "• print my inventory"
+    ),
+
+    # Feature-help bubbles (2026-07-06, Brian-approved copy)
+    "order_help": "<strong>Ordering in chat:</strong> just say the customer and what she wants — like <em>\"Order for Jane Doe, charcoal mask x2 and satin lips set.\"</em><br>I'll match each item and you confirm with <strong>yes</strong>, <strong>no</strong>, or <strong>skip</strong>. When you approve the order, I enter it in MyCustomers for you automatically.<br>Shipping straight to her? Start with <em>\"CDS order for Jane Doe…\"</em> — I'll build the order in MyCustomers and <strong>leave it pending</strong>, so you can pop in, add samples, and submit it for processing when it's just right.",
+    "followup_help": "<strong>Follow-ups (2+2+2):</strong> I track who bought recently and remind you to check in — 2 days, 2 weeks, and 2 months after each order, the Mary Kay way.<br>Say <strong>follow ups</strong> and I'll show cards for everyone who's due, each with a <strong>tap-to-text</strong> button that opens a ready-to-send message right from your phone.",
+    "sync_help": "<strong>How syncing works:</strong> customers and orders you enter here go <strong>to</strong> MyCustomers within a couple of minutes.<br>Changes made <strong>in</strong> MyCustomers (edits, orders placed there, your team reports) come back to me overnight, every night.<br>So if something looks out of date today, it almost always catches up by tomorrow morning.",
+    "billing_help": "<strong>Your subscription:</strong> $5.99/month, every feature included, cancel anytime — no contracts, no tiers.<br>Manage or cancel from the <a href='/settings'>Settings page</a>.<br>Love MPA? Say <strong>referral link</strong> — friends you refer get a 30-day free trial, and you get a free month when they subscribe. 💗",
+    "privacy_help": "<strong>Your data:</strong> your customer records, order history, and team reports live on our secure servers and are visible only to you — never sold, never shared, never used to train AI.<br>The AI reads your chat messages to understand what you're asking, but your stored records and your InTouch login (which is encrypted) never leave our servers.<br>Questions? Email <a href='mailto:support@mypinkassistant.com'>support@mypinkassistant.com</a>.",
+
     # Unit / team query strings
     "unit_no_data": "I don't have team data synced for your account yet. Once a report sync runs, I'll be able to answer questions about your team.",
     "unit_query_rephrase": "I had trouble generating a query. Please try rephrasing your question.",
@@ -164,6 +206,49 @@ UI_ES = {
     "notes_educate": "Estamos trabajando en la posibilidad de agregar notas a los clientes. Por ahora puedes iniciar sesión en <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a> para agregar o editar notas.",
     "mycustomers_link": "Aquí está el enlace a <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>&nbsp; <button class=\"fdp-copy copy-link-btn\" data-copy=\"https://apps.marykayintouch.com/customer-list\">Copy Link</button>",
     "bulk_text_educate": "No puedo enviar mensajes de texto directamente a los clientes, pero si dices <strong>Do I have any followups</strong> puedes tocar el botón de texto para enviar un mensaje de seguimiento directamente desde tu teléfono.",
+
+    # Migrated from hardcoded engine/render strings 2026-07-06 (bundle E slice).
+    # Command phrases stay in English (the parsers match on them); phone-UI
+    # labels use the Spanish that iOS/Android actually display.
+    "app_help": (
+        "<strong>Agrega MPA a tu pantalla de inicio</strong>\n\n"
+        "<strong>iPhone / iPad (Safari):</strong>\n"
+        "1. Toca el botón <strong>Compartir</strong> (cuadro con flecha) en la parte de abajo\n"
+        "2. Desliza hacia abajo y toca <strong>Agregar a pantalla de inicio</strong>\n"
+        "3. Toca <strong>Agregar</strong> — ¡listo!\n\n"
+        "<strong>Android (Chrome):</strong>\n"
+        "1. Toca el <strong>menú ⋮</strong> en la esquina superior derecha\n"
+        "2. Toca <strong>Agregar a la pantalla principal</strong> o <strong>Instalar app</strong>\n"
+        "3. Toca <strong>Agregar</strong> — ¡listo!\n\n"
+        "Una vez instalada, se abre en pantalla completa sin barra del navegador, como una app de verdad."
+    ),
+    "inventory_help": (
+        "Aquí tienes algunas cosas de inventario que puedes decir:\n"
+        "\n"
+        "📦 Ver y actualizar cantidades:\n"
+        "• show my inventory\n"
+        "• how many charcoal masks do I have\n"
+        "• add 3 satin hands to inventory\n"
+        "• remove 1 charcoal mask from inventory\n"
+        "• set satin hands inventory to 5\n"
+        "\n"
+        "🎯 Fijar una cantidad deseada (tu nivel de 'siempre tener a la mano'):\n"
+        "• set charcoal mask par to 3\n"
+        "\n"
+        "📋 Ver qué reordenar:\n"
+        "• what am I low on\n"
+        "• what should I order\n"
+        "\n"
+        "🖨️ Imprimir tu inventario:\n"
+        "• print my inventory"
+    ),
+
+    # Feature-help bubbles (2026-07-06, Brian-approved copy)
+    "order_help": "<strong>Pedidos por chat:</strong> solo dime la clienta y lo que quiere — como <em>\"Order for Jane Doe, charcoal mask x2 and satin lips set.\"</em><br>Yo encuentro cada producto y tú confirmas con <strong>yes</strong>, <strong>no</strong> o <strong>skip</strong>. Cuando apruebes el pedido, lo registro en MyCustomers automáticamente.<br>¿Envío directo a tu clienta? Empieza con <em>\"CDS order for…\"</em> — armo el pedido en MyCustomers y <strong>lo dejo pendiente</strong>, para que entres, agregues muestras y lo envíes a procesar cuando esté perfecto.",
+    "followup_help": "<strong>Seguimientos (2+2+2):</strong> llevo el control de quién compró recientemente y te recuerdo dar seguimiento — a los 2 días, 2 semanas y 2 meses de cada pedido, al estilo Mary Kay.<br>Di <strong>follow ups</strong> y te muestro tarjetas de cada clienta pendiente, con un botón de <strong>texto</strong> que abre un mensaje listo para enviar desde tu teléfono.",
+    "sync_help": "<strong>Cómo funciona la sincronización:</strong> las clientas y pedidos que registras aquí llegan <strong>a</strong> MyCustomers en un par de minutos.<br>Los cambios hechos <strong>en</strong> MyCustomers (ediciones, pedidos, tus reportes de equipo) me llegan cada noche.<br>Así que si algo se ve desactualizado hoy, casi siempre se corrige para mañana en la mañana.",
+    "billing_help": "<strong>Tu suscripción:</strong> $5.99 al mes, todas las funciones incluidas, cancela cuando quieras — sin contratos ni niveles.<br>Administra o cancela desde la <a href='/settings'>página de Configuración</a>.<br>¿Te encanta MPA? Di <strong>referral link</strong> — tus amigas reciben 30 días gratis, y tú un mes gratis cuando se suscriben. 💗",
+    "privacy_help": "<strong>Tus datos:</strong> tus clientas, pedidos y reportes de equipo viven en nuestros servidores seguros y solo tú puedes verlos — nunca se venden, comparten, ni se usan para entrenar IA.<br>La IA lee tus mensajes del chat para entender lo que pides, pero tus registros guardados y tu contraseña de InTouch (que está cifrada) nunca salen de nuestros servidores.<br>¿Preguntas? Escribe a <a href='mailto:support@mypinkassistant.com'>support@mypinkassistant.com</a>.",
 
     # Unit / team query strings
     "unit_no_data": "Aún no tengo datos del equipo sincronizados. Una vez que se realice una sincronización, podré responder preguntas sobre tu equipo.",

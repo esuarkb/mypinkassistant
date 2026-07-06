@@ -90,12 +90,10 @@ from .render import (
     render_customer_delete_picker,
     render_customer_picker,
     render_top5,
-    _APP_HELP_HTML,
     _build_chat_help_html,
     _format_inventory_item,
     _format_inventory_list,
     _format_low_stock_list,
-    _inventory_help_text,
     _QR_YN,
     _wants_to_skip,
 )
@@ -712,8 +710,9 @@ class MKChatEngine:
         intent_result = ctx.intent_result
 
         # Mentioned inventory but nothing above parsed a command — show help
+        # (moved to ui_text 2026-07-06 so ES consultants get Spanish)
         if intent_result.intent == "inventory_help":
-            return ChatReply(_inventory_help_text())
+            return ChatReply(ctx.ui["inventory_help"])
         return None
 
     def _intent_delete_customer(self, ctx) -> Optional[ChatReply]:
@@ -898,6 +897,33 @@ class MKChatEngine:
                 '<a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. '
                 'The changes will then show in MyPinkAssistant on the next sync.'
             )
+        return None
+
+    # --- feature-help bubbles (2026-07-06): one fixed ui_text bubble each;
+    # routed by the _feature_help_intent gate + LLM long tail ---
+    def _intent_order_help(self, ctx) -> Optional[ChatReply]:
+        if ctx.intent_result.intent == "order_help":
+            return ChatReply(ctx.ui["order_help"])
+        return None
+
+    def _intent_followup_help(self, ctx) -> Optional[ChatReply]:
+        if ctx.intent_result.intent == "followup_help":
+            return ChatReply(ctx.ui["followup_help"])
+        return None
+
+    def _intent_sync_help(self, ctx) -> Optional[ChatReply]:
+        if ctx.intent_result.intent == "sync_help":
+            return ChatReply(ctx.ui["sync_help"])
+        return None
+
+    def _intent_billing_help(self, ctx) -> Optional[ChatReply]:
+        if ctx.intent_result.intent == "billing_help":
+            return ChatReply(ctx.ui["billing_help"])
+        return None
+
+    def _intent_privacy_help(self, ctx) -> Optional[ChatReply]:
+        if ctx.intent_result.intent == "privacy_help":
+            return ChatReply(ctx.ui["privacy_help"])
         return None
 
     def _intent_notes_educate(self, ctx) -> Optional[ChatReply]:
@@ -1670,9 +1696,9 @@ class MKChatEngine:
 
         # (edit_request handled earlier, next to the other redirect rules)
 
-        # App install help
+        # App install help (moved to ui_text 2026-07-06 so ES consultants get Spanish)
         if intent_result.intent == "app_help":
-            return ChatReply(_APP_HELP_HTML)
+            return ChatReply(ctx.ui["app_help"])
         return None
 
     def _intent_chat_help(self, ctx) -> Optional[ChatReply]:
@@ -3187,6 +3213,11 @@ class MKChatEngine:
         "notes_educate": "_intent_notes_educate",
         "mycustomers_link": "_intent_mycustomers_link",
         "bulk_text_educate": "_intent_bulk_text_educate",
+        "order_help": "_intent_order_help",
+        "followup_help": "_intent_followup_help",
+        "sync_help": "_intent_sync_help",
+        "billing_help": "_intent_billing_help",
+        "privacy_help": "_intent_privacy_help",
         "pcp_list": "_intent_pcp_list",
         "leaderboard": "_intent_leaderboard",
         "top_sellers": "_intent_top_sellers",

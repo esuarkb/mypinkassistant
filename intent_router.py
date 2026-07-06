@@ -163,7 +163,7 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "inventory_low_stock":   {"llm_allowed": False, "interrupts_pending": True,  "description": "what am I low on / need to reorder"},
     "inventory_threshold":   {"llm_allowed": False, "interrupts_pending": True,  "description": "set desired on-hand level (par/minimum)"},
     "inventory_write":       {"llm_allowed": False, "interrupts_pending": True,  "description": "add/remove/set inventory quantity"},
-    "inventory_help":        {"llm_allowed": False, "interrupts_pending": True,  "description": "mentioned inventory but no command parsed — show help"},
+    "inventory_help":        {"llm_allowed": True,  "interrupts_pending": True,  "description": "asking HOW the inventory feature works or how to use it (not performing an inventory action) — show the inventory cheat sheet"},  # llm_allowed since 2026-07-06 (feature-help long tail); also the hijack-chain fallback for inventory mentions with no parsed command
     "delete_customer":       {"llm_allowed": False, "interrupts_pending": True,  "description": "delete a customer (local only, confirm flow)"},  # route() never claims this mid-flow, so in practice it can't interrupt; True mirrors the old engine dispatch exactly
     "submitted_order_edit":  {"llm_allowed": False, "interrupts_pending": True,  "description": "add/remove against an already-submitted order — educate: change it in MyCustomers, syncs back"},
     "referral":              {"llm_allowed": False, "interrupts_pending": True,  "description": "consultant's referral link"},
@@ -171,6 +171,13 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "birthday_lookup":       {"llm_allowed": False, "interrupts_pending": True,  "description": "birthdays today/this week/this month/..."},
     "followup":              {"llm_allowed": False, "interrupts_pending": True,  "description": "2+2+2 follow-up cards"},
     "customers_by_product":  {"llm_allowed": False, "interrupts_pending": True,  "description": "customers who bought/use a product"},
+    # --- feature-help bubbles (2026-07-06) — "how does X work" explanations;
+    # deterministic gate in route() (_feature_help_intent) + LLM long tail ---
+    "order_help":            {"llm_allowed": True,  "interrupts_pending": True,  "description": "asking HOW ordering works or how to place/CDS an order (an explanation, not placing one)"},
+    "followup_help":         {"llm_allowed": True,  "interrupts_pending": True,  "description": "asking what follow-ups are or how they work (not asking to see their followup cards)"},
+    "sync_help":             {"llm_allowed": True,  "interrupts_pending": True,  "description": "asking how/when data syncs with MyCustomers or why data looks out of date"},
+    "billing_help":          {"llm_allowed": True,  "interrupts_pending": True,  "description": "asking about price, subscription, how to cancel, or the referral program"},
+    "privacy_help":          {"llm_allowed": True,  "interrupts_pending": True,  "description": "asking whether their data is safe/private or what the AI can see"},
     "notes_educate":         {"llm_allowed": False, "interrupts_pending": False, "description": "'add a note to X' — notes aren't supported yet, redirect to MyCustomers"},
     "mycustomers_link":      {"llm_allowed": False, "interrupts_pending": True,  "description": "'link to mycustomers' — the clickable MyCustomers link"},
     "bulk_text_educate":     {"llm_allowed": False, "interrupts_pending": False, "description": "'text/remind several customers' — not supported, point at follow-up/lapsed lists' tap-to-text buttons"},
@@ -530,6 +537,54 @@ def _parse_send_text_target(text: str) -> Optional[tuple]:
     if not pairs:
         return None
     return (len(pairs), pairs[0])
+
+
+# Feature-help topic table: topic words → help intent, FIRST MATCH WINS (so
+# "how do i cancel this order" hits order_help, not billing_help). Adding a
+# help bubble for a new feature = one ui_text pair + one row here + golden
+# cases. Matching is word-boundary ("ai" must not match inside "email").
+_HELP_TOPICS = [
+    (("inventory",), "inventory_help"),
+    (("follow up", "follow ups", "follow-up", "followup", "followups"), "followup_help"),
+    (("order", "orders", "ordering"), "order_help"),
+    (("sync", "syncing", "synced"), "sync_help"),
+    (("billing", "subscription", "subscribe", "cancel", "pricing", "price", "membership"), "billing_help"),
+    (("privacy", "private", "safe", "secure", "security", "openai", "ai", "data"), "privacy_help"),
+]
+
+def _feature_help_intent(text: str) -> Optional[str]:
+    """Return a <topic>_help intent when the message asks HOW a feature works
+    rather than asking to USE it ("how does inventory work", "how do I add
+    inventory?", "what are follow ups", "is my data safe"). None when it's an
+    action — the guards keep counting/commands/data-questions with the action
+    rules."""
+    t = (text or "").strip().lower()
+    if not t:
+        return None
+    # Actions/data-questions in question clothing stay where they belong:
+    if re.search(r"\bhow many\b", t):                     # counting
+        return None
+    if re.search(r"\b(add|remove|set)\s+\d", t):          # command with a qty
+        return None
+    if re.search(r"\bneed to (re)?order\b", t):           # low-stock query
+        return None
+    if re.search(r"\bwhat\s+(?:is|are)\s+my\b", t):       # "what are MY orders" = her data
+        return None
+    _q = (
+        re.search(
+            r"^(?:hey |hi |ok(?:ay)? )?(?:how\s+do(?:es)?\s+(?:i|it|you|the|this|my)?|how\s+can\s+i|how\s+to\b|what\s+(?:can|does|is|are)|when\s+do(?:es)?\b|tell\s+me\s+about|explain)\b",
+            t,
+        )
+        or re.search(r"\bhow\b.{0,40}\bworks?\b", t)
+        or re.search(r"\b(?:is|are)\s+(?:my|our|it|this)\b.{0,40}\b(?:safe|secure|private)\b", t)
+    )
+    if not _q:
+        return None
+    for words, help_intent in _HELP_TOPICS:
+        for w in words:
+            if re.search(rf"\b{re.escape(w)}\b", t):
+                return help_intent
+    return None
 
 
 def _normalize_inventory_command_text(msg: str) -> str:
@@ -1241,6 +1296,7 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
         "Rules:\n"
         "- Choose exactly one allowed intent.\n"
         "- If unsure, return unknown.\n"
+        "- If the user is asking HOW a feature works or how to use it (an explanation, not performing the action), use the matching help intent: inventory_help, order_help, followup_help, sync_help, billing_help, or privacy_help.\n"
         "- If the user is asking about customer details, use customer_info.\n"
         "- If the user is asking for customers in or from a specific city or location, use customers_by_city.\n"
         "- If the user is asking what someone (a specific named person) ordered, use recent_orders.\n"
@@ -1441,6 +1497,15 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 return _claim("product_lookup", {"source": "price", "product_text": product_text})
 
     # Inventory: quantity count — "how many X do I have" (even mid-flow)
+    # Feature-help questions — "how does inventory work?" is a request for an
+    # EXPLANATION, not an action. Without this gate the show/write rules claim
+    # it and dump the whole inventory list (live 2026-07-04/05: "How do I add
+    # inventory?" ×2 went unknown; weed-garden find). Runs BEFORE the inventory
+    # action rules; extend _HELP_TOPICS one row per new topic bubble.
+    _fh = _feature_help_intent(msg)
+    if _fh:
+        return _claim(_fh)
+
     if _looks_like_inventory_count(msg):
         _count_text = _parse_inventory_lookup_text(msg)
         if _count_text:

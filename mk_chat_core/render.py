@@ -181,28 +181,7 @@ def _looks_like_inventory_add(msg: str) -> bool:
     s = (msg or "").strip().lower()
     return "inventory" in s and (s.startswith("add ") or s.startswith("remove ") or s.startswith("set "))
 
-def _inventory_help_text() -> str:
-    return (
-        "Here are a few inventory things you can say:\n"
-        "\n"
-        "📦 View & update quantities:\n"
-        "• show my inventory\n"
-        "• how many charcoal masks do I have\n"
-        "• add 3 satin hands to inventory\n"
-        "• remove 1 charcoal mask from inventory\n"
-        "• set satin hands inventory to 5\n"
-        "\n"
-        "🎯 Set a desired quantity (your 'always keep on hand' level):\n"
-        "• set charcoal mask par to 3\n"
-        "\n"
-        "📋 Check what to reorder:\n"
-        "• what am I low on\n"
-        "• what should I order\n"
-        "\n"
-        "🖨️ Print your inventory:\n"
-        "• print my inventory"
-    )
-
+# _inventory_help_text moved to ui_text.py (EN+ES) 2026-07-06
 # Routing predicates/parsers (_PRODUCT_QUERY_SYNONYMS, price-query,
 # inventory count/write/bare-write/lookup-text) moved to intent_router.py
 # (routing consolidation 2026-07-02); imported back at the top of this file.
@@ -341,18 +320,7 @@ def _build_chat_help_html(has_team: bool, lang: str = "en") -> str:
     return "\n".join(lines)
 
 
-_APP_HELP_HTML = (
-    "<strong>Add MPA to your home screen</strong>\n\n"
-    "<strong>iPhone / iPad (Safari):</strong>\n"
-    "1. Tap the <strong>Share</strong> button (box with arrow) at the bottom of the screen\n"
-    "2. Scroll down and tap <strong>Add to Home Screen</strong>\n"
-    "3. Tap <strong>Add</strong> — done!\n\n"
-    "<strong>Android (Chrome):</strong>\n"
-    "1. Tap the <strong>⋮ menu</strong> in the top-right corner\n"
-    "2. Tap <strong>Add to Home Screen</strong> or <strong>Install App</strong>\n"
-    "3. Tap <strong>Add</strong> — done!\n\n"
-    "Once installed it opens full-screen with no browser bar, just like a real app."
-)
+# _APP_HELP_HTML moved to ui_text.py (EN+ES) 2026-07-06
 
 
 # -------------------------
