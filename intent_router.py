@@ -584,6 +584,13 @@ def _feature_help_intent(text: str) -> Optional[str]:
         for w in words:
             if re.search(rf"\b{re.escape(w)}\b", t):
                 return help_intent
+    # Help-question shape but NO specific feature named — a general "how does
+    # this work" → the standard cheat sheet, not a dead-end ("How does chat
+    # work" got "I couldn't tell if that was a customer or an order" live
+    # 2026-07-06). Gated on generic app/chat words so it can't hijack a
+    # specific request that merely starts with a question word.
+    if re.search(r"\b(chat|app|this|it|everything|get(?:ting)?\s+started)\b", t):
+        return "chat_help"
     return None
 
 

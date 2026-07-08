@@ -342,6 +342,11 @@ ROUTE_CASES = [
     ("what do i need to reorder",                None, "inventory_low_stock"),
     # --- feature-help topics round 2 (2026-07-06, Brian-approved bubbles) ---
     ("how do orders work",                       None, "order_help"),
+    # general "how does the whole thing work" → cheat sheet, not a dead-end
+    # (live 2026-07-06: "How does chat work" → "couldn't tell if customer or order")
+    ("how does chat work",                       None, "chat_help"),
+    ("how does this work",                       None, "chat_help"),
+    ("how do i get started",                     None, "chat_help"),
     ("how do i place an order",                  None, "order_help"),
     ("how do i cancel this order",               None, "order_help"),      # order beats billing
     ("how do followups work",                    None, "followup_help"),
