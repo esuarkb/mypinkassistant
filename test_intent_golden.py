@@ -282,6 +282,14 @@ SLOT_CASES = [
     ("springfield customers",         "city",      "Springfield"),
     ("top selling items this quarter", "timeframe", "quarter"),
     ("best sellers this year",        "timeframe", "year"),
+    # weed-garden 2026-07-07 (F2b): "City, State" + verbose/polite forms must
+    # extract the city. The old end-anchored, comma-less pattern truncated at the
+    # comma or grabbed the leading verb phrase ("No customers found in I Need A
+    # List Of"); c114 typed Cleburne five ways with inconsistent results.
+    ("customers in cleburne, texas",  "city",      "Cleburne, Texas"),
+    ("give me a list of all my customers in cleburne, texas", "city", "Cleburne, Texas"),
+    ("i need a list of customers from cleburne, texas with name and phone number", "city", "Cleburne, Texas"),
+    ("customers in eau claire, wi",   "city",      "Eau Claire, Wi"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -358,6 +366,19 @@ ROUTE_CASES = [
     ("do i have any followups",                  None, "followup"),
     ("what is my referral link",                 None, "referral"),
     ("what foundations do i have in stock",      None, "inventory_count"),  # was a catalog price list
+    # --- weed-garden 2026-07-07: "<name> ordered <products>" is order ENTRY, not
+    # an order-history lookup. c39 fought this ~15x — single items and "ordered:"
+    # colon lists dead-ended in recent_orders word-salad ("I couldn't find blue
+    # eyeliner in your saved customers"). Override now catches the active-verb
+    # statement shape (_looks_like_new_order_entry); interrogative/history
+    # phrasings still stay recent_orders. ---
+    ("dana rivers ordered makeup remover",       None, "new_order"),          # single item, was recent_orders
+    ("dana ordered: spark change, micellar water, black eyeliner", None, "new_order"),  # colon list, was recent_orders
+    ("dana rivers ordered makeup finishing spray", None, "new_order"),
+    # negative guards — genuine lookups must STAY recent_orders:
+    ("what did dana order",                      None, "recent_orders"),
+    ("who last ordered under eye corrector",     None, "recent_orders"),      # cross-customer lookup, not entry
+    ("recent orders for dana",                   None, "recent_orders"),
     # catalog-search fixes 2026-07-03 (search_terms aliases + compound-word
     # normalization + trailing "ingredients" — all were June production failures)
     ("dwl",                                      None, "product_lookup"),   # search_terms alias

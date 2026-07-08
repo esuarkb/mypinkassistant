@@ -403,8 +403,45 @@ def _parse_small_number(text: str) -> Optional[int]:
     return NUMBER_WORDS.get(s)
 
 
+# "<name> ordered/wants/needs [:] <products>" is order ENTRY, not an order-history
+# lookup — but the score-based heuristic below missed it two ways (weed-garden
+# 2026-07-07, c39 fought this ~15x across 3 customers, repeated cancels): the verb
+# check keyed on "ordered " with a trailing space, so "ordered:" scored 0, and
+# single-item orders ("Ellie ordered makeup remover") never reached the 2-signal
+# threshold. This strong-shape shortcut catches the active-verb statement form
+# directly; the lookup guard keeps genuine history phrasings ("recent orders",
+# "what did X order", "order history") in recent_orders.
+_ORDER_ENTRY_SHAPE_RE = re.compile(
+    r"^\s*(?:new\s+order\s+for\s+|order\s+for\s+)?"        # optional lead-in
+    r"[a-z][\w.'-]*(?:\s+[a-z][\w.'-]*){0,3}?"             # subject / name, 1-4 tokens
+    r"\s+(?:ordered|wants?|wanted|needs?|needed)\s*:?\s+"  # active order verb (+ optional colon)
+    r"\S",                                                 # content follows the verb
+    re.IGNORECASE,
+)
+_ORDER_LOOKUP_RE = re.compile(
+    r"\b(recent\s+orders?|order\s+history|last\s+orders?|past\s+orders?|"
+    r"previous\s+orders?|pending\s+orders?|how\s+many\s+orders?|orders?\s+for\b|"
+    r"what\s+did\s+.*\border\b)\b",
+    re.IGNORECASE,
+)
+# A real order-entry statement never opens with an interrogative — those are
+# cross-customer/history lookups ("who last ordered X", "what was the last
+# foundation ordered by Y", "which customers ordered Z"). Guards both the
+# strong-shape shortcut and the score path below.
+_ORDER_QUESTION_RE = re.compile(r"^\s*(?:who|what|which|whose|when|where|why|how)\b", re.IGNORECASE)
+
+
 def _looks_like_new_order_entry(text: str) -> bool:
     t = (text or "").strip().lower()
+
+    # Questions are lookups, not order entry — never flip them to new_order.
+    if _ORDER_QUESTION_RE.match(t):
+        return False
+
+    # Strong shape: "<name> ordered/wants/needs <products>" as a statement (not a
+    # history lookup). Covers single items and colon lists the scorer below missed.
+    if _ORDER_ENTRY_SHAPE_RE.search(t) and not _ORDER_LOOKUP_RE.search(t):
+        return True
 
     has_order_verb = any(x in t for x in ("order ", "ordered ", "wants ", "want ", "needs ", "need "))
     has_item_connector = any(x in t for x in (" and ", ","))
@@ -1208,10 +1245,25 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # Pattern 1: "customers in/from [city]" — unambiguous, no exclusions needed
     # Skip if this looks like a new customer entry
     _is_new_customer_entry = bool(re.match(r"^(new|add|create)\s+customer", lowered))
-    _city_m1 = None if _is_new_customer_entry else re.search(r"\bcustomers?\s+(?:in|from)\s+([A-Za-z][A-Za-z\s.'-]+?)(?:\s*\??\s*$)", lowered)
+    # "customers in/from <City[, State]>" — allow a trailing ", State" and any
+    # trailing qualifier ("with name and phone number", "please") so the comma+state
+    # and polite/verbose forms extract the city instead of dead-ending. The old
+    # pattern was end-anchored and comma-less, so "customers in Cleburne, Texas" and
+    # "I need a list of customers from Cleburne, Texas with name and phone number"
+    # both failed (weed-garden 2026-07-07).
+    _city_m1 = None if _is_new_customer_entry else re.search(
+        r"\bcustomers?\s+(?:in|from)\s+"
+        r"([a-z][a-z.'\- ]*?)"                         # city (lazy, multi-word)
+        r"(?:\s*,\s*([a-z]{2,}))?"                     # optional ", State"
+        r"(?=\s+(?:with|and|w/|that|who|please|for|to|listed)\b|[?.!,]|\s*$)",
+        lowered,
+    )
     if _city_m1:
+        _city1 = _city_m1.group(1).strip()
+        if _city_m1.group(2):
+            _city1 = f"{_city1}, {_city_m1.group(2).strip()}"
         return IntentResult(intent="customers_by_city", confidence=0.95,
-                            slots={"city": _city_m1.group(1).strip().title()}, raw_text=msg)
+                            slots={"city": _city1.title()}, raw_text=msg)
     # Pattern 3: "customers who live/living/lives in [city]"
     _city_m3 = re.search(r"\bliv(?:e|es|ing)\s+in\s+([A-Za-z][A-Za-z\s.',\-]+?)(?:\s*\??\s*$)", lowered) if "customer" in lowered and not _is_new_customer_entry else None
     if _city_m3:

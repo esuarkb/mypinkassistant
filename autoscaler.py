@@ -249,7 +249,6 @@ def check_and_scale_up() -> bool:
     Suppressed during cooldown after a recent scale-down.
     """
     if _is_local_env():
-        print("[Autoscaler] skipped — local SQLite environment, not touching prod scaling")
         return False
 
     elapsed = time.time() - _get_last_scale_down()
@@ -279,7 +278,6 @@ def check_and_scale_nightly() -> bool:
     empty-queue scale-down returns to worker_min when the sweep finishes.
     """
     if _is_local_env():
-        print("[Autoscaler] skipped — local SQLite environment, not touching prod scaling")
         return False
 
     elapsed = time.time() - _get_last_scale_down()
@@ -305,7 +303,6 @@ def check_and_scale_down() -> bool:
     Records timestamp so scale-up is suppressed during Render's termination window.
     """
     if _is_local_env():
-        print("[Autoscaler] skipped — local SQLite environment, not touching prod scaling")
         return False
 
     active = _any_jobs_active()
