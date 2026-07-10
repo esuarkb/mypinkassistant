@@ -271,6 +271,9 @@ NEGATIVE_GUARD_CASES = [
     ("yes", "customer_info", "stray yes must not show a customer card"),
     ("no thanks", "customer_info", "stray no-thanks must not show a customer card"),
     ("Okay", "customer_info", "stray okay must not show a customer card"),
+    # weed-garden 2026-07-09: "phone number" must never be caught by the new
+    # part-number rule — the rule regex is scoped to part/item/sku specifically.
+    ("what is jane doe's phone number", "product_lookup", "phone number must not trigger the part-number rule"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -457,6 +460,18 @@ ROUTE_CASES = [
     # the pre-existing submitted-order-edit-adjacent path, NOT be broken by
     # the new bare-form widening (this is the exact live-incident phrasing)
     ("Edit Bobbie hinski order to add 25% off",  None, ("order_add", "order_adjust", "submitted_order_edit", "<llm-skipped>", "unknown")),
+
+    # --- part-number routing — added weed-garden 2026-07-09 (c29 gave up after
+    # 2 attempts asking "what is the part number of natural lipstick"; the
+    # customer_info catch-all claimed it and dead-ended) ---
+    ("what is the part number of natural lipstick", None, "product_lookup"),
+    ("part number for cc cream",                    None, "product_lookup"),
+    ("sku for hydrating cleanser",                  None, "product_lookup"),
+    # order-context guards: sku/part-number INSIDE an order must never be
+    # hijacked into a lookup (supervision catch, 2026-07-10 — the unguarded
+    # rule stole "New order … sku 10233551" from new_order)
+    ("New order for Dana Rivers sku 10233551",      None, "new_order"),
+    ("add sku 10233551 to the order",               _MID_FLOW, ("order_add", "<llm-skipped>", "unknown")),
 ]
 
 

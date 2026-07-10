@@ -353,6 +353,17 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         if score > best_by_owner.get(oi, -1):
             best_by_owner[oi] = score
 
+    # Exact-phrase override: a multi-word query that appears verbatim in a
+    # product NAME names that product — it must outrank short search_terms
+    # aliases ("hydrating cleanser" lost 82→90 to the bare "cleanser" alias on
+    # Clear Proof; weed-garden 2026-07-09, regression of the 2026-07-04 alias
+    # fix). Gated to ≥2 significant words so single-word queries ("cleanser")
+    # keep the alias behavior that fix intended.
+    if len([w for w in q_for_score.split() if len(w) >= 3]) >= 2:
+        for _oi in best_by_owner:
+            if q_for_score in _norm_plus(candidates[_oi]["product_name"]).lower():
+                best_by_owner[_oi] = max(best_by_owner[_oi], 96)
+
     q_words = {w for w in re.split(r"\s+", q) if len(w) >= 3}
 
     matches: List[dict] = []
@@ -686,6 +697,16 @@ def _looks_like_product_price_query(msg: str) -> bool:
         return True
     if re.search(r"\bprice\b.{0,30}\bfor\b", s) and "order" not in s:
         return True
+    # part number / sku queries (weed-garden 2026-07-09) — must route through the
+    # same extraction path as "price of X"/"ingredients in X" below, otherwise the
+    # bare-message (<=4 word) hijack a few lines down fuzzy-matches the RAW message
+    # ("sku for lifting serum" as one string) instead of stripping "sku for" first,
+    # which sent consultants a wrong product on the very card meant to fix this.
+    # Order-context guard like the price rule above: "New order for Jane sku
+    # 10233551" / "add sku … to the order" are order ENTRY — never hijack them.
+    if (re.search(r"\b(?:part\s*(?:number|no\.?|#)|item\s+number|sku)\b", s)
+            and not re.search(r"\b(?:order|add|remove)\b", s)):
+        return True
     return False
 
 
@@ -698,6 +719,12 @@ def _parse_product_price_query_text(msg: str) -> str:
         r"(?i)^what does\s+(?:the\s+)?(.+?)\s+cost\s*\??$",
         r"(?i)^what(?:'s| are)? (?:the\s+)?ingredients? (?:in|of|for)\s+(?:the\s+)?(.+?)\s*\??$",
         r"(?i)^ingredients? (?:in|of|for)\s+(?:the\s+)?(.+?)\s*\??$",
+        # weed-garden 2026-07-09: part-number/sku queries route to product_lookup
+        # via the new rule in parse_intent(), but route()'s "product_lookup by
+        # classified intent" branch always resets raw_text back to the full
+        # message — same as the ingredients patterns above, the actual product
+        # name has to be pulled back out here at render time.
+        r"(?i)^(?:what(?:'s| is)?\s+)?(?:the\s+)?(?:part\s*(?:number|no\.?|#)|item\s+number|sku)\b\s*(?:of|for|on)?\s*(?:the\s+)?(.+?)\s*\??$",
         r"(?i)^(?:can you\s+)?tell me about\s+(?:the\s+)?(.+?)\s*\??$",
         r"(?i)^(.+?)\s+ingredients?\s*\??$",
     ):
@@ -1324,6 +1351,24 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # "ingredients in X" → always product_lookup (must come before customer_info catch-all)
     if re.search(r"\bingredients?\b", lowered):
         return IntentResult(intent="product_lookup", confidence=0.95, raw_text=msg)
+
+    # "part number/item number/sku of X" → always product_lookup (must come before
+    # customer_info catch-all). weed-garden 2026-07-09: consultant c29 asked "what is
+    # the part number of natural lipstick" twice and gave up — the customer_info
+    # catch-all below claims any "what is ..." message and dead-ended on "couldn't
+    # find natural lipstick in your saved customers". Regex is deliberately scoped to
+    # part/item/sku so "phone number" does NOT trigger this (must stay customer_info).
+    # Order-context guard: "New order for Jane sku 10233551" / mid-flow "add sku …"
+    # are order entry, not lookups — leave them to the order rules/pending flow.
+    if (re.search(r"\b(?:part\s*(?:number|no\.?|#)|item\s+number|sku)\b", lowered)
+            and not re.search(r"\b(?:order|add|remove)\b", lowered)):
+        _part_tail_m = re.search(
+            r"\b(?:part\s*(?:number|no\.?|#)|item\s+number|sku)\b\s*(?:of|for|on)?\s*(.+)$",
+            lowered,
+        )
+        _part_tail = _part_tail_m.group(1).strip().rstrip(" ?.!,") if _part_tail_m else ""
+        return IntentResult(intent="product_lookup", confidence=0.95,
+                            raw_text=_part_tail if _part_tail else msg)
 
     # "create X" without "order" → new customer (e.g. "create nichole giveaway")
     if lowered.startswith("create ") and "order" not in lowered:

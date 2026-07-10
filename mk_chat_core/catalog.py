@@ -114,6 +114,13 @@ def _fmt_product_lookup_single(m: dict) -> str:
     """Format a single product lookup result with optional PDF links."""
     price = _fmt_price_with_change(m)
     line = f"{m['product_name']} — {price}".strip(" —")
+    # Part # shown subtly on the card so consultants can grab it for InTouch
+    # order/replacement entry. weed-garden 2026-07-09: "part number" questions
+    # were routing to product_lookup with no way to answer them — the number
+    # simply wasn't on the card. Gray/small like other muted card meta text.
+    sku = (m.get("sku") or "").strip()
+    if sku:
+        line += f" <span style='color:#888;font-size:0.85em'>Part # {_html.escape(sku)}</span>"
     parts = ["<strong>Product Look Up</strong>", line]
     links = []
     if m.get("fact_sheet_url"):

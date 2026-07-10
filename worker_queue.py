@@ -193,13 +193,18 @@ def retention_cleanup(redact_hours: int = 24, delete_days: int = 90,
             # ---------------------------
             # REDACT (Postgres)
             # ---------------------------
+            # Preserve the non-PII scheduler marker: the admin "Completed" list
+            # hides nightly syncs via payload LIKE '%scheduler%', and redacting
+            # to '{}' was resurrecting day-old sweeps in that list (2026-07-10).
             cur.execute("""
                 UPDATE jobs
-                SET payload_json = '{}',
+                SET payload_json = CASE
+                        WHEN payload_json LIKE '%%"source": "scheduler"%%'
+                        THEN '{"source": "scheduler"}' ELSE '{}' END,
                     error = '',
                     status_msg = COALESCE(NULLIF(status_msg,''), 'Redacted')
                 WHERE status IN ('done','failed')
-                AND payload_json <> '{}'
+                AND payload_json NOT IN ('{}', '{"source": "scheduler"}')
                 AND COALESCE(finished_at, created_at)
                         < (NOW() - make_interval(hours => %s))
             """, (int(redact_hours),))
@@ -234,16 +239,19 @@ def retention_cleanup(redact_hours: int = 24, delete_days: int = 90,
             # ---------------------------
             # REDACT (SQLite)
             # ---------------------------
+            # Preserve the non-PII scheduler marker (see Postgres branch above).
             cur.execute("""
                 UPDATE jobs
-                SET payload_json='{}',
+                SET payload_json=CASE
+                        WHEN payload_json LIKE '%"source": "scheduler"%'
+                        THEN '{"source": "scheduler"}' ELSE '{}' END,
                     error='',
                     status_msg=CASE
                         WHEN status_msg IS NULL OR status_msg='' THEN 'Redacted'
                         ELSE status_msg
                     END
                 WHERE status IN ('done','failed')
-                  AND payload_json <> '{}'
+                  AND payload_json NOT IN ('{}', '{"source": "scheduler"}')
                   AND (
                       strftime('%s','now') - strftime('%s',
                         COALESCE(NULLIF(finished_at,''), NULLIF(created_at,''))
