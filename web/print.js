@@ -1,5 +1,20 @@
 document.addEventListener('DOMContentLoaded', function () {
     var btnPrint = document.getElementById('btn-print');
+    var searchBox = document.getElementById('inv-search');
+    var currentView = 'all';
+
+    // Accent-insensitive normalize so "limpiador" finds "Limpiador" on the ES catalog.
+    function normText(s) {
+        return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
+    // Precompute each row's searchable text (product name + SKU) once —
+    // keeps per-keystroke filtering trivial across the full catalog.
+    document.querySelectorAll('#inv-table tbody tr').forEach(function (row) {
+        if (!row.dataset.sku) return; // skip the no-match placeholder row
+        var name = row.cells[0] ? row.cells[0].textContent : '';
+        row.dataset.search = normText(name + ' ' + row.dataset.sku);
+    });
 
     btnPrint.addEventListener('click', function () {
         var checked = document.querySelector('input[name="view"]:checked');
@@ -13,19 +28,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('view-all').addEventListener('change', function () {
         exitEnterMode();
-        filterRows('all');
+        currentView = 'all';
+        applyFilters();
     });
 
     document.getElementById('view-onhand').addEventListener('change', function () {
         exitEnterMode();
-        filterRows('onhand');
+        currentView = 'onhand';
+        applyFilters();
     });
 
     document.getElementById('view-enter').addEventListener('change', function () {
-        filterRows('all');
+        currentView = 'all';
+        applyFilters();
         toggleInputs(true);
         btnPrint.textContent = 'Save';
     });
+
+    if (searchBox) {
+        searchBox.addEventListener('input', applyFilters);
+    }
 
     function updateGrandTotal() {
         var total = 0;
@@ -99,14 +121,22 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    function filterRows(view) {
+    // One combined predicate: a row shows only if it matches the current tab
+    // AND the search text. Keeps search working identically on all three tabs
+    // and surviving tab switches. Typed Enter-Inventory values live in the DOM,
+    // so rows hidden by a search still save on Save.
+    function applyFilters() {
+        var q = searchBox ? normText(searchBox.value.trim()) : '';
+        var anyVisible = false;
         document.querySelectorAll('#inv-table tbody tr').forEach(function (row) {
-            if (view === 'onhand') {
-                row.classList.toggle('hidden', row.dataset.hasQty === '0');
-            } else {
-                row.classList.remove('hidden');
-            }
+            if (!row.dataset.sku) return; // no-match placeholder handled below
+            var hide = (currentView === 'onhand' && row.dataset.hasQty === '0') ||
+                       (q !== '' && row.dataset.search.indexOf(q) === -1);
+            row.classList.toggle('hidden', hide);
+            if (!hide) anyVisible = true;
         });
+        var noMatch = document.getElementById('no-match-row');
+        if (noMatch) noMatch.classList.toggle('hidden', anyVisible);
         updateGrandTotal();
     }
 });

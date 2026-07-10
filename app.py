@@ -1644,8 +1644,10 @@ def inventory_print(request: Request):
     body {{ font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #111; margin: 0; padding: 20px; }}
     h1 {{ font-size: 18px; margin: 0 0 4px; }}
     .meta {{ color: #666; font-size: 12px; margin-bottom: 16px; }}
-    .controls {{ margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }}
+    .controls {{ margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }}
     .controls label {{ font-size: 13px; cursor: pointer; }}
+    #inv-search {{ padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; width: 220px; max-width: 100%; margin-bottom: 12px; }}
+    #no-match-row td {{ color: #888; text-align: center; padding: 18px 10px; }}
     .btn-print {{ background: #e91e63; color: #fff; border: none; padding: 7px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600; }}
     .btn-print:hover {{ background: #c2185b; }}
     .btn-back {{ display: inline-flex; align-items: center; padding: 7px 18px; border-radius: 8px; border: 1px solid #e6e6e6; background: #fff; color: #111; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; }}
@@ -1668,6 +1670,7 @@ def inventory_print(request: Request):
     .summary-bar .grand-total {{ font-weight: 700; color: #e91e63; }}
     @media print {{
       .controls {{ display: none; }}
+      #inv-search {{ display: none; }}
       body {{ padding: 10px; }}
       tr.low td.low-cell {{ color: #c0392b; }}
       .summary-bar {{ position: static; }}
@@ -1691,7 +1694,10 @@ def inventory_print(request: Request):
     <a class="btn-back" href="/app">Back to chat</a>
   </div>
   <div class="summary-bar" id="summary-bar">
-    Total Retail Value on Shelf: <span class="grand-total" id="grand-total">$0.00</span>
+    Total Retail Value: <span class="grand-total" id="grand-total">$0.00</span>
+  </div>
+  <div>
+    <input type="search" id="inv-search" placeholder="Search product or part #" autocomplete="off">
   </div>
   <table id="inv-table">
     <thead>
@@ -1705,9 +1711,10 @@ def inventory_print(request: Request):
     </thead>
     <tbody>
       {table_rows}
+      <tr id="no-match-row" class="hidden"><td colspan="5">No products match your search.</td></tr>
     </tbody>
   </table>
-  <script src="/web/print.js"></script>
+  <script src="/web/print.js?v=2"></script>
 </body>
 </html>"""
 
