@@ -54,12 +54,13 @@ CASES = [
     ("install the app on my ipad",              "app_help",          "kw"),
 
     # --- mid-flow reply tokens must NOT call the LLM ---
-    # "yes"/"no" hit the bare-name rule → customer_info (logged 1,360x in prod).
-    # Harmless by contract: the customer_info handler in mk_chat_core is guarded
-    # by `if not pending`, so mid-flow replies fall through to the pending flow.
-    # Pinned here so a router change that starts LLM-calling these gets caught.
-    ("yes",                                     "customer_info",     "kw"),
-    ("no",                                      "customer_info",     "kw"),
+    # With NO pending open, "yes"/"no" now return unknown deterministically
+    # (weed-garden 2026-07-08 F4: they used to hit the bare-name rule and show
+    # a random customer's card — "Yes" → Yessica Manzo). Still never LLM.
+    # The mid-flow contract (pending open → bare-name path → pending layer
+    # consumes) is pinned in ROUTE_CASES below.
+    ("yes",                                     "unknown",           "kw"),
+    ("no",                                      "unknown",           "kw"),
     ("3",                                       "unknown",           "kw"),
 
     # --- inventory (kw — the word "inventory" routes directly) ---
@@ -264,6 +265,12 @@ NEGATIVE_GUARD_CASES = [
      "bulk_text_educate", "non-outreach phrasing must not be claimed"),
     ("Edit Bobbie hinski order to add 25% off", "edit_request",
      "order-edit phrasing must not be caught by the bare edit_request widening"),
+    # weed-garden 2026-07-08 (F4): stray confirmations with no pending open
+    # must not pass as bare names and fuzzy-match a random customer's card
+    # ("Yes" → Yessica Manzo). Exact-word exclusion — real names unaffected.
+    ("yes", "customer_info", "stray yes must not show a customer card"),
+    ("no thanks", "customer_info", "stray no-thanks must not show a customer card"),
+    ("Okay", "customer_info", "stray okay must not show a customer card"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -405,6 +412,16 @@ ROUTE_CASES = [
     # pending-flow guards: mid-flow, guarded rules must NOT claim the message,
     # so the pending flow consumes it (route falls through to the base intent)
     ("charcoal mask",                            _MID_FLOW, "customer_info"),  # bare-name rule; pending flow eats it
+    # weed-garden 2026-07-08 F4: mid-flow confirm tokens MUST stay on the
+    # deterministic bare-name path (1,360x/30d, never LLM) — pending consumes.
+    ("yes",                                      _MID_FLOW, "customer_info"),
+    ("no",                                       _MID_FLOW, "customer_info"),
+    # …but with NO pending, the same tokens are unknown (fallback bubble),
+    # never a fuzzy customer-card match.
+    ("yes",                                      None,      "unknown"),
+    ("no thanks",                                None,      "unknown"),
+    ("thank you",                                None,      "unknown"),
+    ("okay",                                     None,      "unknown"),
     ("spanish look book",                        _MID_FLOW, "look_book"),      # look book works even mid-order
     ("print my inventory",                       _MID_FLOW, "inventory_print"),
     # mid-draft add/remove must NOT be claimed by the submitted-order rule —

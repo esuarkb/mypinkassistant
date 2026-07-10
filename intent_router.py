@@ -1223,6 +1223,21 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # Single word (or two words) that looks like a name — treat as lookup
     # e.g. "ruby" or "ruby perez" with no other context
     _words = msg.strip().split()
+    # Stray "yes"/"ok"/"thanks" with NO pending open used to pass as a bare
+    # name and fuzzy-match a random customer's card ("Yes" → Yessica Manzo —
+    # weed-garden 2026-07-08, c114). MID-FLOW these must stay on the bare-name
+    # path (customer_info kw → handler declines → pending layer consumes;
+    # 1,360x/30d, deliberately never LLM — see the pinned golden cases). With
+    # no pending there's nothing to confirm: return unknown deterministically
+    # so the fallback bubble answers instead of a random card (and instead of
+    # an LLM classifier coin-flip). Exact-word check, NOT substring — adding
+    # "no" to the substring tuple below would kill real names like Nora.
+    _CHITCHAT_WORDS = {"yes", "no", "ok", "okay", "yep", "nope", "yeah",
+                       "nah", "sure", "thanks", "thank", "you"}
+    if (_words and len(_words) <= 2
+            and all(w.lower() in _CHITCHAT_WORDS for w in _words)
+            and not (state or {}).get("pending")):
+        return IntentResult(intent="unknown", confidence=0.9, raw_text=msg)
     looks_like_bare_name = (
         1 <= len(_words) <= 2
         and all(re.match(r"^[a-zA-Z'-]+$", w) for w in _words)

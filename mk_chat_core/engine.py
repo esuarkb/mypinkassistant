@@ -2654,10 +2654,18 @@ class MKChatEngine:
                             + ui["order_adjust_hint"]
                         )
                     # Strip leading count: "2 apple and almond lotion" → count=2, target="apple and almond lotion"
+                    # Word numbers count too — "remove one dark brunette" failed while
+                    # "remove 1 lash love fanorama" worked (weed-garden 2026-07-08, c92+c114).
                     _remove_count = 1
-                    _count_m = re.match(r'^(\d+)\s+(.+)$', target)
+                    _count_m = re.match(
+                        r'^(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(.+)$',
+                        target, re.IGNORECASE,
+                    )
                     if _count_m:
-                        _remove_count = max(1, int(_count_m.group(1)))
+                        _cw = _count_m.group(1).lower()
+                        _word_nums = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                                      "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+                        _remove_count = max(1, int(_cw)) if _cw.isdigit() else _word_nums[_cw]
                         target = _count_m.group(2).strip()
                     # Only reject "and"/"," if the name itself doesn't match an order line
                     # (product names like "apple and almond" contain "and" legitimately)
@@ -2674,6 +2682,11 @@ class MKChatEngine:
                             _removed_count += 1
                         else:
                             break
+                    if not _removed_count and _count_m:
+                        # The stripped "count" may actually be part of the product
+                        # name ("3 in 1 cleanser") — retry the untouched text once.
+                        if self._remove_line(order, _count_m.group(0).strip()):
+                            _removed_count = 1
                     if not _removed_count:
                         return ChatReply(
                             ui["remove_not_found"] + "\n\n"
@@ -3598,14 +3611,36 @@ class MKChatEngine:
         Flexible name match for remove: normalize & → and, then check
         substring first, then all-words fallback for cases where the
         catalog name has extra words (e.g. 'Scented', 'Mary Kay').
+        Target punctuation is stripped — voice-to-text inserts commas
+        ("precision, brow, liner, dark, brunette") — and the all-words
+        fallback tolerates light word-form drift ("cleanser" ≈ "cleansing")
+        via a shared ≥5-char stem (weed-garden 2026-07-08, c92+c114).
         """
-        t = target.lower().replace(' & ', ' and ').replace('&', 'and').strip()
+        t = target.lower().replace(' & ', ' and ').replace('&', 'and')
+        t = re.sub(r"[,.;:!]+", " ", t)
+        t = re.sub(r"\s+", " ", t).strip()
         n = (name or "").lower().replace(' & ', ' and ').replace('&', 'and')
         if t in n:
             return True
+
+        def _stem(w: str) -> str:
+            # crude, tight: cleansing→cleans, cleanser→cleans, wipes→wipe
+            for suf in ("ing", "er", "s"):
+                if w.endswith(suf) and len(w) - len(suf) >= 4:
+                    return w[: len(w) - len(suf)]
+            return w
+
+        name_words = re.sub(r"[^a-z0-9 ]+", " ", n).split()
+
+        def _word_ok(w: str) -> bool:
+            if w in n:
+                return True
+            ws = _stem(w)
+            return len(ws) >= 5 and any(_stem(nw) == ws for nw in name_words)
+
         # All-words fallback: every word in the target appears in the name
         words = [w for w in t.split() if len(w) > 2]
-        return bool(words) and all(w in n for w in words)
+        return bool(words) and all(_word_ok(w) for w in words)
 
     def _remove_line_peek(self, order: dict, target: str) -> bool:
         """Return True if target matches any line — without removing it."""

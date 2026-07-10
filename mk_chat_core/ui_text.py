@@ -24,7 +24,7 @@ UI_EN = {
     "order_confirm_q": "Does that sound right? (yes/no)",
     "cds_finalize_reminder": "\nReminder: after confirming, you will need to finalize this CDS order on InTouch by navigating to <a href=\"https://apps.marykayintouch.com/order-list\" target=\"_blank\">Orders</a> and completing the order.\n",
 
-    "need_customer_for_order": "Who is this order for? Please tell me the customer name and the products they ordered.",
+    "need_customer_for_order": "I caught the products but not who they're for! Please retype the order with the customer's name in front — like <strong>New order for Jane: CC cream, mascara</strong>.",
     "need_customer_info": "Okay, tell me the customer's name and information.",
     "need_items": "What items should I add to the order?",
     "got_it_ordering_for": "Got it — order for {name}.",
@@ -34,7 +34,7 @@ UI_EN = {
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Parse error: {err}",
-    "cant_tell": "I couldn't tell if that was a new customer or an order. Try rephrasing.",
+    "cant_tell": "I'm not quite sure what you meant! Plain requests work best — like <strong>New order for Jane</strong> or <strong>Who has birthdays this month</strong>. Type <strong>Help</strong> for my full cheat sheet.",
     "cust_confirmed": "✅ {first} {last} confirmed. Adding to MyCustomers now.",
     "cust_reject": "No problem — Send the corrected customer info and I'll try again.",
     "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
@@ -156,7 +156,7 @@ UI_ES = {
     "order_confirm_q": "¿Suena bien? (sí/no)",
     "cds_finalize_reminder": "\nRecordatorio: después de confirmar, deberás finalizar este pedido CDS en InTouch entrando a <a href=\"https://apps.marykayintouch.com/order-list\" target=\"_blank\">Pedidos</a> (Orders) y completando el pedido.\n",
 
-    "need_customer_for_order": "¿Para quién es este pedido? Dime el nombre del cliente y los productos que ordenó.",
+    "need_customer_for_order": "Entendí los productos, ¡pero no para quién son! Vuelve a escribir el pedido con el nombre del cliente al frente — como <strong>New order for Jane: CC cream, mascara</strong>.",
     "need_customer_info": "Perfecto, dime el nombre del cliente y su información.",
     "need_items": "¿Qué artículos debo agregar al pedido?",
     "got_it_ordering_for": "Listo — pedido para {name}.",
@@ -166,7 +166,7 @@ UI_ES = {
 
     # ✅ Missing keys your code uses:
     "parse_error": "❌ Error al interpretar: {err}",
-    "cant_tell": "No pude determinar si era un cliente nuevo o un pedido. Intenta reformularlo.",
+    "cant_tell": "No entendí muy bien lo que quisiste decir. Las solicitudes sencillas funcionan mejor — como <strong>New order for Jane</strong> o <strong>Who has birthdays this month</strong>. Escribe <strong>Help</strong> para ver mi guía completa.",
     "cust_confirmed": "✅ {first} {last} confirmado. Agregando a MyCustomers ahora.",
     "cust_reject": "No hay problema — envíame la info corregida del cliente y lo intento de nuevo.",
     "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",

@@ -86,13 +86,56 @@ Check KNOWN_BUGS in test_intent_golden.py and the future-features backlog
 first: some "gaps" are deliberate non-features (e.g. bulk SMS) — say so
 instead of proposing them.
 
-## Step 4 — The report
+## Step 4 — Judge by INTENT, not phrasing (accommodate / educate / ignore)
+
+MPA is a focused tool, not a general chatbot. The goal is NEVER to absorb
+every random thing consultants type — it's to make the things the product
+does well work when asked naturally. For every verified friction episode,
+answer first: **what was this consultant trying to ACCOMPLISH, and is that a
+supported feature?**
+
+- **Supported feature, natural phrasing** (how most consultants would say it)
+  → candidate fix.
+- **Supported feature, one person's odd phrasing** → watch-list, not a fix.
+- **Consultant doesn't know a capability exists** (doing manually what MPA
+  already does, e.g. pasting inventory the auto-import already covers) →
+  EDUCATE finding: stage help-bubble/copy, not a routing rule.
+- **Not a feature and not on the backlog** → deliberate non-feature: say so;
+  educate toward the nearest supported path if one exists, otherwise ignore.
+
+**One-off threshold — a finding qualifies for a staged fix only if** ≥2
+distinct consultants hit it, OR one consultant fought it repeatedly
+(retries/cancels/abandonment), OR it's structurally certain to recur (a
+designed funnel or deterministic rule guarantees future traffic). Everything
+else is a watch-list item, not a finding.
+
+**Watch-list — `data/weed_garden/WATCHLIST.md`** (local-only, like reports).
+One line per item: date first seen, consultant, phrasing shape, what happened.
+Every run: read it BEFORE analyzing the window, check for recurrences, promote
+anything that recurred (it now meets the threshold), prune items 30+ days
+stale. One-offs don't evaporate with the daily report — recurrence is the
+promotion signal.
+
+**Fix hierarchy (educate before accommodate).** When staging, prefer in order:
+1. **Educate** — point at an existing capability via the help-bubble system
+   (`_HELP_TOPICS` / `*_help` intents) or a copy tweak. Cheapest, zero
+   routing risk, and it compounds: the consultant learns the tool.
+2. **Fix extraction/handling of natural phrasing** for a core action the tool
+   already claims to do (the "Remove one dark brunette" class).
+3. **New routing rule** — last resort, only for a phrasing family multiple
+   consultants use. Never a rule whose only job is absorbing one person's
+   typing style.
+
+## Step 5 — The report
 
 Rank by **distinct consultants affected** (4 consultants × 1 hit beats
 1 consultant × 10 retries), then frequency. For each finding:
 
 - One-line title + friction class (routing gap / LLM coin-flip / handler
-  extraction / copy dead-end / feature gap / deliberate non-feature)
+  extraction / copy dead-end / educate gap / feature gap / deliberate
+  non-feature)
+- The Step-4 intent call: what the consultant was trying to accomplish, and
+  why this is a fix vs educate vs watch-list item
 - Verbatim examples (log text is fine in the REPORT — it's local-only)
 - What the consultant expected vs got
 - Verified-current: yes (replayed) — with the replay result
@@ -111,11 +154,15 @@ Then the **STAGED FIXES** section for each finding worth fixing:
   care, never in a casual fix batch).
 - **Effort**: minutes/hours.
 
+Include a **Watch-list** section: new one-offs added this run, recurrence
+checks on existing items (promoted / still quiet / pruned). Update
+`data/weed_garden/WATCHLIST.md` to match.
+
 Save the full report to `data/weed_garden/YYYY-MM-DD.md` (data/ is gitignored)
 AND give Brian the ranked summary in chat — findings table + one recommendation
 line. STOP THERE.
 
-## Step 5 — If Brian approves fixes (separate task, after his reply)
+## Step 6 — If Brian approves fixes (separate task, after his reply)
 
 Follow the staged material plus the 6-step template: probe → find extent →
 rule (placement matters — read neighboring comments; cite the incident + date
