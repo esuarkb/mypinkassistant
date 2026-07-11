@@ -118,10 +118,16 @@ CASES = [
     ("which customers have gone quiet",         "lapsed_customers",  "kw"),
 
     # --- data_query (kw) ---
-    # NOTE: "who ordered last month" routes to unit_query since the 6/18-6/29
-    # trigger additions ("ordered last month" is a unit trigger). Ambiguous for
-    # non-directors (they likely mean customers) — revisit in routing consolidation.
-    ("who ordered last month",                  "unit_query",        "kw"),
+    # DECIDED 2026-07-11 (Brian): "who ordered <time>" defaults to CUSTOMERS
+    # for everyone — a director asked it meaning customers and dead-ended
+    # (weed-garden 2026-07-10, c39). Unit views require explicit consultant
+    # phrasing ("which consultants have ordered this month" — pinned above).
+    ("who ordered last month",                  "data_query",        "kw"),
+    ("ordered last month",                      "data_query",        "kw"),
+    ("who ordered last quarter?",               "data_query",        "kw"),
+
+    # --- new_customer "create X" rule (positive pin for the F4 list-guard) ---
+    ("create nichole giveaway",                 "new_customer",      "kw"),
     ("who has ordered only once",               "data_query",        "kw"),
     ("how many customers do i have",            "data_query",        "kw"),
     ("who buys timewise",                       "data_query",        "kw"),
@@ -274,6 +280,11 @@ NEGATIVE_GUARD_CASES = [
     # weed-garden 2026-07-09: "phone number" must never be caught by the new
     # part-number rule — the rule regex is scoped to part/item/sku specifically.
     ("what is jane doe's phone number", "product_lookup", "phone number must not trigger the part-number rule"),
+    # weed-garden 2026-07-10 (F4): "create a list/report of …" is analytics,
+    # not a person — must not prompt the new-customer form. "create nichole
+    # giveaway" staying new_customer is pinned in CASES.
+    ("Create a list of what I sold this week", "new_customer",
+     "create-a-list must not hit the new-customer rule"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -472,6 +483,20 @@ ROUTE_CASES = [
     # rule stole "New order … sku 10233551" from new_order)
     ("New order for Dana Rivers sku 10233551",      None, "new_order"),
     ("add sku 10233551 to the order",               _MID_FLOW, ("order_add", "<llm-skipped>", "unknown")),
+
+    # --- weed-garden 2026-07-10 batch ---
+    # F1: gem street names must not substring-match Star levels; the paste
+    # goes to customer_info so a pending new-customer flow can consume it
+    ("Dana Rivers\n\nStreet Address: 42926 Pearlwood Dr\nCity: Lancaster\nState / Province: CA",
+     {"pending": {"kind": "new_customer"}}, "customer_info"),
+    ("show me pearl consultants",                   None, "unit_query"),   # real gem word still works
+    # F2: "who ordered <time>" is a customer data question, never a product
+    # search (the old guard leaked "quarter?" punctuation and "past…days")
+    ("who ordered last quarter?",                   None, "data_query"),
+    ("Who ordered in the past 90 days?",            None, "data_query"),
+    ("who ordered charcoal mask",                   None, "customers_by_product"),  # real products stay
+    # F3: "make a note" reaches the educate bubble
+    ("Make a note that Dana likes the satin hands set", None, "notes_educate"),
 ]
 
 

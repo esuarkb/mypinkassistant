@@ -480,16 +480,24 @@ def _looks_like_new_order_entry(text: str) -> bool:
 # stick, barrier restore 1-1-3, foundation primer" — that's an order with
 # "add a note" as filler, not a notes request. Reuses _looks_like_new_order_entry's
 # scoring so the two guards stay in sync.
-_NOTE_PHRASE_RE = re.compile(r"\b(?:add|leave|put|write)\s+(?:a\s+)?note\b|\bnotes?\s+for\b", re.IGNORECASE)
+# "make" added 2026-07-11 — "Make a note Elspeth…" fell to the LLM and
+# word-salad'd as a customer search (weed-garden 2026-07-10, c114).
+_NOTE_PHRASE_RE = re.compile(r"\b(?:add|leave|put|write|make)\s+(?:a\s+)?note\b|\bnotes?\s+for\b", re.IGNORECASE)
 
 def _looks_like_notes_request(text: str) -> bool:
     t = (text or "").strip()
     if not _NOTE_PHRASE_RE.search(t):
         return False
-    # Yield to order parsing when the message also has order signal (quantities,
-    # comma-separated items, product words) — that's a real order with "add a
-    # note" as filler, not a request to use the notes feature.
-    if _looks_like_new_order_entry(t):
+    # Yield to order parsing when the message also has REAL order signal — an
+    # order verb or a comma/"and" item list ("Misty Cameron add a note, wants
+    # pink prism shimmer eye stick, …" is an order with note-filler). Quantity+
+    # product-hint alone isn't enough: "Make a note Elspeth Barnes light for
+    # luminous 3-D foundation" scored as an order via the "3" in 3-D +
+    # "foundation" and skipped the educate bubble (weed-garden 2026-07-10).
+    t_l = t.lower()
+    _has_order_verb = any(x in t_l for x in ("order ", "ordered ", "wants ", "want ", "needs ", "need "))
+    _has_item_list = ("," in t_l) or (" and " in t_l)
+    if _looks_like_new_order_entry(t) and (_has_order_verb or _has_item_list):
         return False
     return True
 
@@ -1076,7 +1084,12 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "hasn't hit star", "haven't hit star", "hasn't made star", "haven't made star",
         "what consultants", "which consultants", "consultants have ordered", "consultants ordered",
         "consultants who ordered", "consultants who have ordered", "consultants in my unit",
-        "who in my unit", "ordered this month", "ordered last month",
+        "who in my unit",
+        # "ordered this/last month" moved to data_query triggers 2026-07-11
+        # (Brian's call): "who ordered <time>" defaults to CUSTOMERS for
+        # everyone — live evidence weed-garden 2026-07-10: a director asked it
+        # meaning customers and dead-ended. Unit views keep their explicit
+        # phrasings ("which consultants ordered…", "team…").
     )
     if any(t in lowered for t in _unit_triggers):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
@@ -1095,12 +1108,15 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if any(t in lowered for t in _car_triggers):
         return IntentResult(intent="car_program", confidence=0.95, raw_text=msg)
 
-    # Star Consultant level names (Ruby, Diamond, Emerald, Pearl) in a unit context
-    _STAR_LEVELS = ("ruby", "diamond", "emerald", "pearl")
-    if any(level in lowered for level in _STAR_LEVELS):
-        _star_context = ("consultant", "star", "who", "show", "made", "hit",
-                         "at", "is", "are", "earned", "reached", "level", "status", "close")
-        if any(t in lowered for t in _star_context):
+    # Star Consultant level names (Ruby, Diamond, Emerald, Pearl) in a unit context.
+    # Whole-word matching on BOTH halves — substring matching stole a
+    # new-customer paste ("Pearlwood Dr" + the "at" in "State", c48 5x) AND two
+    # real orders of pearl-named products (the "is" inside "blemish" was the
+    # context hit) — weed-garden 2026-07-10 + collateral scan 2026-07-11.
+    # Order/add context always wins: pearl products get ordered, star levels don't.
+    if (re.search(r"\b(ruby|diamond|emerald|pearl)s?\b", lowered)
+            and not re.search(r"\b(order|orders|ordered|add|remove)\b", lowered)):
+        if re.search(r"\b(consultants?|stars?|who|show|made|hit|at|is|are|earned|reached|levels?|status|close)\b", lowered):
             return IntentResult(intent="unit_query", confidence=0.9, raw_text=msg)
 
     # lapsed customers
@@ -1148,6 +1164,13 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "who ordered the",
         "who ordered a ",
         "who has ordered",
+        # moved from _unit_triggers 2026-07-11: "who ordered <time>" defaults
+        # to customers (see comment there); bare forms land here so they get
+        # a customer answer instead of recent_orders' "Who is the customer?"
+        "ordered this month",
+        "ordered last month",
+        "ordered this week",
+        "ordered last week",
         "how many orders",
         "total orders",
         "total revenue",
@@ -1370,8 +1393,12 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         return IntentResult(intent="product_lookup", confidence=0.95,
                             raw_text=_part_tail if _part_tail else msg)
 
-    # "create X" without "order" → new customer (e.g. "create nichole giveaway")
-    if lowered.startswith("create ") and "order" not in lowered:
+    # "create X" without "order" → new customer (e.g. "create nichole giveaway").
+    # "create a list/report of …" is an analytics ask, not a person — it
+    # prompted a new-customer form for "what I sold this week" (weed-garden
+    # 2026-07-10, c110); let those fall through to the LLM/data_query.
+    if (lowered.startswith("create ") and "order" not in lowered
+            and not re.match(r"create\s+(?:a\s+|an\s+)?(?:list|report|summary)\b", lowered)):
         return IntentResult(intent="new_customer", confidence=0.9, raw_text=msg)
 
     if (
@@ -1876,15 +1903,21 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
             _singular = {"sets": "set", "kits": "kit", "creams": "cream", "serums": "serum",
                          "masks": "mask", "sticks": "stick", "glosses": "gloss", "liners": "liner",
                          "primers": "primer", "powders": "powder", "products": "product"}
+            # Strip trailing punctuation per term — "who ordered last quarter?"
+            # kept "quarter?" which dodged the time-word guard below and
+            # word-salad'd as a product search (weed-garden 2026-07-10, c39
+            # fought it 7x with cancels).
             terms = [_singular.get(w, w) for w in
-                     (_product_term.lower().split()) if len(w) > 1 and w not in _filler]
+                     (t.strip("?!.,;:") for t in _product_term.lower().split())
+                     if len(w) > 1 and w not in _filler]
 
             # Skip for time-period queries ("this quarter", "last month", etc.) — let data_query handle those
             _TIME_WORDS = {
                 # Time periods
                 "this", "last", "next", "today", "yesterday",
                 "week", "weeks", "month", "months", "year", "years",
-                "quarter", "quarters",
+                "quarter", "quarters", "past", "day", "days",
+                "recent", "recently", "ago",
                 "january", "february", "march", "april", "may", "june",
                 "july", "august", "september", "october", "november", "december",
                 "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
@@ -1895,7 +1928,7 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 # Order source/channel words (not product names)
                 "online", "myshop", "cds", "store", "person",
             }
-            if terms and all(t in _TIME_WORDS or (len(t) == 4 and t.isdigit()) for t in terms):
+            if terms and all(t in _TIME_WORDS or t.isdigit() for t in terms):
                 _product_term = None
 
             if _product_term:
