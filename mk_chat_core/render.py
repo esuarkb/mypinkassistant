@@ -15,11 +15,8 @@ def propose_top(top: dict, current_qty: int, ui: dict = None, original_text: str
     if ui is None:
         ui = UI_EN
     if not (top.get("sku") or "").strip():
-        _label = f'"{original_text}"' if original_text else "that product"
-        return (
-            f"I couldn't find {_label} in the catalog. "
-            "Try rewording it (brand, line, or shade helps), say <strong>skip</strong> to skip this item, or <strong>cancel</strong> to start over."
-        ) + _QR_YN
+        _label = f'"{original_text}"' if original_text else ui["propose_top_no_match_default_label"]
+        return ui["propose_top_no_match"].format(label=_label) + _QR_YN
     q = int(current_qty or 1)
     qtxt = f" x{q}" if q != 1 else ""
 
@@ -59,6 +56,10 @@ def _wants_to_skip(msg: str) -> bool:
         "none", "none of those", "none of them",
         "delete that", "delete that one", "remove that", "remove that one",
         "move on", "next", "forget it", "forget that", "never mind",
+        # Spanish (UI_ES describes skip as "omitir este artículo" — accept the
+        # words a Spanish speaker would actually type; added 2026-07-11)
+        "omitir", "omitelo", "omítelo", "saltar", "salta", "siguiente",
+        "ninguno", "ninguna", "ninguno de esos", "ninguna de esas",
     )
 
 
@@ -69,7 +70,7 @@ def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None,
     n = len(top)
     reply_range = "1" if n == 1 else f"1-{n}"
     if skip_hint:
-        intro = "Got it — select the best match, try different search words, or say <strong>skip</strong> to move on."
+        intro = ui["render_top5_intro_skip"]
     else:
         intro = _html.escape(ui["render_top5_intro"].format(range=reply_range))
     rows = ""
@@ -80,7 +81,9 @@ def render_top5(matches: List[dict], show_scores: bool = False, ui: dict = None,
         rows += f'<div class="select-row" data-send="{i}"><span class="select-num">{i}</span><span class="select-text">{name} {price}{score_str}</span></div>'
     return f'<div class="select-intro">{intro}</div><div class="select-list">{rows}</div>'
 
-def render_customer_picker(matches: List[dict], intro: str = "") -> str:
+def render_customer_picker(matches: List[dict], intro: str = "", ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
     top = (matches or [])[:3]
     n = len(top)
 
@@ -97,7 +100,7 @@ def render_customer_picker(matches: List[dict], intro: str = "") -> str:
             {"cls": "no",  "send": "no", "label": "No"},
         ])
         return (
-            f'<div class="select-intro">Is this who you mean?</div>'
+            f'<div class="select-intro">{ui["render_customer_single_intro"]}</div>'
             f'<div class="select-list">'
             f'<div class="select-row" data-send="1"><span class="select-num">1</span>'
             f'<div class="select-text"><span>{full}</span>{detail}</div></div>'
@@ -105,7 +108,7 @@ def render_customer_picker(matches: List[dict], intro: str = "") -> str:
         )
 
     if not intro:
-        intro = f"I found multiple customer matches — reply with 1-{n}:"
+        intro = ui["render_customer_multi_intro"].format(n=n)
     rows = ""
     for i, c in enumerate(top, start=1):
         full = _html.escape(f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip())
@@ -116,18 +119,20 @@ def render_customer_picker(matches: List[dict], intro: str = "") -> str:
         rows += f'<div class="select-row" data-send="{i}"><span class="select-num">{i}</span><span class="select-text">{full}{detail}</span></div>'
     return f'<div class="select-intro">{_html.escape(intro)}</div><div class="select-list">{rows}</div>'
 
-def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[int, list[dict]]) -> str:
+def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[int, list[dict]], ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
     top = (matches or [])[:3]
     n = len(top)
-    intro = f"I found multiple matches. Reply with 1{f'-{n}' if n > 1 else ''} to choose which customer to delete:"
+    intro = ui["render_delete_picker_intro"].format(suffix=f'-{n}' if n > 1 else '')
     rows = ""
 
     for i, c in enumerate(top, start=1):
         cid = int(c["id"])
         full = _html.escape(f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".strip())
 
-        email = _html.escape((c.get("email") or "").strip() or "(none)")
-        phone = _html.escape(format_phone_display(c.get("phone") or "") or "(none)")
+        email = _html.escape((c.get("email") or "").strip() or ui["none"])
+        phone = _html.escape(format_phone_display(c.get("phone") or "") or ui["none"])
 
         street = (c.get("street") or "").strip()
         city = (c.get("city") or "").strip()
@@ -143,8 +148,8 @@ def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[i
         if line2:
             addr_parts.append(line2)
 
-        address = _html.escape(", ".join(addr_parts) if addr_parts else "(none)")
-        birthday = _html.escape(birthday_display(c.get("birthday") or "") or "(none)")
+        address = _html.escape(", ".join(addr_parts) if addr_parts else ui["none"])
+        birthday = _html.escape(birthday_display(c.get("birthday") or "") or ui["none"])
 
         recent_orders = recent_orders_map.get(cid) or []
         order_lines = ""
@@ -158,9 +163,9 @@ def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[i
                 total = o.get("total")
                 total_txt = f"${float(total):.2f}" if isinstance(total, (int, float)) else ""
                 order_lines += f'<span class="delete-order">{_html.escape(dt + (" • " + total_txt if total_txt else ""))}</span>'
-            orders_html = f'<span class="delete-label">Orders:</span> {order_lines}'
+            orders_html = f'<span class="delete-label">{ui["render_delete_orders_label"]}</span> {order_lines}'
         else:
-            orders_html = '<span class="delete-label">Orders:</span> none'
+            orders_html = f'<span class="delete-label">{ui["render_delete_orders_label"]}</span> {ui["render_delete_no_orders"]}'
 
         rows += (
             f'<div class="select-row delete-row" data-send="{i}">'
@@ -169,7 +174,7 @@ def render_customer_delete_picker(matches: List[dict], recent_orders_map: dict[i
             f'<span class="delete-name">{full}</span>'
             f'<span class="delete-detail">{email} • {phone}</span>'
             f'<span class="delete-detail">{address}</span>'
-            f'<span class="delete-detail">Birthday: {birthday}</span>'
+            f'<span class="delete-detail">{ui["render_delete_birthday"].format(birthday=birthday)}</span>'
             f'<span class="delete-detail">{orders_html}</span>'
             f'</div></div>'
         )
@@ -186,12 +191,14 @@ def _looks_like_inventory_add(msg: str) -> bool:
 # inventory count/write/bare-write/lookup-text) moved to intent_router.py
 # (routing consolidation 2026-07-02); imported back at the top of this file.
 
-def _format_inventory_list(rows: List[dict], catalog: List[dict]) -> str:
+def _format_inventory_list(rows: List[dict], catalog: List[dict], ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
     if not rows:
-        return "Your inventory is empty."
+        return ui["inventory_list_empty"]
 
     by_sku = {str(c.get("sku") or "").strip(): c for c in catalog}
-    lines = ["Here is your current inventory:"]
+    lines = [ui["inventory_list_intro"]]
 
     shown_any = False
 
@@ -213,30 +220,34 @@ def _format_inventory_list(rows: List[dict], catalog: List[dict]) -> str:
         retail_txt = fmt_price(retail)
 
         if retail_txt:
-            lines.append(f"• {name} {retail_txt} — {qty} on hand")
+            lines.append(ui["inventory_row_with_price"].format(name=name, price=retail_txt, qty=qty))
         else:
-            lines.append(f"• {name} — {qty} on hand")
+            lines.append(ui["inventory_row_no_price"].format(name=name, qty=qty))
 
     if not shown_any:
-        return "We have not yet added any items to your inventory."
+        return ui["inventory_list_none_shown"]
 
     return "\n".join(lines)
 
 
-def _format_inventory_item(row: dict | None, catalog_item: dict | None, requested_text: str) -> str:
+def _format_inventory_item(row: dict | None, catalog_item: dict | None, requested_text: str, ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
     name = (catalog_item or {}).get("product_name") or requested_text
     if not row:
-        return f"You have 0 {name} in inventory."
+        return ui["inventory_item_absent"].format(name=name)
     qty = int(row.get("qty_on_hand") or 0)
-    return f"You have {qty} {name} in inventory."
+    return ui["inventory_item_present"].format(qty=qty, name=name)
 
 
-def _format_low_stock_list(rows: list[dict], catalog: list[dict]) -> str:
+def _format_low_stock_list(rows: list[dict], catalog: list[dict], ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
     if not rows:
-        return "You're all stocked up — nothing is below your desired on-hand levels."
+        return ui["low_stock_none"]
 
     by_sku = {str(c.get("sku") or "").strip(): c for c in catalog}
-    lines = ["Here's what you need to reorder:"]
+    lines = [ui["low_stock_intro"]]
 
     for row in rows:
         sku = str(row.get("sku") or "").strip()
@@ -245,9 +256,9 @@ def _format_low_stock_list(rows: list[dict], catalog: list[dict]) -> str:
         needed = threshold - qty
 
         cat = by_sku.get(sku) or {}
-        name = (cat.get("product_name") or sku or "Unknown product").strip()
+        name = (cat.get("product_name") or sku or ui["low_stock_unknown_product"]).strip()
 
-        lines.append(f"• {name} — you have {qty}, want {threshold} (need {needed} more)")
+        lines.append(ui["low_stock_row"].format(name=name, qty=qty, threshold=threshold, needed=needed))
 
     return "\n".join(lines)
 
@@ -256,68 +267,13 @@ def _format_low_stock_list(rows: list[dict], catalog: list[dict]) -> str:
 # App install help
 # -------------------------
 
-def _build_chat_help_html(has_team: bool, lang: str = "en") -> str:
-    if lang == "es":
-        lines = [
-            "<strong>Aquí hay algunas cosas que puedes hacer en el chat:</strong>\n",
-            "<strong>Clientes</strong>",
-            "• Buscar un cliente — solo escribe su nombre: <em>Jane Doe</em>",
-            "• Agregar un cliente — <em>Nuevo cliente Jane Doe, 555-1234, jane@gmail.com</em>",
-            "• Qué ordenó alguien — <em>¿Qué ordenó Jane?</em>\n",
-            "<strong>Pedidos</strong>",
-            "• Hacer un pedido — <em>Pedido para Jane: 2 labiales y una base</em>",
-            "• Buscar un producto y precio — <em>Satin hands</em> o <em>¿Cuánto cuesta la mascarilla de carbón?</em>\n",
-            "<strong>Tus clientes</strong>",
-            "• Por ciudad — <em>Clientes en Houston</em>",
-            "• Sin pedidos recientes — <em>¿Quién no ha ordenado en 3 meses?</em>",
-            "• Mejores compradoras — <em>¿Cuáles son mis mejores clientes?</em>",
-            "• Cumpleaños — <em>¿Quién cumple años este mes?</em>\n",
-            "<strong>Inventario</strong>",
-            "• Verificar existencias — <em>¿Cuántas mascarillas de carbón tengo?</em>",
-            "• Establecer mínimo — <em>Set charcoal mask par to 3</em>\n",
-            "<strong>Otro</strong>",
-            "• Look Book actual — <em>Look book</em>",
-            "• Tu enlace de referido — <em>Mi enlace de referido</em>",
-        ]
-        if has_team:
-            lines += [
-                "\n<strong>Tu equipo</strong>",
-                "• <em>¿Quiénes son mis consultoras?</em>",
-                "• <em>¿Quién no ha configurado MyShop?</em>",
-                "• <em>¿Quién está cerca de un paquete Gran Inicio?</em>",
-                "• <em>¿Quién es el equipo de Sarah?</em>",
-            ]
-    else:
-        lines = [
-            "<strong>Here are some things you can do in chat:</strong>\n",
-            "<strong>Customers</strong>",
-            "• Look up a customer — just type their name: <em>Jane Doe</em>",
-            "• Add a customer — <em>New customer Jane Doe, 555-1234, jane@gmail.com</em>",
-            "• What someone ordered — <em>What did Jane order</em>\n",
-            "<strong>Orders</strong>",
-            "• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>",
-            "• Look up a product & price — <em>Satin hands</em> or <em>How much is the charcoal mask</em>\n",
-            "<strong>Your customers</strong>",
-            "• By city — <em>Customers in Huntsville</em>",
-            "• Lapsed — <em>Who hasn't ordered in 3 months</em>",
-            "• Top spenders — <em>Who are my top customers</em>",
-            "• Birthdays — <em>Who has birthdays this month</em>\n",
-            "<strong>Inventory</strong>",
-            "• Check stock — <em>How many TimeWise moisturizers do I have</em>",
-            "• Set a par — <em>Set charcoal mask par to 3</em>\n",
-            "<strong>Other</strong>",
-            "• Current Look Book — <em>Look book</em>",
-            "• Your referral link — <em>My referral link</em>",
-        ]
-        if has_team:
-            lines += [
-                "\n<strong>Your team</strong>",
-                "• <em>Who is on my team</em>",
-                "• <em>Who hasn't set up MyShop</em>",
-                "• <em>Who is close to a Great Start bundle</em>",
-                "• <em>Who is on Sarah's team</em>",
-            ]
-    return "\n".join(lines)
+def _build_chat_help_html(has_team: bool, ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
+    text = ui["chat_help_base"]
+    if has_team:
+        text += ui["chat_help_team_extra"]
+    return text
 
 
 # _APP_HELP_HTML moved to ui_text.py (EN+ES) 2026-07-06

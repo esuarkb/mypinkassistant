@@ -372,7 +372,7 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
     elif hasattr(rows[0], "_fields"):
         dicts = [r._asdict() for r in rows]
     else:
-        return f"{len(rows)} result(s) found."
+        return ui["unit_query_result_count_fallback"].format(n=len(rows))
 
     cols = list(dicts[0].keys())
 
@@ -389,9 +389,12 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
     )
     if _is_count_query or _is_mixed_count:
         count = dicts[0].get(_count_cols[0])
-        label = "consultant" if "consultant" in original_msg.lower() else "result"
-        plural = "s" if count != 1 else ""
-        return f"{count} {label}{plural}"
+        is_consultant = "consultant" in original_msg.lower()
+        if count == 1:
+            key = "unit_query_count_consultant" if is_consultant else "unit_query_count_result"
+        else:
+            key = "unit_query_count_consultants" if is_consultant else "unit_query_count_results"
+        return ui[key].format(count=count)
 
     import html as _html
 
@@ -401,7 +404,7 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
     def _name(d: dict) -> str:
         fn = (d.get("first_name") or "").strip()
         ln = (d.get("last_name") or "").strip()
-        return f"{fn} {ln}".strip() or d.get("consultant_number", "Unknown")
+        return f"{fn} {ln}".strip() or d.get("consultant_number", ui["unit_query_unknown_name"])
 
     def _name_link(d: dict) -> str:
         n = _name(d)
@@ -475,31 +478,31 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
                 emoji = _LEVEL_EMOJI.get(v, "⭐")
                 return f"{emoji} {v}"
             if c == "contest_amount":
-                return f"${v:,.2f} this quarter"
+                return ui["unit_query_contest_amount"].format(amount=f"${v:,.2f}")
             if c == "needed_next_bundle":
-                return f"${v:,.2f} to next bundle"
+                return ui["unit_query_needed_next_bundle"].format(amount=f"${v:,.2f}")
             if c == "promotion_end_date":
                 try:
                     from datetime import date as _dt
                     import calendar as _cal
                     _d = _dt.fromisoformat(str(v)[:10])
-                    return f"ends {_cal.month_name[_d.month]} {_d.day}"
+                    return ui["unit_query_ends_date"].format(month=_cal.month_name[_d.month], day=_d.day)
                 except Exception:
-                    return f"ends {str(v)[:10]}"
+                    return ui["unit_query_ends_date_fallback"].format(date=str(v)[:10])
             if c in ("needed_ruby", "needed_diamond", "needed_emerald", "needed_pearl"):
                 if v and v > 0:
-                    return f"${v:,.2f} to {c.replace('needed_','').title()}"
+                    return ui["unit_query_needed_level"].format(amount=f"${v:,.2f}", level=c.replace('needed_','').title())
                 return None
             if "needed_for_next" in c or "next_level" in c:
-                return f"${v:,.2f} to next level" if v and v > 0 else None
+                return ui["unit_query_needed_next_level_generic"].format(amount=f"${v:,.2f}") if v and v > 0 else None
             if c == "challenge_count":
                 if not v:
                     return None
-                mo = "month" if v == 1 else "months"
-                return f"{v} {mo} achieved"
+                key = "unit_query_month_achieved" if v == 1 else "unit_query_months_achieved"
+                return ui[key].format(count=v)
             if c == "amount_needed":
                 if v and v > 0:
-                    return f"${v:,.2f} to qualify this month"
+                    return ui["unit_query_amount_needed_qualify"].format(amount=f"${v:,.2f}")
                 return None
             if c == "consultant_number":
                 return _html.escape(str(v))
@@ -508,7 +511,7 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
             if c == "activity_status":
                 return _html.escape(str(v))
             if c == "myshop_active":
-                return "MyShop: " + ("✓" if v == 1 else "✗")
+                return ui["unit_query_myshop_status"].format(mark=("✓" if v == 1 else "✗"))
             if c == "last_order_date":
                 try:
                     from datetime import date as _dt
@@ -589,7 +592,7 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
         vals = [str(list(d.values())[0]) for d in dicts]
         return "\n".join(vals)
 
-    return f"{len(dicts)} result(s) found."
+    return ui["unit_query_result_count_fallback"].format(n=len(dicts))
 
 
 # -------------------------

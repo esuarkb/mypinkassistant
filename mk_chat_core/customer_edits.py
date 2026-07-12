@@ -184,9 +184,10 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
                 notes.append("Tags updated")
             continue
 
-        # address:
-        if low.startswith("address"):
-            addr = re.sub(r"^address\s*(?:is|was|at)?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
+        # address: (Spanish "Dirección:" too — ES customer pastes kept the
+        # prefix in the street field; added 2026-07-11)
+        if low.startswith("address") or low.startswith("dirección") or low.startswith("direccion"):
+            addr = re.sub(r"^(?:address|direcci[oó]n)\s*(?:is|was|at|es)?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
             if addr:
                 # ✅ Try smart parse first
                 parsed = parse_address_line(addr)

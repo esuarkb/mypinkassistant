@@ -379,14 +379,19 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
              "previous_price": c.get("previous_price"), "score": score,
              "fact_sheet_url": c.get("fact_sheet_url", ""), "order_of_application_url": c.get("order_of_application_url", ""),
              "use_up_rate_months": c.get("use_up_rate_months", ""),
-             "_hits": word_hits, "_otg": on_the_go}
+             "_hits": word_hits, "_otg": on_the_go,
+             # Final tie-break: newest catalog row wins — re-released products
+             # share a name across old/new SKUs and the current one should be
+             # proposed (backlog item, built 2026-07-11). "" sorts last.
+             "_added": c.get("date_added", "") or ""}
         )
 
-    matches.sort(key=lambda m: (m["score"], m["_hits"], -m["_otg"]), reverse=True)
+    matches.sort(key=lambda m: (m["score"], m["_hits"], -m["_otg"], m["_added"]), reverse=True)
     matches = matches[:limit]
     for m in matches:
         del m["_hits"]
         del m["_otg"]
+        del m["_added"]
     return matches
 
 
@@ -1051,8 +1056,12 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if "inventory" in lowered or lowered in ("show my inventory", "show inventory", "my inventory"):
         return IntentResult(intent="inventory", confidence=1.0, raw_text=msg)
 
-    # cancel
-    if lowered in ("cancel", "stop", "nevermind", "never mind", "start over", "startover"):
+    # cancel — Spanish included: four UI_ES strings literally instruct
+    # "escribe cancelar" but only English words matched, so Spanish users
+    # following our own instructions couldn't cancel (flagged 2026-07-03,
+    # fixed 2026-07-11). "sí"/"si" already work via normalize.yes().
+    if lowered in ("cancel", "stop", "nevermind", "never mind", "start over", "startover",
+                   "cancelar", "cancela", "cancelalo", "cancélalo", "empezar de nuevo", "empieza de nuevo"):
         return IntentResult(intent="cancel", confidence=1.0, raw_text=msg)
 
     # unit_query — activity status code pattern (i3, t6, "who is i3", "show t6", etc.)
@@ -1401,8 +1410,24 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
             and not re.match(r"create\s+(?:a\s+|an\s+)?(?:list|report|summary)\b", lowered)):
         return IntentResult(intent="new_customer", confidence=0.9, raw_text=msg)
 
+    # "show" narrowed 2026-07-11 (decided 2026-06-20): bare "show" claimed
+    # product/team asks for customer lookup ("show me pink lipsticks" → a
+    # customer-name fuzzy search) and forced every new feature to defensively
+    # out-trigger this catch-all. Now "show" only claims when the message also
+    # carries a person signal: a possessive ('s) or a contact-info word.
+    # "show me robyn's contact information" stays; "show me pink lipsticks"
+    # falls through to the LLM/product rules.
+    # Singular "customer" is a person signal ("show customer marion vale");
+    # plural "customers" is NOT — "show me timewise customers" is a
+    # product-buyers list, and \bcustomer\b won't match the plural.
+    _show_person = bool(
+        re.search(r"\bshow\b", lowered)
+        and (re.search(r"\w's\b", lowered)
+             or re.search(r"\b(customer|client|clienta|contact|info|information|details?|email|phone|address|birthday)\b", lowered))
+    )
     if (
-        any(t in lowered for t in ("what's", "whats", "what is", "lookup", "show", "info on", "information for"))
+        any(t in lowered for t in ("what's", "whats", "what is", "lookup", "info on", "information for"))
+        or _show_person
         or looks_like_possessive_info
         or looks_like_name_info
         or looks_like_bare_name

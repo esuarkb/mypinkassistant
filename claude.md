@@ -93,9 +93,12 @@ The longer a consultant uses the app, the smarter it gets for them specifically.
 - **Worker scaling:** job queue handles concurrent workers correctly with
   consultant-level locking. Realtime jobs: autoscaler scales to system_settings
   "worker_max" (module fallback WORKER_MAX=3). Nightly FULL_SYNC sweep: scales
-  to ceil(queued/50) workers capped by "worker_max_nightly" (fallback 4) —
-  one worker syncs ~50 consultants/hour, so the sweep stays under ~1 hour at
-  any subscriber count; scale-down returns to "worker_min" when the queue drains
+  to ceil(queued/50) workers; the cap falls back "worker_max_nightly" row (an
+  escape hatch, normally absent) → "worker_max" → module fallback 4, so the
+  admin-page worker_max knob drives both (decided 2026-07-11; at worker_max=8
+  the cap doesn't bind until ~400 subs). One worker syncs ~50 consultants/hour,
+  so the sweep stays under ~1 hour; scale-down returns to "worker_min" when the
+  queue drains
 
 ## Database Architecture — IMPORTANT
 **Local dev:** SQLite (data/mk.db) — fast, zero setup, no install needed

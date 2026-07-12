@@ -7,6 +7,7 @@ from db import connect, is_postgres
 
 from .dbutil import PH
 from .types import ChatReply
+from .ui_text import UI_EN
 
 
 _CAR_LEVEL_LABELS = {
@@ -67,9 +68,11 @@ def _car_copay_amount(level: str, production: float | None) -> float | None:
     return None
 
 
-def _car_level_display(car_award: str | None) -> str:
+def _car_level_display(car_award: str | None, ui: dict = None) -> str:
+    if ui is None:
+        ui = UI_EN
     if not car_award:
-        return "None"
+        return ui["car_program_no_award"]
     code = car_award.lower().replace("sd", "").replace("v3", "").replace("v2", "").replace("v1", "")
     for key, label in _CAR_LEVEL_LABELS.items():
         if key in code:
@@ -83,7 +86,9 @@ def _fmt_dollars(val) -> str:
     return f"${val:,.0f}"
 
 
-def _handle_car_program(consultant_id: int, msg: str = "") -> "ChatReply":
+def _handle_car_program(consultant_id: int, msg: str = "", ui: dict = None) -> "ChatReply":
+    if ui is None:
+        ui = UI_EN
     with connect() as conn:
         cur = conn.cursor()
         PH = "%s" if is_postgres() else "?"
@@ -95,10 +100,7 @@ def _handle_car_program(consultant_id: int, msg: str = "") -> "ChatReply":
         col_names = [d[0] for d in cur.description] if cur.description else []
 
     if not row:
-        return ChatReply(
-            "I don't have any car program data on file yet. "
-            "Run a report sync first (this happens automatically each night) and try again."
-        )
+        return ChatReply(ui["car_program_no_data"])
 
     if hasattr(row, "keys"):
         r = dict(row)
@@ -106,8 +108,8 @@ def _handle_car_program(consultant_id: int, msg: str = "") -> "ChatReply":
         r = dict(zip(col_names, row))
 
     synced_at = (r.get("synced_at") or "")[:16].replace("T", " ")
-    level = _car_level_display(r.get("car_award"))
-    status_desc = r.get("car_status_type_desc") or r.get("car_status_type") or "Unknown"
+    level = _car_level_display(r.get("car_award"), ui=ui)
+    status_desc = r.get("car_status_type_desc") or r.get("car_status_type") or ui["car_program_status_unknown"]
     q0 = r.get("q0_total_car_production")
     q1 = r.get("q1_total_car_production")
     q2 = r.get("q2_total_car_production")
@@ -133,7 +135,7 @@ def _handle_car_program(consultant_id: int, msg: str = "") -> "ChatReply":
         except Exception:
             return ym
 
-    qtr_label = f"{_month_abbr(m2)}–{_month_abbr(m0)}" if m0 and m2 else "current quarter"
+    qtr_label = f"{_month_abbr(m2)}–{_month_abbr(m0)}" if m0 and m2 else ui["car_program_current_quarter"]
 
     def _fmt_date(d: str) -> str:
         if not d or len(d) < 10:
@@ -144,28 +146,32 @@ def _handle_car_program(consultant_id: int, msg: str = "") -> "ChatReply":
         except Exception:
             return d
 
-    lines = [f"Car Program — {level} (as of the latest sync)\n"]
-    lines.append(f"Status: {status_desc}")
+    lines = [ui["car_program_header"].format(level=level)]
+    lines.append(ui["car_program_status"].format(status_desc=status_desc))
 
     if q0 is not None and maint_min is not None:
         short = maint_min - q0
-        lines.append(f"{qtr_label} production: {_fmt_dollars(q0)} of {_fmt_dollars(maint_min)}")
+        lines.append(ui["car_program_production_of_goal"].format(
+            qtr_label=qtr_label, q0=_fmt_dollars(q0), maint_min=_fmt_dollars(maint_min)
+        ))
         if short > 0:
-            lines.append(f"Remaining: {_fmt_dollars(short)} this quarter")
+            lines.append(ui["car_program_remaining"].format(short=_fmt_dollars(short)))
         else:
-            lines.append("Goal met ✓")
+            lines.append(ui["car_program_goal_met"])
     elif q0 is not None:
-        lines.append(f"{qtr_label} production: {_fmt_dollars(q0)}")
+        lines.append(ui["car_program_production_only"].format(qtr_label=qtr_label, q0=_fmt_dollars(q0)))
 
     # Only show on-target as a separate line if it differs from what's already shown above
     if (ot_goal is not None and needed_ot is not None and needed_ot > 0
             and ot_goal != maint_min):
-        lines.append(f"On-target goal: {_fmt_dollars(ot_goal)}  (need {_fmt_dollars(needed_ot)} more)")
+        lines.append(ui["car_program_on_target_goal"].format(
+            ot_goal=_fmt_dollars(ot_goal), needed_ot=_fmt_dollars(needed_ot)
+        ))
 
     if q1 is not None:
-        lines.append(f"Last quarter: {_fmt_dollars(q1)}")
+        lines.append(ui["car_program_last_quarter"].format(q1=_fmt_dollars(q1)))
     if q2 is not None:
-        lines.append(f"Two quarters ago: {_fmt_dollars(q2)}")
+        lines.append(ui["car_program_two_quarters_ago"].format(q2=_fmt_dollars(q2)))
 
     # Co-pay: only shown when the user specifically asks about it
     if re.search(r"\bco[- ]?pay\b", msg, re.IGNORECASE):
@@ -173,11 +179,11 @@ def _handle_car_program(consultant_id: int, msg: str = "") -> "ChatReply":
         if copay is None:
             pass
         elif copay > 0:
-            lines.append(f"Co-pay: ${copay:,.2f}/mo this quarter")
+            lines.append(ui["car_program_copay_amount"].format(copay=f"${copay:,.2f}"))
         else:
-            lines.append("Co-pay: None ✓")
+            lines.append(ui["car_program_copay_none"])
 
     if requali_date:
-        lines.append(f"Requalification Date: {_fmt_date(requali_date)}")
+        lines.append(ui["car_program_requal_date"].format(date=_fmt_date(requali_date)))
 
     return ChatReply("\n".join(lines))

@@ -164,11 +164,17 @@ def _get_worker_max() -> int:
 
 
 def _get_worker_max_nightly() -> int:
-    """Read the nightly sweep cap from system_settings ("worker_max_nightly"),
-    fallback to the module constant."""
+    """Nightly sweep cap. Precedence (2026-07-11, Brian's call): an explicit
+    "worker_max_nightly" settings row if one ever exists (escape hatch, no
+    admin UI) → the admin-page "worker_max" setting (one knob drives both —
+    ceil(queued/50) is already demand-based, the cap is only a brake; at
+    worker_max=8 it doesn't bind until ~400 subscribers) → module constant."""
     try:
         from db import get_system_setting
-        val = get_system_setting("worker_max_nightly", str(WORKER_MAX_NIGHTLY))
+        val = get_system_setting("worker_max_nightly", "")
+        if val and str(val).strip():
+            return max(1, int(val))
+        val = get_system_setting("worker_max", str(WORKER_MAX_NIGHTLY))
         return max(1, int(val or WORKER_MAX_NIGHTLY))
     except Exception:
         return WORKER_MAX_NIGHTLY

@@ -328,18 +328,13 @@ class MKChatEngine:
         Returns None to decline — fall through to pending flow / normal parse."""
         # (step 4) generated unpack of shared per-message context
         intent_result = ctx.intent_result
+        ui = ctx.ui
 
         # -------------------------
         # Bare inventory-style write guardrail
         # -------------------------
         if intent_result.intent == "inventory_guardrail":
-            return ChatReply(
-                "That looks like an inventory update.\n"
-                "Try again using the word 'inventory':\n"
-                "• add 3 satin hands to inventory\n"
-                "• remove 1 satin hands from inventory\n"
-                "• set satin hands inventory to 5"
-            )
+            return ChatReply(ui["inventory_guardrail"])
         return None
 
     def _intent_inventory_print(self, ctx) -> Optional[ChatReply]:
@@ -367,6 +362,7 @@ class MKChatEngine:
         catalog = ctx.catalog
         pending = ctx.pending
         intent_result = ctx.intent_result
+        ui = ctx.ui
         import re
         import re as _re
 
@@ -396,7 +392,7 @@ class MKChatEngine:
         # Exact product name match — handles data-send clicks from multi-result lists
         # -------------------------
         if intent_result.intent == "product_lookup" and intent_result.slots.get("source") == "exact":
-            return ChatReply(_fmt_product_lookup_single(intent_result.slots["match"]))
+            return ChatReply(_fmt_product_lookup_single(intent_result.slots["match"], ui=ui))
 
         # -------------------------
         # Product price lookup ("how much is X", "price of X") and bare
@@ -416,9 +412,9 @@ class MKChatEngine:
                     word_matches = [c for c in catalog if _all_words_in_product(product_text, c["product_name"])]
                     if len(word_matches) == 1:
                         m = word_matches[0]
-                        return ChatReply(_fmt_product_lookup_single(m))
+                        return ChatReply(_fmt_product_lookup_single(m, ui=ui))
                     elif len(word_matches) > 1:
-                        lines = ["<strong>Product Look Up</strong>"]
+                        lines = [f"<strong>{ui['product_lookup_header']}</strong>"]
                         for m in word_matches[:3]:
                             lines.append(_fmt_product_list_item(m))
                         if len(word_matches) > 3:
@@ -430,8 +426,8 @@ class MKChatEngine:
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
-                            return ChatReply(_fmt_product_lookup_single(top))
-                        lines = ["<strong>Product Look Up</strong>"]
+                            return ChatReply(_fmt_product_lookup_single(top, ui=ui))
+                        lines = [f"<strong>{ui['product_lookup_header']}</strong>"]
                         for m in matches:
                             lines.append(_fmt_product_list_item(m))
                         return ChatReply("<br>".join(lines))
@@ -440,14 +436,14 @@ class MKChatEngine:
                     matches = best_matches(catalog, product_text, limit=3, min_score=50)
                     if not matches or float(matches[0].get("score") or 0) < 70:
                         # Weak whole-string match — the ask may name several products
-                        multi = multi_product_lookup(catalog, product_text)
+                        multi = multi_product_lookup(catalog, product_text, ui=ui)
                         if multi:
                             return ChatReply(multi)
                     if matches:
                         top = matches[0]
                         if len(matches) == 1 or float(top.get("score") or 0) >= 80:
-                            return ChatReply(_fmt_product_lookup_single(top))
-                        lines = ["<strong>Product Look Up</strong>"]
+                            return ChatReply(_fmt_product_lookup_single(top, ui=ui))
+                        lines = [f"<strong>{ui['product_lookup_header']}</strong>"]
                         for m in matches:
                             lines.append(_fmt_product_list_item(m))
                         return ChatReply("<br>".join(lines))
@@ -461,7 +457,7 @@ class MKChatEngine:
             matches = best_matches(catalog, product_text, limit=3, min_score=50)
             if not matches or int(matches[0].get("score") or 0) < 70:
                 # Weak whole-string match — the ask may name several products
-                multi = multi_product_lookup(catalog, product_text)
+                multi = multi_product_lookup(catalog, product_text, ui=ui)
                 if multi:
                     return ChatReply(multi)
             if not matches:
@@ -473,8 +469,8 @@ class MKChatEngine:
             runner_up_score = int(matches[1].get("score") or 0) if len(matches) > 1 else 0
             confident = len(matches) == 1 or (top_score >= 80 and (top_score - runner_up_score) >= 15)
             if confident:
-                return ChatReply(_fmt_product_lookup_single(top))
-            lines = ["<strong>Product Look Up</strong>"]
+                return ChatReply(_fmt_product_lookup_single(top, ui=ui))
+            lines = [f"<strong>{ui['product_lookup_header']}</strong>"]
             for m in matches:
                 lines.append(_fmt_product_list_item(m))
             return ChatReply("\n".join(lines))
@@ -815,7 +811,7 @@ class MKChatEngine:
                 state["pending"] = {"kind": "pick_customer", "candidates": top, "action": "delete"}
                 save_session_state(state, session_id=sid)
 
-                return ChatReply(render_customer_delete_picker(top, recent_orders_map))
+                return ChatReply(render_customer_delete_picker(top, recent_orders_map, ui=ui))
         return None
 
     def _intent_referral(self, ctx) -> Optional[ChatReply]:
@@ -1527,7 +1523,7 @@ class MKChatEngine:
                             }
                             save_session_state(state, session_id=sid)
 
-                            return ChatReply(render_customer_picker(top))
+                            return ChatReply(render_customer_picker(top, ui=ui))
 
                         c = matches[0]
                         customer_id = int(c["id"])
@@ -1636,7 +1632,7 @@ class MKChatEngine:
                         }
                         save_session_state(state, session_id=sid)
 
-                        return ChatReply(render_customer_picker(top))
+                        return ChatReply(render_customer_picker(top, ui=ui))
 
                     c = matches[0]
                     customer_id = int(c["id"])
@@ -1706,8 +1702,8 @@ class MKChatEngine:
         Returns None to decline — fall through to pending flow / normal parse."""
         # (step 4) generated unpack of shared per-message context
         consultant_id = ctx.consultant_id
-        language = ctx.language
         intent_result = ctx.intent_result
+        ui = ctx.ui
         from db import tx
 
         # Chat help — what can I do
@@ -1718,7 +1714,7 @@ class MKChatEngine:
                     (consultant_id,),
                 )
                 has_team = cur.fetchone() is not None
-            return ChatReply(_build_chat_help_html(has_team, lang=language))
+            return ChatReply(_build_chat_help_html(has_team, ui=ui))
         return None
 
     def _intent_unit_query(self, ctx) -> Optional[ChatReply]:
@@ -1746,12 +1742,13 @@ class MKChatEngine:
         consultant_id = ctx.consultant_id
         pending = ctx.pending
         intent_result = ctx.intent_result
+        ui = ctx.ui
 
         # -------------------------
         # Car program status (director feature)
         # -------------------------
         if not pending and intent_result.intent == "car_program":
-            return _handle_car_program(consultant_id, msg=msg)
+            return _handle_car_program(consultant_id, msg=msg, ui=ui)
         return None
 
     def _intent_customer_info(self, ctx) -> Optional[ChatReply]:
@@ -1924,8 +1921,9 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     picker_html = render_customer_picker(
                         top,
-                        intro=f"I found multiple customer matches — reply with 1-{len(top) + 1}:"
-                        if _unit_matches else ""
+                        intro=ui["render_customer_multi_intro"].format(n=len(top) + 1)
+                        if _unit_matches else "",
+                        ui=ui,
                     )
                     if _unit_matches:
                         _extra_rows = []
@@ -3091,7 +3089,7 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_customer_picker(matches[:3]))
+                    return ChatReply(render_customer_picker(matches[:3], ui=ui))
 
             elif len(matches) > 1:
                 strong_local_match = any(
@@ -3113,7 +3111,7 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_customer_picker(matches[:3]))
+                    return ChatReply(render_customer_picker(matches[:3], ui=ui))
 
                 else:
                     # Full name typed, multiple fuzzy matches, none exact — show picker
@@ -3129,7 +3127,7 @@ class MKChatEngine:
                         "order_draft": order_draft,
                     }
                     save_session_state(state, session_id=sid)
-                    return ChatReply(render_customer_picker(matches[:3]))
+                    return ChatReply(render_customer_picker(matches[:3], ui=ui))
 
             items = order.get("items") or []
 

@@ -43,6 +43,9 @@ CASES = [
     ("stop",                                    "cancel",            "kw"),
     ("nevermind",                               "cancel",            "kw"),
     ("start over",                              "cancel",            "kw"),
+    # Spanish — four UI_ES strings instruct "escribe cancelar" (fixed 2026-07-11)
+    ("cancelar",                                "cancel",            "kw"),
+    ("empezar de nuevo",                        "cancel",            "kw"),
 
     # --- chat_help (kw) ---
     ("help",                                    "chat_help",         "kw"),
@@ -285,6 +288,10 @@ NEGATIVE_GUARD_CASES = [
     # giveaway" staying new_customer is pinned in CASES.
     ("Create a list of what I sold this week", "new_customer",
      "create-a-list must not hit the new-customer rule"),
+    # "show" narrowed 2026-07-11: bare show + product words must not
+    # fuzzy-search the product as a customer name
+    ("show me pink lipsticks", "customer_info",
+     "bare show must not claim product asks for customer lookup"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -497,6 +504,11 @@ ROUTE_CASES = [
     ("who ordered charcoal mask",                   None, "customers_by_product"),  # real products stay
     # F3: "make a note" reaches the educate bubble
     ("Make a note that Dana likes the satin hands set", None, "notes_educate"),
+
+    # --- "show" narrowed 2026-07-11: person-signal required (possessive or
+    # contact word); product/team shapes fall through to better homes ---
+    ("show me robyn depagter's contact information", None, "customer_info"),
+    ("show me time wise customers",                  None, "customers_by_product"),
 ]
 
 

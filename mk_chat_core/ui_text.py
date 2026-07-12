@@ -134,6 +134,86 @@ UI_EN = {
     "unit_no_results": "No consultants match that criteria.",
     "unit_consultant_count": "{n} consultant (as of the latest sync):",
     "unit_consultants_count": "{n} consultants (as of the latest sync):",
+
+    # unit_query.py result-formatting strings (bundle E, 2026-07-11)
+    "unit_query_result_count_fallback": "{n} result(s) found.",
+    "unit_query_count_consultant": "{count} consultant",
+    "unit_query_count_consultants": "{count} consultants",
+    "unit_query_count_result": "{count} result",
+    "unit_query_count_results": "{count} results",
+    "unit_query_unknown_name": "Unknown",
+    "unit_query_ends_date": "ends {month} {day}",
+    "unit_query_ends_date_fallback": "ends {date}",
+    "unit_query_contest_amount": "{amount} this quarter",
+    "unit_query_needed_next_bundle": "{amount} to next bundle",
+    "unit_query_needed_level": "{amount} to {level}",
+    "unit_query_needed_next_level_generic": "{amount} to next level",
+    "unit_query_month_achieved": "{count} month achieved",
+    "unit_query_months_achieved": "{count} months achieved",
+    "unit_query_amount_needed_qualify": "{amount} to qualify this month",
+    "unit_query_myshop_status": "MyShop: {mark}",
+
+    # car_program.py strings (bundle E, 2026-07-11)
+    "car_program_no_data": "I don't have any car program data on file yet. Run a report sync first (this happens automatically each night) and try again.",
+    "car_program_header": "Car Program — {level} (as of the latest sync)\n",
+    "car_program_status": "Status: {status_desc}",
+    "car_program_current_quarter": "current quarter",
+    "car_program_production_of_goal": "{qtr_label} production: {q0} of {maint_min}",
+    "car_program_remaining": "Remaining: {short} this quarter",
+    "car_program_goal_met": "Goal met ✓",
+    "car_program_production_only": "{qtr_label} production: {q0}",
+    "car_program_on_target_goal": "On-target goal: {ot_goal}  (need {needed_ot} more)",
+    "car_program_last_quarter": "Last quarter: {q1}",
+    "car_program_two_quarters_ago": "Two quarters ago: {q2}",
+    "car_program_copay_amount": "Co-pay: {copay}/mo this quarter",
+    "car_program_copay_none": "Co-pay: None ✓",
+    "car_program_requal_date": "Requalification Date: {date}",
+    "car_program_no_award": "None",
+    "car_program_status_unknown": "Unknown",
+
+    # render.py picker/list strings (bundle E, 2026-07-11)
+    "render_customer_single_intro": "Is this who you mean?",
+    "render_customer_multi_intro": "I found multiple customer matches — reply with 1-{n}:",
+    "render_delete_picker_intro": "I found multiple matches. Reply with 1{suffix} to choose which customer to delete:",
+    "render_delete_orders_label": "Orders:",
+    "render_delete_no_orders": "none",
+    "render_delete_birthday": "Birthday: {birthday}",
+    "render_top5_intro_skip": "Got it — select the best match, try different search words, or say <strong>skip</strong> to move on.",
+    "inventory_list_intro": "Here is your current inventory:",
+    "inventory_list_empty": "Your inventory is empty.",
+    "inventory_list_none_shown": "We have not yet added any items to your inventory.",
+    "inventory_row_with_price": "• {name} {price} — {qty} on hand",
+    "inventory_row_no_price": "• {name} — {qty} on hand",
+    "inventory_item_present": "You have {qty} {name} in inventory.",
+    "inventory_item_absent": "You have 0 {name} in inventory.",
+    "low_stock_intro": "Here's what you need to reorder:",
+    "low_stock_none": "You're all stocked up — nothing is below your desired on-hand levels.",
+    "low_stock_row": "• {name} — you have {qty}, want {threshold} (need {needed} more)",
+    "low_stock_unknown_product": "Unknown product",
+    "propose_top_no_match": "I couldn't find {label} in the catalog. Try rewording it (brand, line, or shade helps), say <strong>skip</strong> to skip this item, or <strong>cancel</strong> to start over.",
+    "propose_top_no_match_default_label": "that product",
+
+    # chat_help cheat-sheet (moved verbatim from render.py's _build_chat_help_html
+    # 2026-07-11; text unchanged, just relocated so it lives with the rest of
+    # the UI strings)
+    "chat_help_base": "<strong>Here are some things you can do in chat:</strong>\n\n<strong>Customers</strong>\n• Look up a customer — just type their name: <em>Jane Doe</em>\n• Add a customer — <em>New customer Jane Doe, 555-1234, jane@gmail.com</em>\n• What someone ordered — <em>What did Jane order</em>\n\n<strong>Orders</strong>\n• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>\n• Look up a product & price — <em>Satin hands</em> or <em>How much is the charcoal mask</em>\n\n<strong>Your customers</strong>\n• By city — <em>Customers in Huntsville</em>\n• Lapsed — <em>Who hasn't ordered in 3 months</em>\n• Top spenders — <em>Who are my top customers</em>\n• Birthdays — <em>Who has birthdays this month</em>\n\n<strong>Inventory</strong>\n• Check stock — <em>How many TimeWise moisturizers do I have</em>\n• Set a par — <em>Set charcoal mask par to 3</em>\n\n<strong>Other</strong>\n• Current Look Book — <em>Look book</em>\n• Your referral link — <em>My referral link</em>",
+    "chat_help_team_extra": "\n\n<strong>Your team</strong>\n• <em>Who is on my team</em>\n• <em>Who hasn't set up MyShop</em>\n• <em>Who is close to a Great Start bundle</em>\n• <em>Who is on Sarah's team</em>",
+
+    # catalog.py product-lookup strings (bundle E, 2026-07-11)
+    "product_lookup_header": "Product Look Up",
+    "product_fact_sheet_link": "Product Fact Sheet",
+    "product_order_of_application_link": "Order of Application",
+    "product_part_number": "Part # {sku}",
+    "product_lookup_not_found_bullet": "• I couldn't find \"{name}\"",
+
+    # inventory_guardrail (bundle E, 2026-07-11)
+    "inventory_guardrail": (
+        "That looks like an inventory update.\n"
+        "Try again using the word 'inventory':\n"
+        "• add 3 satin hands to inventory\n"
+        "• remove 1 satin hands from inventory\n"
+        "• set satin hands inventory to 5"
+    ),
 }
 
 UI_ES = {
@@ -266,5 +346,84 @@ UI_ES = {
     "unit_no_results": "Ninguna consultora coincide con ese criterio.",
     "unit_consultant_count": "{n} consultora:",
     "unit_consultants_count": "{n} consultoras:",
-    "render_top5_intro": "Listo \u2014 elige la mejor opción (responde {range}), o escribe otras palabras de búsqueda:",
+
+    # unit_query.py result-formatting strings (bundle E, 2026-07-11)
+    "unit_query_result_count_fallback": "{n} resultado(s) encontrado(s).",
+    "unit_query_count_consultant": "{count} consultora",
+    "unit_query_count_consultants": "{count} consultoras",
+    "unit_query_count_result": "{count} resultado",
+    "unit_query_count_results": "{count} resultados",
+    "unit_query_unknown_name": "Desconocido",
+    "unit_query_ends_date": "termina {month} {day}",
+    "unit_query_ends_date_fallback": "termina {date}",
+    "unit_query_contest_amount": "{amount} este trimestre",
+    "unit_query_needed_next_bundle": "{amount} para el próximo paquete",
+    "unit_query_needed_level": "{amount} para {level}",
+    "unit_query_needed_next_level_generic": "{amount} para el siguiente nivel",
+    "unit_query_month_achieved": "{count} mes logrado",
+    "unit_query_months_achieved": "{count} meses logrados",
+    "unit_query_amount_needed_qualify": "{amount} para calificar este mes",
+    "unit_query_myshop_status": "MyShop: {mark}",
+
+    # car_program.py strings (bundle E, 2026-07-11)
+    "car_program_no_data": "Aún no tengo datos del programa de auto en archivo. Ejecuta primero una sincronización de reportes (esto sucede automáticamente cada noche) e inténtalo de nuevo.",
+    "car_program_header": "Programa de Auto — {level} (a partir de la última sincronización)\n",
+    "car_program_status": "Estado: {status_desc}",
+    "car_program_current_quarter": "trimestre actual",
+    "car_program_production_of_goal": "Producción de {qtr_label}: {q0} de {maint_min}",
+    "car_program_remaining": "Falta: {short} este trimestre",
+    "car_program_goal_met": "Meta cumplida ✓",
+    "car_program_production_only": "Producción de {qtr_label}: {q0}",
+    "car_program_on_target_goal": "Meta on-target: {ot_goal}  (faltan {needed_ot} más)",
+    "car_program_last_quarter": "Trimestre pasado: {q1}",
+    "car_program_two_quarters_ago": "Hace dos trimestres: {q2}",
+    "car_program_copay_amount": "Co-pago: {copay}/mes este trimestre",
+    "car_program_copay_none": "Co-pago: Ninguno ✓",
+    "car_program_requal_date": "Fecha de recalificación: {date}",
+    "car_program_no_award": "Ninguno",
+    "car_program_status_unknown": "Desconocido",
+
+    # render.py picker/list strings (bundle E, 2026-07-11)
+    "render_customer_single_intro": "¿Es esta la persona que buscas?",
+    "render_customer_multi_intro": "Encontré varias coincidencias de clientes — responde con 1-{n}:",
+    "render_delete_picker_intro": "Encontré varias coincidencias. Responde con 1{suffix} para elegir qué cliente eliminar:",
+    "render_delete_orders_label": "Pedidos:",
+    "render_delete_no_orders": "ninguno",
+    "render_delete_birthday": "Cumpleaños: {birthday}",
+    "render_top5_intro_skip": "Listo — elige la mejor opción, escribe otras palabras de búsqueda, o di <strong>skip</strong> para continuar.",
+    "inventory_list_intro": "Este es tu inventario actual:",
+    "inventory_list_empty": "Tu inventario esta vacio.",
+    "inventory_list_none_shown": "Todavía no hemos agregado ningún artículo a tu inventario.",
+    "inventory_row_with_price": "• {name} {price} — {qty} disponibles",
+    "inventory_row_no_price": "• {name} — {qty} disponibles",
+    "inventory_item_present": "Tienes {qty} {name} en inventario.",
+    "inventory_item_absent": "Tienes 0 {name} en inventario.",
+    "low_stock_intro": "Esto es lo que necesitas reordenar:",
+    "low_stock_none": "Estás bien surtida — nada está por debajo de tus niveles deseados.",
+    "low_stock_row": "• {name} — tienes {qty}, quieres {threshold} (necesitas {needed} más)",
+    "low_stock_unknown_product": "Producto desconocido",
+    "propose_top_no_match": "No pude encontrar {label} en el catálogo. Intenta describirlo de otra forma (marca, línea o tono ayuda), di <strong>skip</strong> para omitir este artículo, o <strong>cancel</strong> para empezar de nuevo.",
+    "propose_top_no_match_default_label": "ese producto",
+
+    # chat_help cheat-sheet (moved verbatim from render.py's _build_chat_help_html
+    # 2026-07-11; this Spanish copy already existed in render.py -- relocated only)
+    "chat_help_base": '<strong>Aquí hay algunas cosas que puedes hacer en el chat:</strong>\n\n<strong>Clientes</strong>\n• Buscar un cliente — solo escribe su nombre: <em>Jane Doe</em>\n• Agregar un cliente — <em>Nuevo cliente Jane Doe, 555-1234, jane@gmail.com</em>\n• Qué ordenó alguien — <em>¿Qué ordenó Jane?</em>\n\n<strong>Pedidos</strong>\n• Hacer un pedido — <em>Pedido para Jane: 2 labiales y una base</em>\n• Buscar un producto y precio — <em>Satin hands</em> o <em>¿Cuánto cuesta la mascarilla de carbón?</em>\n\n<strong>Tus clientes</strong>\n• Por ciudad — <em>Clientes en Houston</em>\n• Sin pedidos recientes — <em>¿Quién no ha ordenado en 3 meses?</em>\n• Mejores compradoras — <em>¿Cuáles son mis mejores clientes?</em>\n• Cumpleaños — <em>¿Quién cumple años este mes?</em>\n\n<strong>Inventario</strong>\n• Verificar existencias — <em>¿Cuántas mascarillas de carbón tengo?</em>\n• Establecer mínimo — <em>Set charcoal mask par to 3</em>\n\n<strong>Otro</strong>\n• Look Book actual — <em>Look book</em>\n• Tu enlace de referido — <em>Mi enlace de referido</em>',
+    "chat_help_team_extra": '\n\n<strong>Tu equipo</strong>\n• <em>¿Quiénes son mis consultoras?</em>\n• <em>¿Quién no ha configurado MyShop?</em>\n• <em>¿Quién está cerca de un paquete Gran Inicio?</em>\n• <em>¿Quién es el equipo de Sarah?</em>',
+
+    # catalog.py product-lookup strings (bundle E, 2026-07-11)
+    "product_lookup_header": "Búsqueda de producto",
+    "product_fact_sheet_link": "Ficha del producto",
+    "product_order_of_application_link": "Orden de aplicación",
+    "product_part_number": "Parte # {sku}",
+    "product_lookup_not_found_bullet": "• No pude encontrar \"{name}\"",
+        "render_top5_intro": "Listo \u2014 elige la mejor opción (responde {range}), o escribe otras palabras de búsqueda:",
+
+    # inventory_guardrail (bundle E, 2026-07-11)
+    "inventory_guardrail": (
+        "Eso parece una actualización de inventario.\n"
+        "Inténtalo de nuevo usando la palabra 'inventory':\n"
+        "• add 3 satin hands to inventory\n"
+        "• remove 1 satin hands from inventory\n"
+        "• set satin hands inventory to 5"
+    ),
 }

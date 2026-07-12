@@ -11,6 +11,7 @@ from typing import Any, List, Optional, Tuple
 from intent_router import best_matches
 
 from .config import CATALOG_DIR, MATCH_LIMIT
+from .ui_text import UI_EN
 
 
 def get_catalog_path_for_language(language: str) -> Path:
@@ -82,6 +83,8 @@ def load_catalog(path: Path) -> List[dict]:
                 "previous_price": prev_price_val,
                 "search_terms": search_terms,
                 "search_string": f"{name} {search_terms}".strip(),
+                # exposed for best_matches' tie-break: newest same-name SKU wins (2026-07-11)
+                "date_added": (row.get("date_added") or "").strip(),
                 "fact_sheet_url": (row.get("fact_sheet_url") or "").strip(),
                 "order_of_application_url": (row.get("order_of_application_url") or "").strip(),
                 "use_up_rate_months": (row.get("use_up_rate_months") or "").strip(),
@@ -110,8 +113,10 @@ def _fmt_product_list_item(m: dict) -> str:
     return f'• <a href="#" data-send="{safe}">{_html.escape(name)}</a> — {price}'
 
 
-def _fmt_product_lookup_single(m: dict) -> str:
+def _fmt_product_lookup_single(m: dict, ui: dict = None) -> str:
     """Format a single product lookup result with optional PDF links."""
+    if ui is None:
+        ui = UI_EN
     price = _fmt_price_with_change(m)
     line = f"{m['product_name']} — {price}".strip(" —")
     # Part # shown subtly on the card so consultants can grab it for InTouch
@@ -120,19 +125,19 @@ def _fmt_product_lookup_single(m: dict) -> str:
     # simply wasn't on the card. Gray/small like other muted card meta text.
     sku = (m.get("sku") or "").strip()
     if sku:
-        line += f" <span style='color:#888;font-size:0.85em'>Part # {_html.escape(sku)}</span>"
-    parts = ["<strong>Product Look Up</strong>", line]
+        line += f" <span style='color:#888;font-size:0.85em'>{ui['product_part_number'].format(sku=_html.escape(sku))}</span>"
+    parts = [f"<strong>{ui['product_lookup_header']}</strong>", line]
     links = []
     if m.get("fact_sheet_url"):
-        links.append(f'<a href="{m["fact_sheet_url"]}" target="_blank">Product Fact Sheet</a>')
+        links.append(f'<a href="{m["fact_sheet_url"]}" target="_blank">{ui["product_fact_sheet_link"]}</a>')
     if m.get("order_of_application_url"):
-        links.append(f'<a href="{m["order_of_application_url"]}" target="_blank">Order of Application</a>')
+        links.append(f'<a href="{m["order_of_application_url"]}" target="_blank">{ui["product_order_of_application_link"]}</a>')
     if links:
         parts.append(" &bull; ".join(links))
     return "<br>".join(parts)
 
 
-def multi_product_lookup(catalog: List[dict], product_text: str) -> Optional[str]:
+def multi_product_lookup(catalog: List[dict], product_text: str, ui: dict = None) -> Optional[str]:
     """
     Fallback for lookups that name several products at once
     ("how much is the cc cream, lifting serum and night treatment").
@@ -144,6 +149,8 @@ def multi_product_lookup(catalog: List[dict], product_text: str) -> Optional[str
     product, not a list — never split it.
     Returns formatted HTML when 2+ parts independently resolve, else None.
     """
+    if ui is None:
+        ui = UI_EN
     text = (product_text or "").strip()
     if not re.search(r",|\s+and\s+", text, flags=re.IGNORECASE):
         return None
@@ -175,12 +182,12 @@ def multi_product_lookup(catalog: List[dict], product_text: str) -> Optional[str
     if sum(1 for _, f in found if f) < 2:
         return None
 
-    lines = ["<strong>Product Look Up</strong>"]
+    lines = [f"<strong>{ui['product_lookup_header']}</strong>"]
     for p, f in found:
         if f:
             lines.append(_fmt_product_list_item(f))
         else:
-            lines.append(f"• I couldn't find \"{_html.escape(p)}\"")
+            lines.append(ui["product_lookup_not_found_bullet"].format(name=_html.escape(p)))
     return "<br>".join(lines)
 
 

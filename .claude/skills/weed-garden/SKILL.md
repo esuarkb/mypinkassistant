@@ -158,6 +158,20 @@ Include a **Watch-list** section: new one-offs added this run, recurrence
 checks on existing items (promoted / still quiet / pruned). Update
 `data/weed_garden/WATCHLIST.md` to match.
 
+Include a **Reach-out candidates** section when anyone qualifies: consultants
+whose episode was bad enough that a personal note from Brian might be
+warranted. Flag when a consultant (a) fought a GENUINE BUG repeatedly (not
+user error) and (b) gave up without succeeding — especially with real
+business impact (an order lost, a customer never added, data they needed and
+never got). For each: consultant id + name + email (query the consultants
+table), what they were trying to do, what they lost, and whether the fix has
+shipped yet. DO NOT draft or send anything — Brian decides and handles the
+outreach. Precedent: Linne Lane (c48, 2026-07-11) got a founder note after
+the Pearlwood bug ate her new customer 5x; it should have been flagged in the
+report, not discovered afterwards. Rule of thumb: if the fix comment cites a
+consultant fighting something "5x" or "gave up", that person belongs in this
+section.
+
 Save the full report to `data/weed_garden/YYYY-MM-DD.md` (data/ is gitignored)
 AND give Brian the ranked summary in chat — findings table + one recommendation
 line. STOP THERE.
