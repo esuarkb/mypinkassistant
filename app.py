@@ -208,6 +208,14 @@ def favicon():
     return FileResponse(str(WEB_DIR / "favicon.ico"), media_type="image/x-icon")
 
 
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    # Served from the ROOT (not /web/) so the service worker's scope covers
+    # the whole app — required for web push notification clicks to open /admin
+    # (web push feature, 2026-07-12).
+    return FileResponse(str(WEB_DIR / "sw.js"), media_type="application/javascript")
+
+
 # -------------------------
 # Security headers (simple + production-friendly)
 # -------------------------
@@ -2088,6 +2096,7 @@ def admin_diagnostics(request: Request):
     em_msg = ui["message"].replace('"', "&quot;")
     queue_paused = (get_system_setting("queue_paused", "0") or "0").strip() == "1"
     worker_max = int((get_system_setting("worker_max", "3") or "3").strip())
+    vapid_pub = (os.getenv("VAPID_PUBLIC_KEY") or "").strip()
 
     CT = ZoneInfo("America/Chicago")
 
@@ -2376,6 +2385,19 @@ def admin_diagnostics(request: Request):
     </form>
     </div>
     
+    <h2 style="margin:20px 0 6px;font-size:16px">Push Alerts</h2>
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button type="button" class="adminBtn" id="btn-push-enable" data-vapid="{vapid_pub}">Enable push alerts 🔔</button>
+        <button type="button" class="adminBtn" id="btn-push-test">Send test push</button>
+        <span id="push-status" style="font-size:13px;color:#666"></span>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:8px">
+        Failure alerts mirror to this device 24/7 (no ProjectBroadcast quiet hours).
+        Enable must be tapped inside the installed web app on iPhone; notifications mirror to Apple Watch.
+      </div>
+    </div>
+
     <h2 style="margin:20px 0 6px;font-size:16px">Emergency UI Banner</h2>
     <div class="card">
     <form method="post" action="/admin/ui-emergency">
@@ -2460,6 +2482,7 @@ def admin_diagnostics(request: Request):
       <a href="/app">← Back to app</a>
     </div>
   </div>
+  <script src="/web/admin_push.js?v=1"></script>
 </body>
 </html>
 """
@@ -2558,6 +2581,70 @@ def admin_pause_queue(request: Request):
     current = (get_system_setting("queue_paused", "0") or "0").strip()
     set_system_setting("queue_paused", "0" if current == "1" else "1")
     return RedirectResponse("/admin", status_code=302)
+
+
+# ---- Web push (admin alert notifications, 2026-07-12) ----
+# Admin-gated on purpose: consultants never see a notification prompt today.
+# When consultant push ships (reorder reminders roadmap), these endpoints
+# open to require_login and the enable UI moves to a consultant surface.
+
+@app.post("/push/subscribe")
+async def push_subscribe(request: Request):
+    try:
+        cid = require_admin(request)
+    except PermissionError:
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        sub = await request.json()
+        endpoint = (sub.get("endpoint") or "").strip()
+        keys = sub.get("keys") or {}
+        p256dh = (keys.get("p256dh") or "").strip()
+        auth = (keys.get("auth") or "").strip()
+        if not (endpoint and p256dh and auth):
+            return JSONResponse({"ok": False}, status_code=400)
+    except Exception:
+        return JSONResponse({"ok": False}, status_code=400)
+
+    from db import tx, is_postgres
+    _ph = "%s" if is_postgres() else "?"
+    ua = (request.headers.get("user-agent") or "")[:300]
+    with tx() as (conn, cur):
+        cur.execute(f"DELETE FROM push_subscriptions WHERE endpoint = {_ph}", (endpoint,))
+        cur.execute(
+            f"INSERT INTO push_subscriptions (consultant_id, endpoint, p256dh, auth, user_agent) "
+            f"VALUES ({_ph}, {_ph}, {_ph}, {_ph}, {_ph})",
+            (cid, endpoint, p256dh, auth, ua),
+        )
+    return JSONResponse({"ok": True})
+
+
+@app.post("/push/unsubscribe")
+async def push_unsubscribe(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        sub = await request.json()
+        endpoint = (sub.get("endpoint") or "").strip()
+    except Exception:
+        return JSONResponse({"ok": False}, status_code=400)
+    from db import tx, is_postgres
+    _ph = "%s" if is_postgres() else "?"
+    with tx() as (conn, cur):
+        cur.execute(f"DELETE FROM push_subscriptions WHERE endpoint = {_ph}", (endpoint,))
+    return JSONResponse({"ok": True})
+
+
+@app.post("/push/test")
+async def push_test(request: Request):
+    try:
+        _ = require_admin(request)
+    except PermissionError:
+        return JSONResponse({"ok": False}, status_code=401)
+    from push_notify import send_push_to_admins
+    n = send_push_to_admins("MPA test alert 🔔", "Push notifications are working — this is what a failure alert will look like.", url="/admin")
+    return JSONResponse({"ok": True, "sent": n})
 
 
 @app.post("/admin/set-worker-max")

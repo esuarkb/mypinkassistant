@@ -429,6 +429,23 @@ CREATE TABLE IF NOT EXISTS unit_car_award (
 """)
 cur.execute("CREATE INDEX IF NOT EXISTS idx_unit_car_award_consultant ON unit_car_award(consultant_id)")
 
+# ---- push_subscriptions (web push / PWA notifications, 2026-07-12) ----
+# consultant_id from day one: admin-only today, consultant reorder-reminder
+# push is on the roadmap — future feature is UI+copy, not schema surgery.
+cur.execute("""
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultant_id INTEGER NOT NULL,
+  endpoint      TEXT    NOT NULL UNIQUE,
+  p256dh        TEXT    NOT NULL,
+  auth          TEXT    NOT NULL,
+  user_agent    TEXT    DEFAULT '',
+  created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+  failed_count  INTEGER NOT NULL DEFAULT 0
+)
+""")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_push_subs_consultant ON push_subscriptions(consultant_id)")
+
 conn.commit()
 conn.close()
 

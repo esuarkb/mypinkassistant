@@ -6,6 +6,14 @@ PB_CONTACT_ID = os.getenv("PB_CONTACT_ID")
 
 
 def send_failure_text(message):
+    # Mirror every SMS alert as a web push (2026-07-12): PB has a 9am send
+    # window (noon Sundays) — push has none, and it reaches the Watch.
+    # Push problems must never break the SMS path.
+    try:
+        from push_notify import send_push_to_admins
+        send_push_to_admins("🚨 MPA Failure", message, url="/admin")
+    except Exception as _pe:
+        print("Push mirror failed:", _pe)
 
     url = "https://api.projectbroadcast.com/v2/messages"
 
