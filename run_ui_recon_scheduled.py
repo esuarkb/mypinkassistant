@@ -48,6 +48,18 @@ def send_email(subject: str, body: str) -> None:
         print(f"[UIRecon] Failed to send email alert: {e}")
 
 
+def send_push(title: str, message: str) -> None:
+    # Web push mirror (2026-07-12): the 6:45am run's PB text waits for the 9am
+    # send window — push reaches the phone/Watch immediately. push_notify
+    # reads prod subscriptions via .env.production when run from this Mac.
+    try:
+        from push_notify import send_push_to_admins
+        n = send_push_to_admins(title, message, url="/admin")
+        print(f"[UIRecon] push alert sent to {n} device(s)")
+    except Exception as e:
+        print(f"[UIRecon] Failed to send push alert: {e}")
+
+
 def send_text(message: str) -> None:
     if not PB_API_KEY or not PB_CONTACT_ID:
         print("[UIRecon] Missing PB credentials — cannot text")
@@ -86,12 +98,14 @@ def main() -> int:
         msg = (f"🔍 MPA UI Recon: InTouch CHANGED\n\n{body}\n\n"
                f"Run diagnostics before tonight's sync. If benign: python run_ui_recon.py --reset")
         send_email("MPA UI Recon: InTouch CHANGED", msg)
-        send_text(msg)  # PB delivers after 9am CST; email covers the 6:45am run
+        send_push("🔍 InTouch CHANGED", msg)
+        send_text(msg)  # PB delivers after 9am CST; push + email cover the 6:45am run
     else:
         tail = "\n".join(out.splitlines()[-6:])
         msg = (f"🔍 MPA UI Recon FAILED to complete (couldn't inspect InTouch — "
                f"possibly a login-page change or outage):\n\n{tail}")
         send_email("MPA UI Recon: FAILED to complete", msg)
+        send_push("🔍 UI Recon FAILED", msg)
         send_text(msg)
     return 1
 

@@ -26,6 +26,25 @@ def _admin_consultant_ids(cur, PH) -> list:
     return [int(r[0] if not hasattr(r, "get") else r["id"]) for r in cur.fetchall()]
 
 
+def _open_db():
+    """Connection for subscription reads/cleanup. Subscriptions live in the
+    PRODUCTION db — that's where the admin's device subscribed. Precedence:
+    1. DATABASE_URL env set (Render web/worker) → normal db.connect().
+    2. No DATABASE_URL but .env.production exists (Brian's Mac: backup +
+       ui-recon launchd scripts) → connect to prod directly; without this,
+       Mac-side pushes silently no-op against the empty local SQLite table.
+    3. Neither → local SQLite (dev).
+    Returns (conn, PH)."""
+    if not (os.getenv("DATABASE_URL") or "").strip():
+        from dotenv import dotenv_values
+        prod_url = (dotenv_values(".env.production").get("DATABASE_URL") or "").strip()
+        if prod_url:
+            import psycopg2
+            return psycopg2.connect(prod_url), "%s"
+    from db import connect, is_postgres
+    return connect(), ("%s" if is_postgres() else "?")
+
+
 def send_push_to_admins(title: str, body: str, url: str = "/admin", tag: str = "mpa-alert") -> int:
     """Send a web push to every admin subscription. Returns the number
     delivered. Dead subscriptions (404/410 from the push service) are
@@ -35,10 +54,10 @@ def send_push_to_admins(title: str, body: str, url: str = "/admin", tag: str = "
         return 0
     try:
         from pywebpush import webpush, WebPushException
-        from db import tx, is_postgres
-        PH = "%s" if is_postgres() else "?"
 
-        with tx() as (conn, cur):
+        conn, PH = _open_db()
+        try:
+            cur = conn.cursor()
             admin_ids = _admin_consultant_ids(cur, PH)
             if not admin_ids:
                 return 0
@@ -54,6 +73,8 @@ def send_push_to_admins(title: str, body: str, url: str = "/admin", tag: str = "
                  "auth": r[3] if not hasattr(r, "get") else r["auth"]}
                 for r in cur.fetchall()
             ]
+        finally:
+            conn.close()
 
         payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag})
         sent = 0
@@ -82,11 +103,16 @@ def send_push_to_admins(title: str, body: str, url: str = "/admin", tag: str = "
                 print(f"[Push] send failed sub={s['row_id']}: {e}")
 
         if dead or failed:
-            with tx() as (conn, cur):
+            conn, PH = _open_db()
+            try:
+                cur = conn.cursor()
                 for rid in dead:
                     cur.execute(f"DELETE FROM push_subscriptions WHERE id = {PH}", (rid,))
                 for rid in failed:
                     cur.execute(f"UPDATE push_subscriptions SET failed_count = failed_count + 1 WHERE id = {PH}", (rid,))
+                conn.commit()
+            finally:
+                conn.close()
         return sent
     except Exception as e:
         print(f"[Push] send_push_to_admins error: {e}")

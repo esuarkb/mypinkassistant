@@ -30,6 +30,17 @@ _last_outage_alert_time = 0.0
 def send_failure_text(message: str) -> None:
     global _last_alert_time
 
+    # Mirror every worker alert as a web push (2026-07-12): this is the
+    # worker's LOCAL copy of send_failure_text (it does not import alerts.py),
+    # so the push mirror lives here too. Push fires BEFORE the SMS cooldown
+    # check — push has no cost/window, so it should never be suppressed by
+    # the SMS-specific cooldown. Push problems must never break the SMS path.
+    try:
+        from push_notify import send_push_to_admins
+        send_push_to_admins("🚨 MPA Failure", message, url="/admin")
+    except Exception as _pe:
+        print("[Worker] Push mirror failed:", _pe)
+
     if not PB_API_KEY or not PB_CONTACT_ID:
         print("[Worker] Missing PB credentials")
         return
@@ -73,9 +84,11 @@ _REPORT_ALERT_COOLDOWN_SECONDS = 6 * 3600
 def _alert_report_fetch_errors(cid: int, summary: dict) -> None:
     """
     Report-sync fetches degraded (error ≠ empty — see report_sync._foreposts_get).
-    The job still completes; this sends ONE SMS naming the failing report(s).
-    6h cooldown per worker process so a global FOReports outage during the
-    nightly FULL_SYNC sweep doesn't fire one text per consultant.
+    The job still completes; this sends ONE EMAIL naming the failing report(s).
+    EMAIL-ONLY since 2026-07-12 (Brian's call after push alerts shipped):
+    degraded reports are stale-data housekeeping, not wake-the-Watch urgent —
+    no push, no SMS. 6h cooldown per worker process so a global FOReports
+    outage during the nightly sweep doesn't fire one email per consultant.
     """
     global _last_report_alert_time
     errs = (summary or {}).get("fetch_errors") or []
@@ -84,10 +97,12 @@ def _alert_report_fetch_errors(cid: int, summary: dict) -> None:
     print(f"[ReportSync] fetch errors for consultant_id={cid}: {errs}")
     now = time.time()
     if now - _last_report_alert_time < _REPORT_ALERT_COOLDOWN_SECONDS:
-        print("[ReportSync] fetch-error SMS suppressed (6h cooldown)")
+        print("[ReportSync] fetch-error email suppressed (6h cooldown)")
         return
     _last_report_alert_time = now
-    send_failure_text(
+    from emailer import send_admin_alert_email
+    send_admin_alert_email(
+        "MPA Report Sync Degraded",
         "⚠️ MyPinkAssistant Report Sync Degraded\n\n"
         f"Consultant ID: {cid}\n"
         "Job completed, but these report fetches FAILED (team data may be stale):\n"

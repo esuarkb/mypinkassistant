@@ -590,3 +590,26 @@ def send_login_failure_alert_email(to_email: str, consultant_id: int, consultant
     )
     if r.status_code >= 300:
         raise RuntimeError(f"Resend error {r.status_code}: {r.text}")
+
+def send_admin_alert_email(subject: str, message: str) -> None:
+    """Plain-text ops alert to the support inbox (2026-07-12). Used for
+    lower-urgency alerts Brian routed OFF push/SMS — first user: report-sync
+    degraded (worker.py). Never raises: alert paths must not die on email."""
+    import requests as _requests
+    try:
+        api_key = (os.getenv("RESEND_API_KEY") or "").strip()
+        mail_from = (os.getenv("MAIL_FROM") or "").strip()
+        if not api_key or not mail_from:
+            print("[AdminAlertEmail] Missing RESEND_API_KEY or MAIL_FROM")
+            return
+        r = _requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"from": mail_from, "to": ["support@mypinkassistant.com"],
+                  "subject": subject, "text": message},
+            timeout=15,
+        )
+        if r.status_code >= 300:
+            print(f"[AdminAlertEmail] Resend error {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        print(f"[AdminAlertEmail] send failed: {e}")
