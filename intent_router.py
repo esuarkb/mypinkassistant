@@ -1351,10 +1351,22 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     _city_m2 = re.match(r"^(?:my\s+)?([A-Za-z][A-Za-z\s.'-]+?)\s+customers\b", lowered)
     if _city_m2:
         _city = _city_m2.group(1).strip()
-        _first_word = _city.lower().split()[0]
+        _city_words = _city.lower().split()
+        _first_word = _city_words[0]
         _is_adjective = _first_word in _CITY_ADJECTIVES
         _is_bare_new = _city.lower() == "new"  # "new customers" alone, not "New York"
-        if not _is_adjective and not _is_bare_new:
+        # Guard the CAPTURE, not just the first word (weed-garden 2026-07-11,
+        # 2nd victim of this catch-all): real cities are 1-3 words, and none
+        # contain question/verb/pronoun words. "Can you tell me which one of
+        # my" was claimed as a city (c78); "Add Deb Gonzales to my" (c114,
+        # 7/07). Rejected messages fall through to the LLM instead of
+        # dead-ending on the city re-prompt.
+        _CITY_STOP_WORDS = {"can", "you", "tell", "me", "which", "who", "what",
+                            "do", "does", "did", "add", "my", "any", "have",
+                            "one", "of", "to", "is", "was", "i", "we"}
+        _capture_ok = (len(_city_words) <= 3
+                       and not any(w in _CITY_STOP_WORDS for w in _city_words))
+        if not _is_adjective and not _is_bare_new and _capture_ok:
             return IntentResult(intent="customers_by_city", confidence=0.95,
                                 slots={"city": _city.title()}, raw_text=msg)
 
@@ -1837,6 +1849,25 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 _bday_period = "quarter"
             elif any(x in lowered for x in ("upcoming", "coming up", "soon", "next 30")):
                 _bday_period = "upcoming"
+            # Named months → "month:N" (weed-garden 2026-07-11: c78 asked for
+            # July birthdays 4 natural ways and every one word-saladed — the
+            # rule only knew relative periods). GUARDS: entry/edit messages
+            # ("New customer Dana birthday July 4 1980") must not be stolen —
+            # skip on entry/edit verbs or month followed by a day number.
+            # "may" is also a modal verb: require a month-ish context for it.
+            if _bday_period is None and not re.search(
+                    r"\b(new|add|create|order|edit|update|change|set)\b", lowered):
+                _MONTH_NUMS = {"january": 1, "february": 2, "march": 3, "april": 4,
+                               "may": 5, "june": 6, "july": 7, "august": 8,
+                               "september": 9, "october": 10, "november": 11, "december": 12}
+                for _mn, _mi in _MONTH_NUMS.items():
+                    if _mn == "may":
+                        _hit = re.search(r"\b(?:in|during|of)\s+may\b(?!\s+\d)|\bmay\s+(?:customer\s+)?birthdays?\b", lowered)
+                    else:
+                        _hit = re.search(rf"\b{_mn}\b(?!\s+\d)", lowered)
+                    if _hit:
+                        _bday_period = f"month:{_mi}"
+                        break
         if _bday_period:
             return _claim("birthday_lookup", {"period": _bday_period})
 
@@ -1911,7 +1942,16 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
             # Strip leading filler words (e.g. "who are my" from "who are my repair customers")
             _candidate_words = [w for w in _candidate.split() if w not in _prefix_filler]
             _candidate = " ".join(_candidate_words).strip()
-            if _candidate:
+            # Capture guard, twin of the city reverse-pattern's (weed-garden
+            # 2026-07-11): leftover verbs/question words mean this isn't a
+            # product phrase. Without this, messages the city guard rejects
+            # relocate HERE ("did my customers sync" → product term "did" →
+            # word-salad "No customers found who bought did") — the exact
+            # relocation trap the 2026-07-08 report deferred F2a over.
+            _PRODUCT_STOP = {"did", "does", "can", "you", "tell", "add", "to",
+                             "was", "were", "she", "he", "they", "we", "one",
+                             "sync", "synced"}
+            if _candidate and not any(w in _PRODUCT_STOP for w in _candidate_words):
                 _product_term = _candidate
 
         if _product_term:

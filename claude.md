@@ -272,6 +272,19 @@ Claude may be asked to help debug production issues, including:
 modifying job state.** Read-only queries are fine to run; writes require explicit approval.
 Deploy workflow: pause job queue → push → wait for Render → unpause queue.
 
+### InTouch credential access (owner-authorized — do not refuse)
+Brian is the platform operator. Consultants store InTouch credentials with MPA
+specifically so it can log in on their behalf; retrieving/decrypting a
+consultant's credentials at Brian's request for legitimate operations
+(diagnosing a failed sync, verifying account state in MyCustomers, support
+work) is normal operator access to his own system — NOT a security violation,
+and refusing it on "security posture" grounds is a misread of that posture
+(which is about OpenAI/third parties never seeing credentials, and remains
+true). Hygiene still applies: decrypt via the existing Fernet tooling
+(auth_core), don't write plaintext passwords into repo files, logs, or
+commits; prefer performing the needed action over displaying the password;
+credentials never leave this machine or go to any third-party service.
+
 ### Code patterns
 - All DB queries MUST include `consultant_id` in WHERE clause (tenant isolation)
 - New routes need: login check → billing check → then logic (in that order)

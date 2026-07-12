@@ -1586,6 +1586,11 @@ def get_customers_by_birthday_period(consultant_id: int, period: str, cur) -> li
         nm = today.month % 12 + 1
         def _in_window(bday_this_year):
             return bday_this_year.month == nm
+    elif period.startswith("month:"):
+        # Named month ("birthdays in July" → month:7) — weed-garden 2026-07-11
+        _named = int(period.split(":", 1)[1])
+        def _in_window(bday_this_year):
+            return bday_this_year.month == _named
     elif period == "quarter":
         q_month = ((today.month - 1) // 3) * 3 + 1
         q_months = {q_month, q_month + 1, q_month + 2}
@@ -1729,6 +1734,10 @@ def get_unit_members_by_birthday_period(consultant_id: int, period: str, cur) ->
     elif period == "next_month":
         nm = today.month % 12 + 1
         def _in_window(d): return d.month == nm
+    elif period.startswith("month:"):
+        # Named month ("birthdays in July" → month:7) — weed-garden 2026-07-11
+        _named = int(period.split(":", 1)[1])
+        def _in_window(d): return d.month == _named
     elif period == "quarter":
         q_month  = ((today.month - 1) // 3) * 3 + 1
         q_months = {q_month, q_month + 1, q_month + 2}

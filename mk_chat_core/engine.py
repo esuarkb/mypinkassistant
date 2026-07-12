@@ -1138,6 +1138,10 @@ class MKChatEngine:
                     "quarter": "this quarter", "upcoming": "the next 30 days", "next_month": "next month",
                 }
                 _period_label = _period_labels.get(_bday_period, _bday_period)
+                if _bday_period.startswith("month:"):
+                    # Named month ("birthdays in July") — weed-garden 2026-07-11
+                    import calendar as _cal_bd
+                    _period_label = f"in {_cal_bd.month_name[int(_bday_period.split(':', 1)[1])]}"
 
                 if not _bday_results:
                     _empty_who = {"customers": "customers", "consultants": "consultants", "both": "customers or consultants"}[_bday_scope]

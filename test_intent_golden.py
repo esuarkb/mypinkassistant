@@ -292,6 +292,15 @@ NEGATIVE_GUARD_CASES = [
     # fuzzy-search the product as a customer name
     ("show me pink lipsticks", "customer_info",
      "bare show must not claim product asks for customer lookup"),
+    # weed-garden 2026-07-11 (F1/F2 guards):
+    ("New customer Dana Doe birthday July 4 1980", "birthday_lookup",
+     "customer entry with a birthday month must not become a birthday list"),
+    ("did my customers sync", "customers_by_product",
+     "city-guard rejects must not relocate to the product catch-all"),
+    ("Add Deb Rivers to my customers", "customers_by_product",
+     "city-guard rejects must not relocate to the product catch-all"),
+    ("did my customers sync", "customers_by_city",
+     "verb capture must not be claimed as a city"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -509,6 +518,23 @@ ROUTE_CASES = [
     # contact word); product/team shapes fall through to better homes ---
     ("show me robyn depagter's contact information", None, "customer_info"),
     ("show me time wise customers",                  None, "customers_by_product"),
+
+    # --- weed-garden 2026-07-11 batch (built 2026-07-12) ---
+    # F1: month-NAMED birthday queries (c78 fought 4 phrasings; rule only knew
+    # relative periods). Full-sentence case also exercises the F2 city guard —
+    # the reverse pattern had claimed "Can You Tell Me Which One Of My" as a city.
+    ("Can you tell me which one of my customers have a birthday in the month of July and on what day their birthdays are",
+     None, "birthday_lookup"),
+    ("July customer birthdays",                      None, "birthday_lookup"),
+    ("who has a birthday in the month of july",      None, "birthday_lookup"),
+    ("Does Gail have a birthday in July",            None, "birthday_lookup"),
+    ("birthdays in december",                        None, "birthday_lookup"),
+    ("who has a birthday in may",                    None, "birthday_lookup"),   # "may" needs month-ish context
+    ("customers who may have a birthday this week",  None, "birthday_lookup"),   # modal "may" must not force month:5
+    # F2: reverse "[X] customers" capture guards — legit cities stay, verb-y
+    # captures fall through (and must NOT relocate to customers_by_product)
+    ("Sheboygan customers",                          None, "customers_by_city"),
+    ("eau claire customers",                         None, "customers_by_city"),
 ]
 
 
