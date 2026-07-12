@@ -213,6 +213,7 @@ def service_worker():
     # Served from the ROOT (not /web/) so the service worker's scope covers
     # the whole app — required for web push notification clicks to open /admin
     # (web push feature, 2026-07-12).
+    from fastapi.responses import FileResponse
     return FileResponse(str(WEB_DIR / "sw.js"), media_type="application/javascript")
 
 
