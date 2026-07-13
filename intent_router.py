@@ -1576,6 +1576,39 @@ _BARE_MSG_BLOCKING_INTENTS = {
 }
 
 
+_CATALOG_VOCAB_CACHE: dict = {}
+
+def _catalog_vocab(catalog: Optional[List[dict]]) -> set:
+    """Set of every 3+char whole word appearing in any product search_string.
+    Cached per catalog object (id+len key — the catalog is a startup singleton)."""
+    if not catalog:
+        return set()
+    key = (id(catalog), len(catalog))
+    v = _CATALOG_VOCAB_CACHE.get(key)
+    if v is None:
+        v = set()
+        for c in catalog:
+            for w in re.findall(r"[a-z0-9]+", (c.get("search_string") or "").lower()):
+                if len(w) >= 3:
+                    v.add(w)
+        _CATALOG_VOCAB_CACHE.clear()  # only ever one live catalog; don't leak
+        _CATALOG_VOCAB_CACHE[key] = v
+    return v
+
+
+def _phrase_is_all_product_words(phrase: str, catalog: Optional[List[dict]]) -> bool:
+    """True when EVERY significant word of `phrase` is a catalog word — the
+    discriminator that separates "satin hands"/"repair" (all catalog words)
+    from cities like "Eau Claire"/"Grand Island" (share a coincidental word
+    like eau/island but not all). Used to yield the city reverse-pattern to
+    the customers_by_product block (weed-garden 2026-07-12)."""
+    vocab = _catalog_vocab(catalog)
+    if not vocab:
+        return False
+    toks = [w for w in re.findall(r"[a-z0-9]+", (phrase or "").lower()) if len(w) >= 3]
+    return bool(toks) and all(t in vocab for t in toks)
+
+
 def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dict]] = None) -> IntentResult:
     """
     Classify a chat message into the intent that will handle it.
@@ -1897,8 +1930,15 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         intent == "customers_by_city"
         or re.match(r"customers\s+in\s+\S.+\s+all$", lowered)
     ):
-        return IntentResult(intent="customers_by_city", confidence=base.confidence if intent == "customers_by_city" else 1.0,
-                            slots=base.slots if intent == "customers_by_city" else {}, raw_text=msg)
+        # "repair customers" / "timewise customers": parse_intent's reverse
+        # "[X] customers" pattern grabbed a PRODUCT word as a city. When the
+        # captured city is entirely catalog words, it's a product-buyers query
+        # — fall through to the customers_by_product block below (weed-garden
+        # 2026-07-12). Real cities (Madison, Eau Claire) aren't all catalog words.
+        _city_slot = (base.slots or {}).get("city", "") if intent == "customers_by_city" else ""
+        if not (_city_slot and _phrase_is_all_product_words(_city_slot, catalog)):
+            return IntentResult(intent="customers_by_city", confidence=base.confidence if intent == "customers_by_city" else 1.0,
+                                slots=base.slots if intent == "customers_by_city" else {}, raw_text=msg)
 
     # Product lookup by classified intent (not pending)
     if not pending and intent == "product_lookup":

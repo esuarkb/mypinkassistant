@@ -535,6 +535,17 @@ ROUTE_CASES = [
     # captures fall through (and must NOT relocate to customers_by_product)
     ("Sheboygan customers",                          None, "customers_by_city"),
     ("eau claire customers",                         None, "customers_by_city"),
+
+    # --- "[product] customers" catalog-yield (weed-garden 2026-07-12): a
+    # PRODUCT word grabbed as a city now falls through to product-buyers.
+    # Discriminator = every word is a catalog word (separates "satin hands"
+    # from "grand island"). ---
+    ("repair customers",                             None, "customers_by_product"),
+    ("timewise customers",                           None, "customers_by_product"),
+    ("satin hands customers",                        None, "customers_by_product"),
+    # cities that share ONE catalog word must STAY city:
+    ("Eau Claire customers",                         None, "customers_by_city"),
+    ("Grand Island customers",                       None, "customers_by_city"),
 ]
 
 
