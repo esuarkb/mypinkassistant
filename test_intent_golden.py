@@ -546,6 +546,14 @@ ROUTE_CASES = [
     # cities that share ONE catalog word must STAY city:
     ("Eau Claire customers",                         None, "customers_by_city"),
     ("Grand Island customers",                       None, "customers_by_city"),
+
+    # --- weed-garden 2026-07-12 batch (built 2026-07-13) ---
+    # F1: count-question "[category] customers" must not dead-end as a city
+    ("How many skincare customers do I have?",        None, "customers_by_product"),
+    # F2: business-wide "total amount sold" is data_query, not a customer
+    ("What's the total amount sold for the last 12 months", None, "data_query"),
+    # F3: "reorder the most" must not substring-hit the leaderboard trigger
+    ("What product does Norma Boettcher reorder the most?", None, ("recent_orders", "<llm-skipped>", "unknown")),
 ]
 
 

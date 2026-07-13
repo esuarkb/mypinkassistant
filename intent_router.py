@@ -1146,17 +1146,15 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if any(t in lowered for t in _followup_kw):
         return IntentResult(intent="followup", confidence=0.95, raw_text=msg)
 
-    # leaderboard
+    # leaderboard — the "…the most" triggers are word-boundaried so "reorder
+    # the most" doesn't substring-match "order the most" (weed-garden 2026-07-12:
+    # c116 "what product does X reorder the most" got the top-customers list
+    # instead of that customer's product history).
     if (
         "leaderboard" in lowered
         or "vip" in lowered
-        or "spent the most" in lowered
-        or "spend the most" in lowered
-        or "ordered the most" in lowered
-        or "order the most" in lowered
-        or "bought the most" in lowered
-        or "buy the most" in lowered
         or "pcp" in lowered
+        or re.search(r"\b(spent|spend|ordered|order|bought|buy)\s+the\s+most\b", lowered)
         or ("top" in lowered and "customer" in lowered)
     ):
         return IntentResult(intent="leaderboard", confidence=0.95, raw_text=msg)
@@ -1184,6 +1182,13 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "total orders",
         "total revenue",
         "total sales",
+        # business-sales phrasings (weed-garden 2026-07-12, c110): claim here
+        # BEFORE the customer_spend / customer_info catch-alls, which both
+        # word-salad'd "What's the total amount sold for the last 12 months".
+        "amount sold",
+        "total amount sold",
+        "how much have i sold",
+        "how much did i sell",
         "how many customers",
         "how much revenue",
         "how much did i make",
@@ -1243,10 +1248,22 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     ):
         return IntentResult(intent="recent_orders", confidence=0.9, raw_text=msg)
 
-    # customer spend
+    # customer spend — how much a NAMED person spent. The bare-"total" path was
+    # over-broad: "total amount sold for the last 12 months" is a BUSINESS total
+    # (data_query), not a customer, and word-salad'd ("couldn't find sold the" —
+    # weed-garden 2026-07-12, c110). The reliable person signal is the
+    # spend/spent VERB (always qualifies, e.g. "how much did Jane spend this
+    # year"); the "total"/"how much" path alone now needs a possessive
+    # ("Jane's total"). Business totals lack both → fall to data_query/LLM,
+    # which answered c110's identical companion query correctly.
+    # possessive = a NAME's, not a contraction ("what's"/"it's" are not names —
+    # they were making "What's the total amount sold…" read as a person, c110).
+    _CONTRACTIONS = {"what's", "it's", "that's", "there's", "here's", "let's",
+                     "he's", "she's", "who's", "how's", "where's", "when's", "one's"}
+    _has_possessive = any(t not in _CONTRACTIONS for t in re.findall(r"\b\w+'s\b", lowered))
     if (
-        ("spent" in lowered or "spend" in lowered or "total" in lowered)
-        and any(k in lowered for k in ("how much", "total", "spent", "spend"))
+        ("spent" in lowered or "spend" in lowered
+         or (("total" in lowered or "how much" in lowered) and _has_possessive))
         and not ("add" in lowered and "order" in lowered)
     ):
         return IntentResult(intent="customer_spend", confidence=0.9, raw_text=msg)
@@ -1361,9 +1378,12 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         # my" was claimed as a city (c78); "Add Deb Gonzales to my" (c114,
         # 7/07). Rejected messages fall through to the LLM instead of
         # dead-ending on the city re-prompt.
+        # "how"/"many"/"count" added 2026-07-12: "How many skincare customers
+        # do I have?" captured "How Many Skincare" as a city and dead-ended.
         _CITY_STOP_WORDS = {"can", "you", "tell", "me", "which", "who", "what",
                             "do", "does", "did", "add", "my", "any", "have",
-                            "one", "of", "to", "is", "was", "i", "we"}
+                            "one", "of", "to", "is", "was", "i", "we",
+                            "how", "many", "count", "number"}
         _capture_ok = (len(_city_words) <= 3
                        and not any(w in _CITY_STOP_WORDS for w in _city_words))
         if not _is_adjective and not _is_bare_new and _capture_ok:
@@ -1990,7 +2010,7 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
             # relocation trap the 2026-07-08 report deferred F2a over.
             _PRODUCT_STOP = {"did", "does", "can", "you", "tell", "add", "to",
                              "was", "were", "she", "he", "they", "we", "one",
-                             "sync", "synced"}
+                             "sync", "synced", "how", "many", "count", "number"}
             if _candidate and not any(w in _PRODUCT_STOP for w in _candidate_words):
                 _product_term = _candidate
 
