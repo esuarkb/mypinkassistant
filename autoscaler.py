@@ -217,6 +217,15 @@ def _get_worker_min() -> int:
 
 
 _SCALE_DOWN_COOLDOWN = 60  # seconds to suppress scale-up after a scale-down
+# Keep a just-scaled-up worker warm for this long before it may be scaled down.
+# Fixes the tear-down-before-next-order race (2026-07-13, Becky/Kim Meulbroek):
+# a worker scaled up at 17:24:14 was scaled down 94s later (queue momentarily
+# empty), and Render's SIGTERM landed ~60s after that — right as it had claimed
+# a new order, orphaning it into stale-running (which the reaper FAILS, not
+# retries). Holding a fresh worker warm through the brief empty-queue gaps keeps
+# it available for the next order instead of being torn down into it. The
+# active-jobs guard already covers in-flight work; this covers the idle gaps.
+_SCALE_UP_KEEPWARM = 300  # seconds
 
 
 def _get_last_scale_down() -> float:
@@ -232,6 +241,23 @@ def _record_scale_down() -> None:
     try:
         from db import set_system_setting
         set_system_setting("last_scale_down_at", str(time.time()))
+    except Exception:
+        pass
+
+
+def _get_last_scale_up() -> float:
+    """Return epoch timestamp of the last scale-up, or 0 if never."""
+    try:
+        from db import get_system_setting
+        return float(get_system_setting("last_scale_up_at", "0") or "0")
+    except Exception:
+        return 0.0
+
+
+def _record_scale_up() -> None:
+    try:
+        from db import set_system_setting
+        set_system_setting("last_scale_up_at", str(time.time()))
     except Exception:
         pass
 
@@ -271,7 +297,10 @@ def check_and_scale_up() -> bool:
             running = _running_consultant_count()
             target = min(worker_max, running + waiting + 1)
             if current < target:
-                return _scale(target)
+                if _scale(target):
+                    _record_scale_up()
+                    return True
+                return False
     return False
 
 
@@ -298,7 +327,10 @@ def check_and_scale_nightly() -> bool:
     print(f"[Autoscaler] check_and_scale_nightly: {queued} FULL_SYNC(s) queued → target {target} worker(s)")
     current = current_instance_count()
     if current is not None and current < target:
-        return _scale(target)
+        if _scale(target):
+            _record_scale_up()
+            return True
+        return False
     return False
 
 
@@ -309,6 +341,14 @@ def check_and_scale_down() -> bool:
     Records timestamp so scale-up is suppressed during Render's termination window.
     """
     if _is_local_env():
+        return False
+
+    # Keep-warm: don't tear down a worker within _SCALE_UP_KEEPWARM of scaling
+    # up — it stays available for the next order instead of being torn down
+    # right as one arrives (2026-07-13 Becky/Kim incident, see constant note).
+    elapsed_up = time.time() - _get_last_scale_up()
+    if elapsed_up < _SCALE_UP_KEEPWARM:
+        print(f"[Autoscaler] scale-down suppressed — worker warm ({int(_SCALE_UP_KEEPWARM - elapsed_up)}s left)")
         return False
 
     active = _any_jobs_active()
