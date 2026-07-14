@@ -23,6 +23,7 @@ UI_EN = {
     "estimated_total": "Estimated retail total: {total}",
     "order_confirm_q": "Does that sound right? (yes/no)",
     "cds_finalize_reminder": "\nReminder: after confirming, you will need to finalize this CDS order on InTouch by navigating to <a href=\"https://apps.marykayintouch.com/order-list\" target=\"_blank\">Orders</a> and completing the order.\n",
+    "discount_educate": "💡 Discounts in chat are coming soon! I've built this order at full price — after you place it, add the discount in <a href=\"https://apps.marykayintouch.com/order-list\" target=\"_blank\">Orders</a> in MyCustomers.",
 
     "need_customer_for_order": "I caught the products but not who they're for! Please retype the order with the customer's name in front — like <strong>New order for Jane: CC cream, mascara</strong>.",
     "need_customer_info": "Okay, tell me the customer's name and information.",
@@ -235,6 +236,7 @@ UI_ES = {
     "estimated_total": "Total estimado (precio): {total}",
     "order_confirm_q": "¿Suena bien? (sí/no)",
     "cds_finalize_reminder": "\nRecordatorio: después de confirmar, deberás finalizar este pedido CDS en InTouch entrando a <a href=\"https://apps.marykayintouch.com/order-list\" target=\"_blank\">Pedidos</a> (Orders) y completando el pedido.\n",
+    "discount_educate": "💡 ¡Los descuentos en el chat llegarán pronto! Armé este pedido a precio completo — después de colocarlo, agrega el descuento en <a href=\"https://apps.marykayintouch.com/order-list\" target=\"_blank\">Orders</a> en MyCustomers.",
 
     "need_customer_for_order": "Entendí los productos, ¡pero no para quién son! Vuelve a escribir el pedido con el nombre del cliente al frente — como <strong>New order for Jane: CC cream, mascara</strong>.",
     "need_customer_info": "Perfecto, dime el nombre del cliente y su información.",

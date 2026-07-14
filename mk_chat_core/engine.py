@@ -2715,32 +2715,14 @@ class MKChatEngine:
                             + ui["order_adjust_hint"]
                         )
 
-                # ✅ Discount parsing (before guardrail so it isn't blocked)
-                _discount = _parse_discount(msg, order)
-                if _discount is not None:
-                    # Validate: total discount can't exceed order subtotal
-                    _subtotal = sum(
-                        float((ln.get("chosen") or {}).get("price") or 0) * int(ln.get("qty") or 1)
-                        for ln in order.get("lines") or []
-                    )
-                    _existing_discount = sum(d["amount"] for d in (order.get("discounts") or []))
-                    _new_total_discount = _existing_discount - (
-                        # subtract old discount for same line_idx if being replaced
-                        next((d["amount"] for d in (order.get("discounts") or [])
-                              if d.get("line_idx") == _discount["line_idx"]), 0)
-                    ) + _discount["amount"]
-                    if _new_total_discount >= _subtotal:
-                        return ChatReply(
-                            f"That discount (${_new_total_discount:.2f} total) can't equal or exceed the order subtotal (${_subtotal:.2f}). "
-                            "Please enter a smaller discount.\n\n"
-                            + self._format_order_confirm(order, ui) + "\n\n"
-                            + ui["order_adjust_hint"]
-                        )
-                    # Apply: replace any existing discount for the same line_idx
-                    discounts = [d for d in (order.get("discounts") or [])
-                                 if d.get("line_idx") != _discount["line_idx"]]
-                    discounts.append(_discount)
-                    order["discounts"] = discounts
+                # ✅ Discount request mid-confirm — detect but DON'T apply. Discounts
+                # don't reach InTouch yet (MK still building the MyCustomers discount
+                # fields, 2026-07-14); applying one in chat would show a discounted
+                # total InTouch never receives. Flag the order so the confirm educates
+                # (add it manually in MyCustomers). _parse_discount stays the detector;
+                # the apply/validate logic is retired until the feature resumes.
+                if _parse_discount(msg, order) is not None or self._mentions_discount(msg):
+                    order["discount_requested"] = True
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
@@ -2993,6 +2975,10 @@ class MKChatEngine:
             cust_last = (order.get("customer_last") or "").strip()
             fulfillment_method = "cds" if (order.get("fulfillment_method") or "").lower() == "cds" else "inventory"
             leave_pending = bool(order.get("leave_pending")) or fulfillment_method == "cds"
+            # Discount in the initial order text? Build at full price + educate on
+            # the confirm — don't silently drop it (weed-garden 2026-07-13). The
+            # LLM parser ignores the discount phrasing, so detect it on raw msg.
+            _disc_req = self._mentions_discount(msg)
 
             # Promote flag words that the AI mistakenly put in the items list
             _FLAG_WORDS = {"cds", "pending", "customer delivery", "customer delivery service"}
@@ -3084,7 +3070,7 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req)
                     order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3106,7 +3092,7 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req)
                     order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3122,7 +3108,7 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req)
                     order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3154,7 +3140,7 @@ class MKChatEngine:
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
                 return ChatReply(f"{prefix}\n{ui['need_items']}")
 
-            order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+            order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req)
             order_draft["customer_id"] = resolved_customer_id
             order_draft["order_date"] = (order.get("order_date") or "").strip()
             if not order_draft["lines"]:
@@ -3371,7 +3357,18 @@ class MKChatEngine:
         )
 
 
-    def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict], fulfillment_method: str = "inventory", leave_pending: bool = False) -> dict:
+    @staticmethod
+    def _mentions_discount(text: str) -> bool:
+        """Detect a discount/percent request in an order message. Discounts don't
+        reach InTouch yet (MK is still building the MyCustomers discount fields,
+        2026-07-14) — so we DON'T apply them; we build the order at full price and
+        educate on the confirm screen (weed-garden 2026-07-13, Wendy Coffey's order
+        collapsed when a "30% discount" was silently dropped). Detection only —
+        the parsing feature stays paused."""
+        t = (text or "").lower()
+        return bool(re.search(r"\bdiscount(?:ed|s)?\b|\bpercent\b|\d+\s*%|%\s*off\b|\b\d+(?:\.\d+)?\s*(?:%|percent|dollars?|\$)?\s*off\b|\$\s*\d+(?:\.\d+)?\s*off\b", t))
+
+    def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict], fulfillment_method: str = "inventory", leave_pending: bool = False, discount_requested: bool = False) -> dict:
         lines = []
         for it in items:
             text = (it.get("text") or "").strip()
@@ -3387,6 +3384,7 @@ class MKChatEngine:
             "lines": lines,
             "fulfillment_method": fulfillment_method,
             "leave_pending": leave_pending,
+            "discount_requested": discount_requested,
         }
 
     def _aggregate_lines_for_preview(self, order: dict) -> List[dict]:
@@ -3583,6 +3581,11 @@ class MKChatEngine:
 
         if fulfillment == "cds":
             out.append(ui["cds_finalize_reminder"])
+
+        # Discount requested but not applied (feature paused — see _mentions_discount):
+        # order built at full price; tell her to add it in MyCustomers Orders.
+        if order.get("discount_requested"):
+            out.append(ui["discount_educate"])
 
         out.append(ui["order_confirm_q"])
         return "\n".join(out) + _QR_YN
