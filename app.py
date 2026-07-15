@@ -2352,6 +2352,7 @@ def admin_diagnostics(request: Request):
 </head>
 <body>
   <div class="wrap">
+    <div style="margin-bottom:12px"><a href="/app">← Back to app</a></div>
     <h1>Admin Diagnostics</h1>
     <div class="muted">Jobs + locks overview for troubleshooting. (Private)</div>
 
@@ -2386,19 +2387,6 @@ def admin_diagnostics(request: Request):
     </form>
     </div>
     
-    <h2 style="margin:20px 0 6px;font-size:16px">Push Alerts</h2>
-    <div class="card">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button type="button" class="adminBtn" id="btn-push-enable" data-vapid="{vapid_pub}">Enable push alerts 🔔</button>
-        <button type="button" class="adminBtn" id="btn-push-test">Send test push</button>
-        <span id="push-status" style="font-size:13px;color:#666"></span>
-      </div>
-      <div style="font-size:12px;color:#888;margin-top:8px">
-        Failure alerts mirror to this device 24/7 (no ProjectBroadcast quiet hours).
-        Enable must be tapped inside the installed web app on iPhone; notifications mirror to Apple Watch.
-      </div>
-    </div>
-
     <h2 style="margin:20px 0 6px;font-size:16px">Emergency UI Banner</h2>
     <div class="card">
     <form method="post" action="/admin/ui-emergency">
@@ -2479,8 +2467,17 @@ def admin_diagnostics(request: Request):
       Tip: if you ever see “running” jobs older than ~15 minutes, the worker likely crashed mid-run.
     </div>
 
-    <div style="margin-top:10px">
-      <a href="/app">← Back to app</a>
+    <h2 style="margin:20px 0 6px;font-size:16px">Push Alerts</h2>
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button type="button" class="adminBtn" id="btn-push-enable" data-vapid="{vapid_pub}">Enable push alerts 🔔</button>
+        <button type="button" class="adminBtn" id="btn-push-test">Send test push</button>
+        <span id="push-status" style="font-size:13px;color:#666"></span>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:8px">
+        Failure alerts mirror to this device 24/7 (no ProjectBroadcast quiet hours).
+        Enable must be tapped inside the installed web app on iPhone; notifications mirror to Apple Watch.
+      </div>
     </div>
   </div>
   <script src="/web/admin_push.js?v=1"></script>
