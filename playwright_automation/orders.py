@@ -114,19 +114,37 @@ def add_sku_to_bag(page: Page, sku: str, fulfillment_method: str = "inventory") 
     page.locator(f"text={sku}").first.wait_for(timeout=12000)
     page.wait_for_timeout(500)
 
-    # check for no-CDS chip before attempting to add (CDS orders only)
+    # check for no-CDS chip before attempting to add (CDS orders only). MK changed
+    # the chip from <img src=...noCdsChip> to a styled '.cds-chip' badge (2026-07-15,
+    # which silently broke the old selector and failed Wendy's whole order). This is
+    # the fast, specific signal; the disabled-button check below is the real,
+    # markup-independent backstop.
     if fulfillment_method == "cds":
         step("orders", 10, 17, "check_cds_eligibility", f"checking no-CDS chip for SKU {sku}")
-        no_cds = page.locator('img[src*="noCdsChip"]')
+        no_cds = page.locator('.cds-chip, img[alt*="CDS" i]')
         if no_cds.count() > 0:
             raise SkuNotCdsEligible(f"SKU {sku} is not available for CDS orders (expired or out of stock).")
 
-    # click Add to Bag and give the UI a brief moment to update
-    # waits for the Add to Bag button to be enabled for the SKU
+    # Add to Bag. A DISABLED 'Add to Bag' button = the item can't be added (no-CDS,
+    # out of stock, discontinued) regardless of chip markup — the robust signal
+    # (Brian's insight 2026-07-15). Poll briefly for it to enable (normal items
+    # enable in ~1s); if it stays disabled, skip this item rather than blocking on
+    # .click()'s 30s actionability timeout, which failed the entire order.
     step("orders", 11, 17, "add_to_bag", f"clicking 'Add to Bag' for SKU {sku}")
-    page.get_by_role("button", name="Add to Bag").wait_for(timeout=12000)
-    # click the Add to Bag button for the SKU
-    page.get_by_role("button", name="Add to Bag").click()
+    _add_btn = page.get_by_role("button", name="Add to Bag").first
+    _add_btn.wait_for(timeout=12000)
+    _enabled = False
+    for _ in range(10):  # up to ~5s
+        if not _add_btn.is_disabled():
+            _enabled = True
+            break
+        page.wait_for_timeout(500)
+    if not _enabled:
+        raise SkuNotCdsEligible(
+            f"SKU {sku} could not be added — 'Add to Bag' stayed disabled "
+            "(not available for CDS, or out of stock)."
+        )
+    _add_btn.click()
     # small wait to ensure the item is added to the bag before proceeding
     page.wait_for_timeout(300)
 
