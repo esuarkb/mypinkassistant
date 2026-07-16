@@ -359,10 +359,26 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
     # Clear Proof; weed-garden 2026-07-09, regression of the 2026-07-04 alias
     # fix). Gated to ≥2 significant words so single-word queries ("cleanser")
     # keep the alias behavior that fix intended.
-    if len([w for w in q_for_score.split() if len(w) >= 3]) >= 2:
+    _q_sig = [w for w in q_for_score.split() if len(w) >= 3]
+    if len(_q_sig) >= 2:
         for _oi in best_by_owner:
             if q_for_score in _norm_plus(candidates[_oi]["product_name"]).lower():
                 best_by_owner[_oi] = max(best_by_owner[_oi], 96)
+
+        # Scattered all-words-in-NAME boost: a multi-word query whose every
+        # significant word appears as a whole word in a product NAME — even if
+        # not contiguous — names that product, and must outrank alias-only
+        # partial hits. "timewise cleanser" scored 53 for "TimeWise 4-in-1
+        # Cleanser - Normal/Dry" (both words in the name) yet 71 for MKMen
+        # (neither word in the name, only a 'mkmen cleanser' alias) and 90 for
+        # Clear Proof's bare 'cleanser' alias — WRatio penalizes the true
+        # product's extra name tokens ("4-in-1"). Ranks just below the 96
+        # contiguous-phrase tier above. weed-garden 2026-07-15, c39 (Clear Proof
+        # stealing branded cleanser orders out of real orders).
+        for _oi in best_by_owner:
+            _name_l = _norm_plus(candidates[_oi]["product_name"]).lower()
+            if all(re.search(rf"\b{re.escape(w)}\b", _name_l) for w in _q_sig):
+                best_by_owner[_oi] = max(best_by_owner[_oi], 93)
 
     q_words = {w for w in re.split(r"\s+", q) if len(w) >= 3}
 
