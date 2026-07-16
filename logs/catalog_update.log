@@ -4870,3 +4870,69 @@ Logged in.
 
 Sending change summary email...
   Email sent to support@mypinkassistant.com
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 575 products.
+  Scraping PDF links for 43 products (first-run may take several minutes)...
+  Found PDF links for 0 of 43 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 575 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 517 SKUs
+  Scraped        : 575 products
+  Total now      : 517 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 517 SKUs
+  Scraped        : 575 products
+  Total now      : 517 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 575 products.
+  Scraping PDF links for 43 products (first-run may take several minutes)...
+  Found PDF links for 0 of 43 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 575 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 517 SKUs
+  Scraped        : 575 products
+  Total now      : 517 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 517 SKUs
+  Scraped        : 575 products
+  Total now      : 517 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.

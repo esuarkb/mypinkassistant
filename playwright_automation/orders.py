@@ -123,7 +123,7 @@ def add_sku_to_bag(page: Page, sku: str, fulfillment_method: str = "inventory") 
         step("orders", 10, 17, "check_cds_eligibility", f"checking no-CDS chip for SKU {sku}")
         no_cds = page.locator('.cds-chip, img[alt*="CDS" i]')
         if no_cds.count() > 0:
-            raise SkuNotCdsEligible(f"SKU {sku} is not available for CDS orders (expired or out of stock).")
+            raise SkuNotCdsEligible(f"SKU {sku} is not currently available for CDS orders (expired or out of stock).")
 
     # Add to Bag. A DISABLED 'Add to Bag' button = the item can't be added (no-CDS,
     # out of stock, discontinued) regardless of chip markup — the robust signal
@@ -142,7 +142,7 @@ def add_sku_to_bag(page: Page, sku: str, fulfillment_method: str = "inventory") 
     if not _enabled:
         raise SkuNotCdsEligible(
             f"SKU {sku} could not be added — 'Add to Bag' stayed disabled "
-            "(not available for CDS, or out of stock)."
+            "(not currently available for CDS, or out of stock)."
         )
     _add_btn.click()
     # small wait to ensure the item is added to the bag before proceeding

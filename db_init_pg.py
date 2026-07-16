@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS consultants (
   intouch_password_enc TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   consecutive_login_failures INT NOT NULL DEFAULT 0,
-  last_login_failure_at TIMESTAMPTZ NULL
+  last_login_failure_at TIMESTAMPTZ NULL,
+  pwa_installed_at TEXT NULL   -- first time consultant opened the installed PWA (/pwa-ping); ISO string to match db_setup.py + app.py
 );
 
 -- password resets
@@ -183,6 +184,11 @@ CREATE INDEX IF NOT EXISTS idx_pcp_enrollments_consultant ON pcp_enrollments(con
 
 -- secondary InTouch account IDs for duplicate customer handling
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS intouch_account_ids TEXT DEFAULT '[]';
+
+-- PWA install tracking (/pwa-ping). Was in db_setup.py (SQLite) but never in
+-- prod Postgres → the ping silently failed for everyone (2026-07-15). Migrates
+-- existing DBs; also in the consultants CREATE above for fresh ones.
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS pwa_installed_at TEXT;
 
 CREATE TABLE IF NOT EXISTS guest_orders (
   id                    BIGSERIAL PRIMARY KEY,
