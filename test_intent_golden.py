@@ -268,6 +268,8 @@ NEGATIVE_GUARD_CASES = [
     ("Misty Cameron add a note,  wants pink prism shimmer eye stick, barrier restore 1-1-3, foundation primer, translucent powder",
      "notes_educate",
      "filler 'add a note' inside a real order entry must still be parsed as an order"),
+    ("New order for Jane: cc cream, mascara", "order_of_application",
+     "real order entry must not be caught by the order_of_application phrase rule"),
     ("text liz mayo a reminder", "bulk_text_educate", "single name must not be claimed"),
     ("send a reminder text to liz mayo", "bulk_text_educate", "single name must not be claimed"),
     ("can you create a text message so i can send out to previous orders?",
@@ -357,6 +359,13 @@ ROUTE_CASES = [
     ("lifting serum",                            None, "product_lookup"),
     ("how many timewise sets do i have on hand", None, "inventory_count"),
     ("spanish look book",                        None, "look_book"),
+    ("order of application",                      None, "order_of_application"),   # weed-garden 2026-07-16, c78
+    ("what order do i apply these",              None, "order_of_application"),
+    # birthday "+N more" tap sends "show all birthdays <period>" — must expand
+    # the birthday list, not run a product lookup (bug report 2026-07-17)
+    ("show all birthdays in July",               None, "birthday_lookup"),
+    ("show all birthdays this month",            None, "birthday_lookup"),
+    ("show all satin hands",                     None, "show_all_products"),       # real product expansion still works
     ("what should i order",                      None, "inventory_low_stock"),
     # hijack-chain rules
     ("show all satin hands",                     None, "show_all_products"),
@@ -453,6 +462,7 @@ ROUTE_CASES = [
     ("thank you",                                None,      "unknown"),
     ("okay",                                     None,      "unknown"),
     ("spanish look book",                        _MID_FLOW, "look_book"),      # look book works even mid-order
+    ("order of application",                      _MID_FLOW, "order_of_application"),  # OOA chart works mid-order too
     ("print my inventory",                       _MID_FLOW, "inventory_print"),
     # mid-draft add/remove must NOT be claimed by the submitted-order rule —
     # the pending flow edits the draft (route falls through to the base intent)

@@ -323,6 +323,21 @@ class MKChatEngine:
             )
         return None
 
+    def _intent_order_of_application(self, ctx) -> Optional[ChatReply]:
+        """Static link to the MK Order of Application skincare chart. The URL is
+        read live from the catalog so update_catalog's nightly refresh self-heals
+        MK's rotating Demandware static hash. Rendered target="_blank" like the
+        per-product fact-sheet / OOA links (MK-hosted, not our CDN — no in-app
+        overlay). Works even mid-order. weed-garden 2026-07-16, c78."""
+        intent_result = ctx.intent_result
+        ui = ctx.ui
+        catalog = ctx.catalog
+        if intent_result.intent == "order_of_application":
+            from .catalog import get_order_of_application_url
+            url = get_order_of_application_url(catalog)
+            return ChatReply(ui["order_of_application_reply"].format(url=url))
+        return None
+
     def _intent_inventory_guardrail(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
         Returns None to decline — fall through to pending flow / normal parse."""
@@ -3197,6 +3212,7 @@ class MKChatEngine:
     # ------------------------------------------------------------------
     _INTENT_DISPATCH = {
         "look_book": "_intent_look_book",
+        "order_of_application": "_intent_order_of_application",
         "inventory_guardrail": "_intent_inventory_guardrail",
         "inventory_print": "_intent_inventory_print",
         "product_lookup": "_intent_product_lookup",

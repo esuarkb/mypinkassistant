@@ -21,6 +21,28 @@ def get_catalog_path_for_language(language: str) -> Path:
     return CATALOG_DIR / "en.csv"
 
 
+# The Order of Application skincare chart is a single MK-hosted PDF shared by
+# nearly every skincare product (49 of 53 rows carrying a URL on 2026-07-16).
+# We surface the live catalog URL rather than hardcoding it, so update_catalog's
+# nightly refresh self-heals MK's rotating Demandware static hash. The fallback
+# is the dominant URL as of 2026-07-16, used only if the catalog carries none.
+_ORDER_OF_APPLICATION_FALLBACK = (
+    "https://order.marykayintouch.com/on/demandware.static/-/"
+    "Sites-us-master-catalog/default/dw2fadb95e/Original/10005/Order%20of%20Application.pdf"
+)
+
+
+def get_order_of_application_url(catalog: List[dict]) -> str:
+    """Most common non-empty order_of_application_url in the catalog, else the
+    2026-07-16 fallback. Cheap to compute per call (~400 rows)."""
+    from collections import Counter
+    counts = Counter(
+        u for c in (catalog or [])
+        if (u := (c.get("order_of_application_url") or "").strip())
+    )
+    return counts.most_common(1)[0][0] if counts else _ORDER_OF_APPLICATION_FALLBACK
+
+
 # -------------------------
 # Catalog
 # -------------------------

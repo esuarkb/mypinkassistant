@@ -156,6 +156,7 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     # --- heuristic-claimed intents (hijack chain / handler-position rules) ---
     "show_all_products":     {"llm_allowed": False, "interrupts_pending": True,  "description": "'show all <term>' product list expansion (UI tap)"},  # answered before intent logging — special-cased in handle_message, not dispatched
     "look_book":             {"llm_allowed": False, "interrupts_pending": True,  "description": "current Look Book PDF link"},
+    "order_of_application":  {"llm_allowed": False, "interrupts_pending": True,  "description": "Order of Application skincare chart PDF link"},
     "inventory_guardrail":   {"llm_allowed": False, "interrupts_pending": True,  "description": "inventory-style write missing the word 'inventory' — coach the phrasing"},
     "inventory_print":       {"llm_allowed": False, "interrupts_pending": True,  "description": "inventory print / PDF report link"},
     "inventory_count":       {"llm_allowed": False, "interrupts_pending": True,  "description": "how many X do I have on hand"},
@@ -1601,7 +1602,8 @@ def parse_intent_with_openai(message: str, state: Optional[dict] = None) -> Inte
 # "show all <term>" is only a product-list expansion when the term is not
 # a CRM concept ("show all lapsed 3 days", "show all birthdays", ...)
 _SHOW_ALL_CRM_TERMS = {"customer", "customers", "order", "orders", "inventory", "follow", "followup", "followups", "lapsed",
-                       "team", "consultants", "consultant", "unit", "members", "member"}
+                       "team", "consultants", "consultant", "unit", "members", "member",
+                       "birthday", "birthdays"}  # birthdays: the "+N more" tap sends "show all birthdays <period>" — must reach birthday_lookup, not product expansion (bug report 2026-07-17: tap ran a product lookup)
 
 # Intents that block the bare-message product lookup (a short message already
 # claimed by one of these should not be treated as a product name)
@@ -1697,6 +1699,15 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
     # Look Book — claims even mid-flow so it works during an order
     if "look book" in lowered or "lookbook" in lowered:
         return _claim("look_book")
+
+    # Order of Application chart — the literal phrase is specific enough that it
+    # can't be confused with order ENTRY ("new order for Jane…"). Claims even
+    # mid-flow so a consultant building an order can ask what goes on first.
+    # weed-garden 2026-07-16, c78 ("Order of application" → order-entry salad).
+    if ("order of application" in lowered or "application order" in lowered
+            or "what order do i apply" in lowered or "what order to apply" in lowered
+            or "which goes on first" in lowered or "what goes on first" in lowered):
+        return _claim("order_of_application")
 
     # Inventory-style write without the word "inventory" — coach phrasing (not pending)
     if not pending and _looks_like_bare_inventory_write(msg):
