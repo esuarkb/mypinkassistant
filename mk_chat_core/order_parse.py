@@ -340,6 +340,37 @@ def _parse_date_value(text: str):
     return None
 
 
+# Modifier phrase patterns — shared by extract_order_modifiers (parse) and
+# strip_modifier_text (clean item text before catalog matching).
+_MOD_TAX_PATS = (
+    r"\d+(?:\.\d+)?\s*%\s*(?:sales\s+)?(?:tax|impuesto)\b",
+    r"(?:sales\s+tax|tax|impuesto(?:\s+de\s+ventas)?)(?:\s+rate)?\s+(?:of|de|at|to|is|a)?\s*\d+(?:\.\d+)?\s*%",
+    r"\bno\s+(?:sales\s+)?tax\b|\bwithout\s+tax\b|\bsin\s+impuesto\w*",
+)
+_MOD_DISC_PATS = (
+    r"(?:with\s+|at\s+|for\s+)?(?:a\s+|an\s+)?\d+(?:\.\d+)?\s*(?:%|percent)\s*(?:off|discount|descuento)\b",
+    r"(?:discount|descuento)\s+(?:of|de)?\s*\d+(?:\.\d+)?\s*(?:%|percent)",
+    r"(?:with\s+|at\s+|for\s+)?(?:a\s+|an\s+)?\$\s*\d+(?:\.\d+)?\s*(?:off|discount|descuento)\b",
+    r"\d+(?:\.\d+)?\s*dollars?\s+(?:off|discount)\b",
+    r"(?:discount|descuento)\s+(?:of|de)?\s*\$\s*\d+(?:\.\d+)?",
+)
+
+
+def strip_modifier_text(text: str) -> str:
+    """Remove discount/tax phrasing from an ITEM string so catalog matching
+    sees only the product words. The LLM parser often keeps modifier text in
+    the item ("repair set $50 off"), which craters match scores (93 → 55) and
+    scrambled the picker order — the Go Set outranked the real repair sets
+    (Brian 2026-07-18). Returns "" when nothing product-like remains."""
+    t = text or ""
+    for pat in _MOD_TAX_PATS + _MOD_DISC_PATS:
+        t = re.sub(pat, " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s+", " ", t).strip(" -—,.")
+    # drop dangling connectors left at either end ("repair set at" → "repair set")
+    t = re.sub(r"^(?:with|at|for|and|a|an|the)\s+|\s+(?:with|at|for|and|a|an|the)$", "", t, flags=re.IGNORECASE).strip()
+    return t if re.search(r"[A-Za-z]", t) else ""
+
+
 def extract_order_modifiers(message: str) -> dict:
     """Extract order-level modifiers from anywhere in an order message
     (discount feature 2026-07-18; V1 applies everything order-level, per Brian:
@@ -434,17 +465,11 @@ def is_pure_modifier_item(text: str) -> bool:
     "20% off", "7% sales tax", "no tax" — not a product. The parser doesn't
     know about modifiers, so they leak into the items list and would fuzzy-match
     a random product ("20% off" → Illuminea Body Soufflé, caught in local
-    testing 2026-07-18). Modifier words scrubbed → nothing left = pure."""
-    t = (text or "").lower().strip()
-    if not t:
+    testing 2026-07-18). Pure = stripping modifier phrases leaves no product."""
+    t = (text or "").strip()
+    if not t or not extract_order_modifiers(t):
         return False
-    if not extract_order_modifiers(t):
-        return False
-    leftover = re.sub(
-        r"\d+(?:\.\d+)?|[%$]|\b(?:off|discount|descuento|percent|dollars?|sales|tax|"
-        r"impuesto|ventas|no|sin|add|with|and|a|an|of|de|en|the|her|him|them|please)\b",
-        " ", t)
-    return not re.search(r"[a-z]", leftover)
+    return strip_modifier_text(t) == ""
 
 
 def _parse_discount(message: str, order: dict) -> dict | None:

@@ -54,6 +54,17 @@ check("no-comma m2", (_ds[1]["type"], _ds[1]["value"], _ds[1]["target"]) if len(
 _ds = (eom("order for Kim: mask $5 off, set $10 off, lipstick 50% off").get("discounts") or [])
 check("three mentions", [(d["type"], d["value"]) for d in _ds], [("$", 5.0), ("$", 10.0), ("%", 50.0)])
 
+# ---- strip_modifier_text: item text must reach the catalog matcher clean
+# ("repair set $50 off" scored 55 vs 93 and scrambled the picker; 2026-07-18) ----
+from mk_chat_core.order_parse import strip_modifier_text as smt
+check("strip $ off",       smt("repair set $50 off"), "repair set")
+check("strip at $ off",    smt("a repair set at $100 off"), "repair set")
+check("strip pct off",     smt("charcoal mask at 20% off"), "charcoal mask")
+check("strip with disc",   smt("lipstick with a 30% discount"), "lipstick")
+check("strip pure -> empty", smt("20% off"), "")
+check("strip tax -> empty",  smt("7% sales tax"), "")
+check("strip no-op",       smt("clinical solutions retinol 0.5"), "clinical solutions retinol 0.5")
+
 # ---- is_pure_modifier_item ----
 check("item leak pct",  ipmi("20% off"), True)
 check("item leak tax",  ipmi("7% sales tax"), True)

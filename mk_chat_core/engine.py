@@ -2699,8 +2699,11 @@ class MKChatEngine:
                         _add_items = [{"text": item_text, "qty": qty}] if item_text else []
                     if not _add_items:
                         return ChatReply(ui["add_hint"])
+                    from .order_parse import strip_modifier_text as _smt, extract_order_modifiers as _eom_add
                     for it in _add_items:
                         item_text = (it.get("text") or "").strip()
+                        if item_text and _eom_add(item_text):
+                            item_text = _smt(item_text)  # clean "mask $5 off" → "mask"
                         qty = int(it.get("qty") or 1)
                         if item_text:
                             order["lines"].append({"text": item_text, "qty": qty, "chosen": None})
@@ -3582,14 +3585,20 @@ class MKChatEngine:
                 "notes": notes}
 
     def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict], fulfillment_method: str = "inventory", leave_pending: bool = False, discount_requested: bool = False, modifiers: dict = None, tax_rate: float = 0.0) -> dict:
-        from .order_parse import is_pure_modifier_item
+        from .order_parse import extract_order_modifiers as _eom_d, strip_modifier_text
         lines = []
         for it in items:
             text = (it.get("text") or "").strip()
             if not text:
                 continue
-            if is_pure_modifier_item(text):
-                continue  # "20% off" / "7% sales tax" leaked into items (2026-07-18)
+            if _eom_d(text):
+                # modifier text inside the item ("repair set $50 off") wrecks
+                # catalog scores (93→55, Go Set outranked the real sets) —
+                # strip it; a pure modifier ("20% off") strips to nothing and
+                # the line is dropped entirely (both Brian 2026-07-18).
+                text = strip_modifier_text(text)
+                if not text:
+                    continue
             qty = int(it.get("qty") or 1)
             qty = fix_qty_if_number_is_part_of_name(text, qty)
             if qty < 1:

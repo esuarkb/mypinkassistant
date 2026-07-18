@@ -47,6 +47,12 @@ CASES = [
     # names contain "for" must still win their real queries on other words ---
     ("lotion for feet",             "Mint Bliss Energizing Lotion for Feet & Legs"),
     ("moisturizer for acne prone skin", "Clear Proof Oil-Free Moisturizer"),
+
+    # --- Go Set query-awareness + fewest-tokens tie-break (2026-07-18) ---
+    ("repair set",                  "TimeWise Repair Volu-Firm Set"),          # plain set beats Ultimate + Go Set
+    ("repair go set",               "TimeWise Repair Volu-Firm The Go Set"),   # she SAID go
+    ("the go set",                  "The Go Set"),
+    ("hydrating go set",            "Mary Kay Hydrating Go Set"),
 ]
 
 

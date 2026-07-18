@@ -397,20 +397,32 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
         c = candidates[idx]
         name_l = c["product_name"].lower()
         word_hits = sum(1 for w in q_words if re.search(rf"\b{re.escape(w)}\b", name_l))
-        on_the_go = 1 if "the go set" in name_l else 0
+        # Go Set handling is query-aware (2026-07-18): "go" is only 2 chars so
+        # it never counts as a significant word — without this, "repair go set"
+        # ranked the NON-Go set first. She said "go" → prefer go-set names (-1);
+        # she didn't → deprioritize them in ties (1, the original behavior).
+        _q_has_go = bool(re.search(r"\bgo\b", q_compact))
+        if _q_has_go:
+            on_the_go = -1 if "go set" in name_l else 0
+        else:
+            on_the_go = 1 if "the go set" in name_l else 0
         matches.append(
             {"sku": c["sku"], "product_name": c["product_name"], "price": c["price"],
              "previous_price": c.get("previous_price"), "score": score,
              "fact_sheet_url": c.get("fact_sheet_url", ""), "order_of_application_url": c.get("order_of_application_url", ""),
              "use_up_rate_months": c.get("use_up_rate_months", ""),
              "_hits": word_hits, "_otg": on_the_go,
+             # Tie-break: fewer name tokens = closest to what she actually said
+             # ("repair set" → the plain Volu-Firm Set over Ultimate/Go Set;
+             # 2026-07-18, after the scattered boost made these a 3-way 93 tie).
+             "_ntok": len(name_l.split()),
              # Final tie-break: newest catalog row wins — re-released products
              # share a name across old/new SKUs and the current one should be
              # proposed (backlog item, built 2026-07-11). "" sorts last.
              "_added": c.get("date_added", "") or ""}
         )
 
-    matches.sort(key=lambda m: (m["score"], m["_hits"], -m["_otg"], m["_added"]), reverse=True)
+    matches.sort(key=lambda m: (m["score"], m["_hits"], -m["_otg"], -m["_ntok"], m["_added"]), reverse=True)
     matches = matches[:limit]
     for m in matches:
         del m["_hits"]

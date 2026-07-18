@@ -666,12 +666,16 @@ def create_order_from_confirmed(
         subtotal += unit_price * max(1, qty)
 
     total_discount = sum(d.get("amount", 0) for d in discounts)
-    total = max(0.0, subtotal - total_discount)
-
     try:
         tax_amount = float(tax_amount or 0)
     except Exception:
         tax_amount = 0.0
+
+    # total mirrors InTouch's GrandTotalAmount (subtotal − discount + tax) so the
+    # nightly sync's reconcile is a no-op — verified live 2026-07-18: InTouch
+    # returned 200.80 for the $256 − $55.20 no-tax test order. For "total sales"
+    # analytics, product revenue = total − tax_amount.
+    total = max(0.0, subtotal - total_discount) + tax_amount
 
     # Use provided order_date if valid, else fall back to now
     _use_date = None
