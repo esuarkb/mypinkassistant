@@ -340,6 +340,113 @@ def _parse_date_value(text: str):
     return None
 
 
+def extract_order_modifiers(message: str) -> dict:
+    """Extract order-level modifiers from anywhere in an order message
+    (discount feature 2026-07-18; V1 applies everything order-level, per Brian:
+    item-level mentions fold into one flat total, matching how MK records it).
+
+    Unlike _parse_discount (anchored ^, mid-confirm shapes only), this scans the
+    whole message so initial-message mentions apply too ("New order for Jane:
+    lipstick, 20% off"). TAX is matched first and its span blanked so
+    "7% sales tax" can never be read as a 7% discount.
+
+    Returns {} or any of:
+      tax_percent_override: float   ("7% sales tax", "sales tax of 7%")
+      no_tax: True                  ("no tax", "without tax", "sin impuesto")
+      discount_type: '$' | '%'      with discount_value: float
+    """
+    t = (message or "").lower()
+    mods: dict = {}
+
+    # tax first — blank its span before discount matching
+    m = re.search(r"(\d+(?:\.\d+)?)\s*%\s*(?:sales\s+)?(?:tax|impuesto)\b", t)
+    if not m:
+        m = re.search(r"(?:sales\s+tax|tax|impuesto(?:\s+de\s+ventas)?)(?:\s+rate)?\s+(?:of|de|at|to|is|a)?\s*(\d+(?:\.\d+)?)\s*%", t)
+    if m:
+        mods["tax_percent_override"] = float(m.group(1))
+        t = t[:m.start()] + " " * (m.end() - m.start()) + t[m.end():]
+
+    if re.search(r"\bno\s+(?:sales\s+)?tax\b|\bwithout\s+tax\b|\bsin\s+impuesto", t):
+        mods["no_tax"] = True
+
+    # Discounts — find ALL mentions with their (optional) item targets, per
+    # segment so "charcoal mask at 20% off, repair set at $100 off" yields two
+    # scoped mentions (2026-07-18, Brian's two-discount test: first-match-only
+    # extraction applied her item-scoped 20% to the WHOLE order and dropped the
+    # $100 entirely). Target = the segment text around the discount phrase;
+    # the engine resolves it against order lines and folds everything into one
+    # flat order-level $ total (MK has a single discount field).
+    discounts: list[dict] = []
+    _LEAD_NOISE = r"(?:^|\b)(?:with|at|for|and|a|an|the|add|give|take|her|him|them|please|apply|applied)\b"
+
+    # Strip the order preamble so it can't pollute the first mention's target
+    # ("new order for Jane Doe charcoal mask 20% off…" — no-comma phrasing,
+    # Brian 2026-07-18 round 2).
+    t_d = re.sub(r"^\s*(?:new\s+)?(?:cds\s+)?order\s+(?:for\s+\w+(?:\s+\w+)?)?\s*[:,]?", " ", t)
+
+    _PCT_PATS = (r"(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:off|discount|descuento)\b",
+                 r"(?:discount|descuento)\s+(?:of|de)?\s*(\d+(?:\.\d+)?)\s*(?:%|percent)")
+    _DOL_PATS = (r"\$\s*(\d+(?:\.\d+)?)\s*(?:off|discount|descuento)\b",
+                 r"(\d+(?:\.\d+)?)\s*dollars?\s+(?:off|discount)\b",
+                 r"(?:discount|descuento)\s+(?:of|de)?\s*\$\s*(\d+(?:\.\d+)?)")
+
+    def _clean(s: str) -> str:
+        s = re.sub(_LEAD_NOISE, " ", s)
+        return re.sub(r"\s+", " ", s).strip(" -—,")
+
+    for seg in re.split(r"[,.;\n]+", t_d):
+        seg = seg.strip()
+        if not seg:
+            continue
+        # ALL mentions in the segment, not just the first — "mask 20% off and
+        # repair set $50 off" is ONE comma-less segment with TWO discounts.
+        found: list[tuple[int, int, str, float]] = []
+        for pats, d_type in ((_PCT_PATS, "%"), (_DOL_PATS, "$")):
+            for pat in pats:
+                for m in re.finditer(pat, seg):
+                    if any(m.start() < e and m.end() > s for s, e, _, _ in found):
+                        continue  # overlaps a mention already captured
+                    found.append((m.start(), m.end(), d_type, float(m.group(1))))
+        found.sort()
+        for i, (s_, e_, d_type, value) in enumerate(found):
+            prev_end = found[i - 1][1] if i > 0 else 0
+            next_start = found[i + 1][0] if i + 1 < len(found) else len(seg)
+            pre = _clean(seg[prev_end:s_])
+            post = _clean(seg[e_:next_start])
+            # preceding text names the item ("mask 20% off"); fall back to the
+            # following text ("$100 off repair set")
+            target = pre if re.search(r"[a-z]", pre) else post
+            discounts.append({"type": d_type, "value": value, "target": target})
+
+    if discounts:
+        mods["discounts"] = discounts
+        # legacy single-mention fields (unit tests + simple paths): only when
+        # ONE untargeted mention — anything richer must go through resolution.
+        if len(discounts) == 1 and not discounts[0]["target"]:
+            mods["discount_type"] = discounts[0]["type"]
+            mods["discount_value"] = discounts[0]["value"]
+
+    return mods
+
+
+def is_pure_modifier_item(text: str) -> bool:
+    """True when an ITEM the LLM parser emitted is really just modifier text —
+    "20% off", "7% sales tax", "no tax" — not a product. The parser doesn't
+    know about modifiers, so they leak into the items list and would fuzzy-match
+    a random product ("20% off" → Illuminea Body Soufflé, caught in local
+    testing 2026-07-18). Modifier words scrubbed → nothing left = pure."""
+    t = (text or "").lower().strip()
+    if not t:
+        return False
+    if not extract_order_modifiers(t):
+        return False
+    leftover = re.sub(
+        r"\d+(?:\.\d+)?|[%$]|\b(?:off|discount|descuento|percent|dollars?|sales|tax|"
+        r"impuesto|ventas|no|sin|add|with|and|a|an|of|de|en|the|her|him|them|please)\b",
+        " ", t)
+    return not re.search(r"[a-z]", leftover)
+
+
 def _parse_discount(message: str, order: dict) -> dict | None:
     """
     Tries to parse a discount from the user message.

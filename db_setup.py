@@ -111,6 +111,11 @@ CREATE TABLE IF NOT EXISTS orders (
   total REAL,
   source TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  discount_amount REAL,
+  tax_amount REAL,
+  discount_type TEXT,
+  discount_value REAL,
+  tax_percent REAL,
   FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
 )
 """)
@@ -150,6 +155,22 @@ try:
     cur.execute("ALTER TABLE orders ADD COLUMN intouch_order_id TEXT")
 except Exception:
     pass  # already exists
+
+# ---- discount feature (2026-07-18): older DBs predate these in the CREATE.
+# discount_amount/tax_amount/tax_rate were hand-ALTERed long ago (fresh-install
+# gap); discount_type/discount_value/tax_percent are new.
+for _ddl in (
+    "ALTER TABLE orders ADD COLUMN discount_amount REAL",
+    "ALTER TABLE orders ADD COLUMN tax_amount REAL",
+    "ALTER TABLE orders ADD COLUMN discount_type TEXT",       # what she SAID: '$' or '%'
+    "ALTER TABLE orders ADD COLUMN discount_value REAL",      # the number she said (20 for "20% off")
+    "ALTER TABLE orders ADD COLUMN tax_percent REAL",         # rate applied at order time
+    "ALTER TABLE consultants ADD COLUMN tax_rate REAL",       # settings/chat-set sales tax rate
+):
+    try:
+        cur.execute(_ddl)
+    except Exception:
+        pass  # already exists
 
 # ---- customer followups (2+2+2) ----
 cur.execute("""

@@ -60,6 +60,22 @@ messages is the #1 way this review goes wrong.
 - Generic dead-ends: "No close matches", "I couldn't find …", word-salad
   replies ("I couldn't find *the was* in your saved customers").
 - Typos fuzzy matching should have caught.
+- Response CONTRADICTS the logged intent (e.g. intent=birthday_lookup but the
+  response is a product card). High-signal even when unreproducible — document
+  the negative evidence (what you checked and ruled out) instead of dropping it.
+
+**Name the mechanism, then hunt its other faces (lesson of 2026-07-18):**
+For every weird row, state the MECHANISM — which rule, score, or token caused
+it — or explicitly write "mechanism unknown". Never file a weirdness without
+one or the other. Then, before filing anything as a single-hit watch item,
+scan the REST of the window for the same mechanism wearing a different
+surface: different consultant, different intent, different feature — same
+root cause. Two surfaces of one mechanism = ONE finding at two-consultant
+strength, not two watch items. (The miss that taught this: "Details for
+Rachel Hansen" → product card AND "timewise for" → same product proposed,
+same day. Both were the token "for" scoring 85.5 against two "…for…" product
+names. Filed separately they looked like one-offs; connected, they were the
+day's top finding with a one-word staged fix.)
 
 ## Step 3 — VERIFY before you report (mandatory)
 
@@ -115,6 +131,15 @@ Every run: read it BEFORE analyzing the window, check for recurrences, promote
 anything that recurred (it now meets the threshold), prune items 30+ days
 stale. One-offs don't evaporate with the daily report — recurrence is the
 promotion signal.
+
+**Parked items count too (lesson of 2026-07-18):** reconcile every row against
+watch-list families INCLUDING items marked parked/deferred/Brian-decided. A
+hit on a parked family must be reported as a **recurrence note** even when the
+interaction "worked" — the consultant count on a parked decision is exactly
+what Brian needs to decide when to unpark it. (The miss that taught this:
+"What shade of foundation has Kim Shaw ordered?" routed fine and returned her
+history — but it was the 3rd distinct consultant on the parked shade/product-
+history family, and went unreported because nothing "failed".)
 
 **Fix hierarchy (educate before accommodate).** When staging, prefer in order:
 1. **Educate** — point at an existing capability via the help-bubble system
@@ -172,9 +197,25 @@ report, not discovered afterwards. Rule of thumb: if the fix comment cites a
 consultant fighting something "5x" or "gave up", that person belongs in this
 section.
 
-Save the full report to `data/weed_garden/YYYY-MM-DD.md` (data/ is gitignored)
-AND give Brian the ranked summary in chat — findings table + one recommendation
-line. STOP THERE.
+Save the full report to `data/weed_garden/YYYY-MM-DD.md` — the FILE is named
+for the day the review RUNS; the header names the WINDOW reviewed (they differ:
+a review run on the 18th covers the 17th). data/ is gitignored. AND give Brian
+the ranked summary in chat — findings table + one recommendation line, plus
+for each finding 1–2 sentences on what the consultant was trying to accomplish
+and how the sequence shows it. STOP THERE.
+
+**Before you finish — self-check (mandatory, especially unsupervised runs):**
+- Every finding: replayed against current code this run? (not from memory)
+- Every weird row: mechanism named, or "mechanism unknown" + negative evidence?
+- Every single-hit item: did you scan the window for the same mechanism under
+  another surface before filing it as a one-off?
+- Every row: reconciled against WATCHLIST.md including parked families?
+- Every consultant in the window accounted for — either in a finding, the
+  watch-list, or "confirmed working"? (An unmet goal that produced no error is
+  the easiest thing to silently skip.)
+- WATCHLIST.md updated to match the report (new items, recurrences, prunes)?
+- No real customer names/phones in any STAGED golden case or code snippet?
+- Zero code/catalog/test files edited?
 
 ## Step 6 — If Brian approves fixes (separate task, after his reply)
 

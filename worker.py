@@ -582,8 +582,9 @@ def main():
 
                             # Process one MyCustomers order containing all SKUs
                             skipped_msg = None
+                            fill_failures = []
                             try:
-                                process_order_batch(page, rows)
+                                fill_failures = process_order_batch(page, rows) or []
                             except SkuNotCdsEligible as e:
                                 skipped_msg = str(e)
 
@@ -598,6 +599,11 @@ def main():
                                 done_msg = f"Order for {customer_name} saved as pending. ✅"
                             else:
                                 done_msg = f"Order for {customer_name} complete! ✅"
+                            if fill_failures:
+                                # discount/tax field could not be filled — order saved
+                                # WITHOUT it; never silently drop (2026-07-13 bug class)
+                                _ff = " and ".join(fill_failures)
+                                done_msg += f" ⚠️ The {_ff} could not be applied — please add it to the order in MyCustomers."
                             for jid in job_ids:
                                 mark_job_done(jid, done_msg)
 

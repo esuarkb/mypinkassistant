@@ -42,6 +42,11 @@ CASES = [
     ("hydrating cleanser",          "Mary Kay Hydrating Cleanser"),           # kept: 2026-07-09 fix
     ("mattifying cleanser",         "Mary Kay Mattifying Cleanser"),
     ("charcoal mask",               "Clear Proof Deep-Cleansing Charcoal Mask"),
+
+    # --- "for" stop-word (weed-garden 2026-07-17 F1): the two products whose
+    # names contain "for" must still win their real queries on other words ---
+    ("lotion for feet",             "Mint Bliss Energizing Lotion for Feet & Legs"),
+    ("moisturizer for acne prone skin", "Clear Proof Oil-Free Moisturizer"),
 ]
 
 

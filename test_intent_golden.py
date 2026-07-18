@@ -270,6 +270,14 @@ NEGATIVE_GUARD_CASES = [
      "filler 'add a note' inside a real order entry must still be parsed as an order"),
     ("New order for Jane: cc cream, mascara", "order_of_application",
      "real order entry must not be caught by the order_of_application phrase rule"),
+    ("Details for Jane Doe", "product_lookup",
+     "customer-details request must not be claimed by the bare-message product rule via the 'for' token (weed-garden 2026-07-17 F1)"),
+    ("Add one lipstick to a new order for Jane Doe", "inventory_guardrail",
+     "order entry with a leading add-qty must not be coached toward inventory wording (weed-garden 2026-07-17 F2)"),
+    ("Start a new order for Jane Doe. One powder. 7% sales tax. Ordered yesterday.", "set_sales_tax",
+     "tax as an ORDER modifier must stay with the order flow, not set the rate (discount feature 2026-07-18)"),
+    ("New order for Jane Doe: charcoal mask, 20% off", "set_sales_tax",
+     "discount phrasing must not drift to the tax intent"),
     ("text liz mayo a reminder", "bulk_text_educate", "single name must not be claimed"),
     ("send a reminder text to liz mayo", "bulk_text_educate", "single name must not be claimed"),
     ("can you create a text message so i can send out to previous orders?",
@@ -372,6 +380,12 @@ ROUTE_CASES = [
     ("print my inventory",                       None, "inventory_print"),
     ("add 3 satin hands to inventory",           None, "inventory_write"),
     ("add 3 satin hands",                        None, "inventory_guardrail"),
+    ("add 3 satin hands to reorder list",        None, "inventory_guardrail"),  # "reorder" must not trip the \border\b order-exit (2026-07-18)
+    # sales tax rate intent (discount feature 2026-07-18)
+    ("set my sales tax to 8.25%",                None, "set_sales_tax"),
+    ("set my sales tax to 0",                    None, "set_sales_tax"),        # \btax\b exit keeps the set-to-N guardrail pattern off it
+    ("what's my sales tax rate",                 None, "set_sales_tax"),
+    ("set 3 satin hands to 5",                   None, "inventory_guardrail"),  # inventory set-to-N unchanged by the tax exit
     ("keep 3 charcoal mask on hand",             None, "inventory_threshold"),
     ("delete jane doe",                          None, "delete_customer"),
     ("my referral link",                         None, "referral"),

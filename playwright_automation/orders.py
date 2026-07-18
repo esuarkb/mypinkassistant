@@ -162,32 +162,53 @@ def add_sku_to_bag(page: Page, sku: str, fulfillment_method: str = "inventory") 
 def _lwc_fill(page: Page, locator, value: str) -> None:
     """
     Fill a Lightning Web Component number input in a way that triggers
-    framework event listeners (triple-click to select, then type the value).
+    framework event listeners (click to focus + select-all, then real
+    keystrokes). NOTE: Locator has no triple_click() in our Playwright —
+    the original version of this helper had never actually run; caught by
+    test_discount_fill.py 2026-07-18. press_sequentially sends true key
+    events, which LWC inputs need (fill() alone can skip their listeners).
     """
     locator.wait_for(state="visible", timeout=5000)
-    locator.triple_click()
-    locator.type(value, delay=50)
+    locator.click(click_count=3)  # triple-click selects any existing value
+    locator.press_sequentially(value, delay=50)
     page.wait_for_timeout(200)
 
 
-def fill_discount_fields(page: Page, discount_amount: float = 0.0, tax_amount: float = 0.0) -> None:
+def fill_discount_fields(page: Page, discount_amount: float = 0.0, tax_percent: float = 0.0) -> list[str]:
     """
-    Fills the discount and shipping/tax fields on the order entry screen.
-    Only called when discount_amount > 0. Fields only appear after at least one item
-    has been added to the bag.
+    Fills the Discount ($) and Sales Tax (%) fields on the order entry screen.
+    Field map verified live 2026-07-18 (inspect_discount_fields.py):
+      input[name='discount']   — $ amount (the $/% dropdown DEFAULTS to $; chat
+                                 converts % discounts to $ so we never touch it)
+      input[name='taxPercent'] — PERCENT rate (fixed % prefix, MK computes the $)
+      input[name='shipping'] / input[name='otherCharges'] — NOT used (V1 skips)
+    Fields render only after at least one item is in the bag.
+
+    Returns a list of human labels that FAILED to fill ("discount", "sales tax")
+    so the worker can surface them in status_msg — a silently dropped discount
+    is the 2026-07-13 bug class this feature exists to kill. Failures do NOT
+    abort the order: it still saves at the un-modified price.
     """
+    failed: list[str] = []
+    if discount_amount > 0 or tax_percent > 0:
+        step("orders", 12, 17, "fill_discount_tax",
+             f"filling discount ${discount_amount:.2f}" + (f" / tax {tax_percent:g}%" if tax_percent > 0 else ""))
+
     if discount_amount > 0:
-        step("orders", 12, 17, "fill_discount_tax", f"filling discount ${discount_amount:.2f}" + (f" / tax ${tax_amount:.2f}" if tax_amount > 0 else ""))
         try:
             _lwc_fill(page, page.locator("input[name='discount']").first, f"{discount_amount:.2f}")
         except Exception as e:
             print(f"[Orders] Could not fill discount field: {e}")
+            failed.append("discount")
 
-    if tax_amount > 0:
+    if tax_percent > 0:
         try:
-            _lwc_fill(page, page.locator("input[name='shipping']").first, f"{tax_amount:.2f}")
+            _lwc_fill(page, page.locator("input[name='taxPercent']").first, f"{tax_percent:g}")
         except Exception as e:
-            print(f"[Orders] Could not fill shipping/tax field: {e}")
+            print(f"[Orders] Could not fill sales tax field: {e}")
+            failed.append("sales tax")
+
+    return failed
 
 
 def _read_intouch_error(page: Page) -> str:
@@ -249,10 +270,13 @@ def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code
     print(f"[Orders] CDS address filled: {street}, {city}, {state} {postal_code}")
 
 
-def finalize_order(page: Page, leave_pending: bool = False, discount_amount: float = 0.0, tax_amount: float = 0.0, cds_address: dict | None = None) -> None:
-    # Fill discount/tax fields before saving (only if a discount was applied)
-    if discount_amount > 0:
-        fill_discount_fields(page, discount_amount=discount_amount, tax_amount=tax_amount)
+def finalize_order(page: Page, leave_pending: bool = False, discount_amount: float = 0.0, tax_percent: float = 0.0, cds_address: dict | None = None) -> list[str]:
+    """Returns fill_discount_fields' failed-field labels ([] = all good) so the
+    worker can flag un-applied discount/tax in the consultant's status_msg."""
+    # Fill discount/tax fields before saving (chat sends $ discount + % tax rate)
+    fill_failures: list[str] = []
+    if discount_amount > 0 or tax_percent > 0:
+        fill_failures = fill_discount_fields(page, discount_amount=discount_amount, tax_percent=tax_percent)
 
     # save and review order
     step("orders", 13, 17, "click_save_and_review", "clicking 'Save and Review'")
@@ -269,7 +293,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
             timeout=20000
         )
         if "order-details" in page.url:
-            return
+            return fill_failures
 
         # An error toast appeared — read it
         intouch_error = _read_intouch_error(page)
@@ -300,7 +324,7 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
             print(f"[Orders] Save and Review clicked (retry after address fill)")
             step("orders", 14, 17, "wait_order_outcome", "waiting for order-details URL (retry after CDS address fill)")
             page.wait_for_function("() => window.location.href.includes('order-details')", timeout=20000)
-            return
+            return fill_failures
 
         raise RuntimeError(f"InTouch: {intouch_error}")
 
@@ -327,15 +351,18 @@ def finalize_order(page: Page, leave_pending: bool = False, discount_amount: flo
             raise RuntimeError("Timeout: Post-confirm — order was already placed")
         raise
     print(f"[Orders] Order complete")
+    return fill_failures
 
-def process_order_batch(page: Page, rows: list[dict]) -> None:
+def process_order_batch(page: Page, rows: list[dict]) -> list[str]:
     """
     Processes a batch of order rows for ONE customer.
     Each row must contain: First Name, Last Name, SKU
-    Optional: fulfillment_method ("inventory" or "cds"), leave_pending (bool)
+    Optional: fulfillment_method ("inventory" or "cds"), leave_pending (bool);
+    rows[0] may carry order-level discount_amount ($) and tax_percent (%).
+    Returns finalize_order's failed-fill labels ([] = discount/tax all applied).
     """
     if not rows:
-        return
+        return []
 
     first = rows[0]["First Name"].strip()
     last = rows[0]["Last Name"].strip()
@@ -343,7 +370,7 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
     leave_pending = bool(rows[0].get("leave_pending", False))
     order_date = rows[0].get("order_date") or None
     discount_amount = float(rows[0].get("discount_amount") or 0)
-    tax_amount = float(rows[0].get("tax_amount") or 0)
+    tax_percent = float(rows[0].get("tax_percent") or 0)
 
     print(f"[Orders] Starting batch: {first} {last} — {len(rows)} SKU(s)")
     open_customer_and_start_order(page, first, last, fulfillment_method, order_date=order_date)
@@ -368,7 +395,8 @@ def process_order_batch(page: Page, rows: list[dict]) -> None:
             "state": rows[0].get("state", ""),
             "postal_code": rows[0].get("postal_code", ""),
         }
-    finalize_order(page, leave_pending=leave_pending, discount_amount=discount_amount, tax_amount=tax_amount, cds_address=cds_address)
+    fill_failures = finalize_order(page, leave_pending=leave_pending, discount_amount=discount_amount, tax_percent=tax_percent, cds_address=cds_address)
 
     if skipped_skus:
         raise SkuNotCdsEligible("\n".join(skipped_skus))
+    return fill_failures or []

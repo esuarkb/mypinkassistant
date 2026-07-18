@@ -153,6 +153,7 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "edit_request":      {"llm_allowed": False, "interrupts_pending": True,  "description": "customer info edit — redirected to MyCustomers"},
     "inventory":         {"llm_allowed": False, "interrupts_pending": False, "description": "generic inventory mention (always refined to a specific inventory_* intent by the hijack chain)"},
     "car_program":       {"llm_allowed": False, "interrupts_pending": False, "description": "career car / co-pay questions (director feature)"},
+    "set_sales_tax":     {"llm_allowed": True,  "interrupts_pending": True,  "description": "set or show the consultant's sales tax rate (auto-applied to My Inventory orders; discount feature 2026-07-18)"},  # interrupts like look_book: a settings command mid-order should answer, not be eaten by the pending confirm (found in local replay 2026-07-18)
     # --- heuristic-claimed intents (hijack chain / handler-position rules) ---
     "show_all_products":     {"llm_allowed": False, "interrupts_pending": True,  "description": "'show all <term>' product list expansion (UI tap)"},  # answered before intent logging — special-cased in handle_message, not dispatched
     "look_book":             {"llm_allowed": False, "interrupts_pending": True,  "description": "current Look Book PDF link"},
@@ -223,7 +224,13 @@ def should_use_openai_intent_fallback(message: str) -> bool:
 # Product matching (moved verbatim from mk_chat_core 2026-07-02;
 # mk_chat_core re-imports best_matches for its handler bodies)
 # =====================================================================
-_SEARCH_STOP_WORDS = {"mary", "kay"}
+# "for": connector word in exactly two product names ("…Moisturizer for
+# Acne-Prone Skin", "…Lotion for Feet & Legs") — as a query token it scored
+# 85.5 on those two for ANY message containing "for", letting the bare-message
+# product claim steal "Details for <customer>" (c100) and polluting v2t order
+# segments ("timewise for" → Clear Proof, c116). Both products still win their
+# real queries on their other words. weed-garden 2026-07-17 F1.
+_SEARCH_STOP_WORDS = {"mary", "kay", "for"}
 
 # Query-side word-form fixes: consultants write these differently than the
 # official catalog names, which breaks the whole-word pre-filter below.
@@ -838,6 +845,19 @@ def _looks_like_bare_inventory_write(msg: str) -> bool:
     if "inventory" in s:
         return False
 
+    # Ignore if they said ORDER — "Add one translucent loose powder to a new
+    # order for Sonya…" is order entry, and the guardrail actively coached her
+    # to use 'inventory' wording for it (weed-garden 2026-07-17 F2, c116).
+    # \border\b doesn't match "reorder", so reorder-phrasings are unaffected.
+    if re.search(r"\border\b", s):
+        return False
+
+    # Ignore if they said TAX — "set my sales tax to 0" is the set_sales_tax
+    # intent, not an inventory write (no MK product has "tax" in its name).
+    # Discount feature 2026-07-18.
+    if re.search(r"\btax\b", s):
+        return False
+
     # Ignore threshold-setting phrases — those are handled separately
     if "on hand" in s or bool(re.search(r"\bpar\b", s)) or "minimum" in s:
         return False
@@ -1180,6 +1200,20 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # before the broad "orders in " data_query trigger grabs it.
     if re.search(r"\b\w+'s orders\b", lowered):
         return IntentResult(intent="recent_orders", confidence=0.92, raw_text=msg)
+
+    # Sales tax rate — set/show the consultant's rate (discount feature 2026-07-18).
+    # "set my sales tax to 8.25%", "my tax rate is 7", "what's my sales tax rate".
+    # Guards: order messages carrying tax as a MODIFIER ("add 7% sales tax",
+    # "Start a new order for Sonya… 7% sales tax") must stay with the order flow —
+    # require a set/show shape and reject anything containing "order". Runs before
+    # data_query so "sales" in "sales tax" can't drift to a business-sales query.
+    if re.search(r"\b(?:sales\s+tax|tax\s+rate)\b", lowered) and "order" not in lowered:
+        if (
+            re.search(r"\b(?:set|update|change|make)\b.*\b(?:sales\s+tax|tax\s+rate)\b", lowered)
+            or re.search(r"\b(?:my|our)\s+(?:sales\s+)?tax(?:\s+rate)?\s+(?:is|to|should be)\b", lowered)
+            or re.search(r"\b(?:what(?:'s|\s+is)?|show|check)\b.*\b(?:my|our)\b.*\btax\b", lowered)
+        ):
+            return IntentResult(intent="set_sales_tax", confidence=0.95, raw_text=msg)
 
     # data_query — cross-customer/aggregate queries; must run before recent_orders
     # so "who ordered in May" doesn't get stolen by the broad recent_orders keyword match

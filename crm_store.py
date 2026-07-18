@@ -635,6 +635,9 @@ def create_order_from_confirmed(
     order_date: str = None,
     discounts: list = None,
     tax_amount: float = 0.0,
+    discount_type: str = None,
+    discount_value: float = None,
+    tax_percent: float = None,
 ) -> int:
     """
     Create an order + order_items in CRM tables.
@@ -682,26 +685,27 @@ def create_order_from_confirmed(
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # Insert order row
+    # Insert order row (discount_type/value + tax_percent added 2026-07-18:
+    # what the consultant SAID and the rate applied, alongside the $ amounts)
     if is_sqlite:
         cur.execute("""
-            INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, created_at)
-            VALUES (?,?,?,?,?,?,?, datetime('now'))
-        """, (consultant_id, customer_id, _use_date or now_iso, total, source, total_discount, tax_amount))
+            INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, discount_type, discount_value, tax_percent, created_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?, datetime('now'))
+        """, (consultant_id, customer_id, _use_date or now_iso, total, source, total_discount, tax_amount, discount_type, discount_value, tax_percent))
         order_id = int(cur.lastrowid)
     else:
         if _use_date:
             cur.execute("""
-                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, created_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s, NOW())
+                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, discount_type, discount_value, tax_percent, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW())
                 RETURNING id
-            """, (consultant_id, customer_id, _use_date, total, source, total_discount, tax_amount))
+            """, (consultant_id, customer_id, _use_date, total, source, total_discount, tax_amount, discount_type, discount_value, tax_percent))
         else:
             cur.execute("""
-                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, created_at)
-                VALUES (%s,%s, NOW(), %s, %s, %s, %s, NOW())
+                INSERT INTO orders (consultant_id, customer_id, order_date, total, source, discount_amount, tax_amount, discount_type, discount_value, tax_percent, created_at)
+                VALUES (%s,%s, NOW(), %s, %s, %s, %s, %s, %s, %s, NOW())
                 RETURNING id
-            """, (consultant_id, customer_id, total, source, total_discount, tax_amount))
+            """, (consultant_id, customer_id, total, source, total_discount, tax_amount, discount_type, discount_value, tax_percent))
         order_id = int(cur.fetchone()[0])
 
     # Build per-item discount map by line index

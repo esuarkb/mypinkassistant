@@ -338,6 +338,40 @@ class MKChatEngine:
             return ChatReply(ui["order_of_application_reply"].format(url=url))
         return None
 
+    def _intent_set_sales_tax(self, ctx) -> Optional[ChatReply]:
+        """Set or show the consultant's sales tax rate (consultants.tax_rate).
+        Rate auto-applies to My Inventory orders at confirm time; 0/unset = no
+        tax (today's behavior). Settings-page field edits the same column.
+        Discount feature 2026-07-18."""
+        import re
+        from db import tx
+        msg = ctx.msg
+        ui = ctx.ui
+        consultant_id = ctx.consultant_id
+        if ctx.intent_result.intent != "set_sales_tax":
+            return None
+
+        # A number means SET; no number means SHOW. Ignore digits glued to
+        # words ("tax2go") — take the first standalone decimal.
+        m = re.search(r"(?<![\w.])(\d{1,3}(?:\.\d+)?)\s*%?(?![\w.])", msg)
+        if m is None:
+            with tx() as (conn, cur):
+                cur.execute(f"SELECT tax_rate FROM consultants WHERE id = {PH}", (consultant_id,))
+                row = cur.fetchone()
+            rate = float(row[0]) if row and row[0] is not None else 0.0
+            if rate > 0:
+                return ChatReply(ui["sales_tax_show"].format(rate=f"{rate:g}"))
+            return ChatReply(ui["sales_tax_unset"])
+
+        rate = float(m.group(1))
+        if rate > 100:  # MK's field caps at 100; anything above is a typo
+            return ChatReply(ui["sales_tax_invalid"])
+        with tx() as (conn, cur):
+            cur.execute(f"UPDATE consultants SET tax_rate = {PH} WHERE id = {PH}", (rate, consultant_id))
+        if rate == 0:
+            return ChatReply(ui["sales_tax_cleared"])
+        return ChatReply(ui["sales_tax_set"].format(rate=f"{rate:g}"))
+
     def _intent_inventory_guardrail(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
         Returns None to decline — fall through to pending flow / normal parse."""
@@ -2617,7 +2651,11 @@ class MKChatEngine:
                 if not items:
                     qty, item_text = parse_qty_prefix(msg.strip())
                     items = [{"text": item_text, "qty": qty}] if item_text else []
-                order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending)
+                # modifiers can arrive with the items reply too ("one powder, 20% off")
+                from .order_parse import extract_order_modifiers as _eom
+                order_draft = self._make_order_draft(
+                    cust_first, cust_last, items, fulfillment_method, leave_pending,
+                    modifiers=_eom(msg), tax_rate=self._get_tax_rate(consultant_id))
                 order_draft["customer_id"] = resolved_customer_id
                 order_draft["order_date"] = ((_parsed.get("order") or {}).get("order_date") or "").strip()
                 if not order_draft["lines"]:
@@ -2634,6 +2672,13 @@ class MKChatEngine:
 
                 # ✅ FIRST: handle add/remove (so they don't get blocked by looks_like_command)
                 action, rest = parse_add_remove(msg)
+
+                # "add 20% off" / "add 7% sales tax" is a MODIFIER, not an item —
+                # fall through to the modifier block below instead of item-parsing
+                # it ("20% off" fuzzy-matched Illuminea; local test 2026-07-18).
+                from .order_parse import is_pure_modifier_item as _ipmi
+                if action == "add" and rest and _ipmi(rest):
+                    action, rest = None, ""
 
                 if action == "add":
                     if not rest:
@@ -2730,14 +2775,34 @@ class MKChatEngine:
                             + ui["order_adjust_hint"]
                         )
 
-                # ✅ Discount request mid-confirm — detect but DON'T apply. Discounts
-                # don't reach InTouch yet (MK still building the MyCustomers discount
-                # fields, 2026-07-14); applying one in chat would show a discounted
-                # total InTouch never receives. Flag the order so the confirm educates
-                # (add it manually in MyCustomers). _parse_discount stays the detector;
-                # the apply/validate logic is retired until the feature resumes.
-                if _parse_discount(msg, order) is not None or self._mentions_discount(msg):
-                    order["discount_requested"] = True
+                # ✅ Discount/tax mid-confirm — APPLY (2026-07-18, MK shipped the
+                # MyCustomers discount fields; verified live via inspect_discount_fields).
+                # "add 20% off" / "$5 off" / "7% sales tax" / "no tax" adjust the
+                # draft and redisplay. CDS orders: the fields don't exist on that
+                # form → educate (Brian's copy) instead of silently dropping.
+                from .order_parse import extract_order_modifiers as _eom_mc
+                _mods_mc = _eom_mc(msg)
+                if _mods_mc or self._mentions_discount(msg):
+                    # CDS: mods still get STORED — _order_money zeroes them and
+                    # the confirm formatter shows the CDS educate (single path
+                    # with the initial-message case; gap found by Brian 2026-07-18).
+                    if _mods_mc:
+                        if "discounts" in _mods_mc:
+                            # REPLACE semantics: a new discount message swaps the
+                            # whole discount set (restating never doubles it)
+                            order["discount_mentions"] = _mods_mc["discounts"]
+                            order["discount_type"] = _mods_mc.get("discount_type")
+                            order["discount_value"] = _mods_mc.get("discount_value")
+                            order["discount_requested"] = False
+                        if "tax_percent_override" in _mods_mc:
+                            order["tax_percent_override"] = _mods_mc["tax_percent_override"]
+                            order["no_tax"] = False
+                        if _mods_mc.get("no_tax"):
+                            order["no_tax"] = True
+                            order["tax_percent_override"] = None
+                    else:
+                        # discount mentioned but unparseable — can't-read educate
+                        order["discount_requested"] = True
                     state["pending"] = {"kind": "order_confirm", "order": order}
                     save_session_state(state, session_id=sid)
                     return ChatReply(self._format_order_confirm(order, ui) + "\n\n" + ui["order_adjust_hint"])
@@ -2756,28 +2821,17 @@ class MKChatEngine:
                     cust_first = order["customer"]["First Name"]
                     cust_last = order["customer"]["Last Name"]
 
-                    # Compute discount + tax before saving
-                    _order_discounts = order.get("discounts") or []
-                    _total_discount = sum(d.get("amount", 0) for d in _order_discounts)
-                    _tax_amount = 0.0
+                    # Compute discount + tax before saving — _order_money is the
+                    # single source of truth (same math the confirm displayed).
+                    _money = self._order_money(order)
+                    _total_discount = _money["discount_amount"]
+                    _tax_amount = _money["tax_amount"]
+                    _order_discounts = []
                     if _total_discount > 0:
-                        # Look up consultant's tax rate
-                        try:
-                            _tr_conn = db_connect()
-                            _tr_cur = _tr_conn.cursor()
-                            _tr_cur.execute(f"SELECT tax_rate FROM consultants WHERE id={PH}", (consultant_id,))
-                            _tr_row = _tr_cur.fetchone()
-                            _tr_conn.close()
-                            _tax_rate = float((_tr_row[0] if _tr_row else None) or 0)
-                        except Exception:
-                            _tax_rate = 0.0
-                        if _tax_rate > 0:
-                            # Tax on pre-discount subtotal
-                            _pretax_subtotal = sum(
-                                float((ln.get("chosen") or {}).get("price") or 0) * int(ln.get("qty") or 1)
-                                for ln in order.get("lines") or []
-                            )
-                            _tax_amount = round(_pretax_subtotal * (_tax_rate / 100), 2)
+                        _d_label = (f"{_money.get('rec_value'):g}% off"
+                                    if _money.get("rec_type") == "%"
+                                    else f"${_total_discount:.2f} off")
+                        _order_discounts = [{"amount": _total_discount, "line_idx": None, "label": _d_label}]
 
                     # 1) Save order + items to CRM (permanent, even if Playwright fails)
                     # CDS orders are skipped here — left pending in InTouch for the
@@ -2807,6 +2861,9 @@ class MKChatEngine:
                                 order_date=(order.get("order_date") or None),
                                 discounts=_order_discounts,
                                 tax_amount=_tax_amount,
+                                discount_type=_money.get("rec_type"),
+                                discount_value=_money.get("rec_value"),
+                                tax_percent=(_money["tax_percent"] if _tax_amount > 0 else None),
                             )
 
                     # 2) Queue jobs for worker/playwright
@@ -2851,9 +2908,12 @@ class MKChatEngine:
                             }
                             if _cds_address:
                                 payload.update(_cds_address)
-                            if _first_job and _total_discount > 0:
+                            if _first_job and (_total_discount > 0 or _tax_amount > 0):
+                                # first job of the batch carries the order-level
+                                # modifiers; process_order_batch reads rows[0].
+                                # tax goes as the RATE — MK's field is a percent.
                                 payload["discount_amount"] = _total_discount
-                                payload["tax_amount"] = _tax_amount
+                                payload["tax_percent"] = _money["tax_percent"]
                             insert_job(
                                 "NEW_ORDER_ROW",
                                 payload,
@@ -2990,10 +3050,15 @@ class MKChatEngine:
             cust_last = (order.get("customer_last") or "").strip()
             fulfillment_method = "cds" if (order.get("fulfillment_method") or "").lower() == "cds" else "inventory"
             leave_pending = bool(order.get("leave_pending")) or fulfillment_method == "cds"
-            # Discount in the initial order text? Build at full price + educate on
-            # the confirm — don't silently drop it (weed-garden 2026-07-13). The
-            # LLM parser ignores the discount phrasing, so detect it on raw msg.
-            _disc_req = self._mentions_discount(msg)
+            # Discount/tax in the initial order text? Extract and APPLY (2026-07-18).
+            # The LLM parser ignores modifier phrasing, so extract from raw msg.
+            # _disc_req survives as the safety net: a discount MENTION that
+            # extraction couldn't parse → can't-read educate on the confirm
+            # instead of a silent drop (weed-garden 2026-07-13 bug class).
+            from .order_parse import extract_order_modifiers, is_pure_modifier_item
+            _order_mods = extract_order_modifiers(msg)
+            _disc_req = self._mentions_discount(msg) and not _order_mods.get("discounts")
+            _cons_tax_rate = self._get_tax_rate(consultant_id)
 
             # Promote flag words that the AI mistakenly put in the items list
             _FLAG_WORDS = {"cds", "pending", "customer delivery", "customer delivery service"}
@@ -3006,6 +3071,11 @@ class MKChatEngine:
                         leave_pending = True
                     elif item_text == "pending":
                         leave_pending = True
+                elif is_pure_modifier_item(item_text):
+                    # modifier text the parser emitted as an "item" ("20% off",
+                    # "7% sales tax") — already captured in _order_mods; without
+                    # this it fuzzy-matches a random product (2026-07-18).
+                    pass
                 else:
                     cleaned_items.append(it)
             if cleaned_items != (order.get("items") or []):
@@ -3085,7 +3155,7 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req)
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req, modifiers=_order_mods, tax_rate=_cons_tax_rate)
                     order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3107,7 +3177,7 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req)
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req, modifiers=_order_mods, tax_rate=_cons_tax_rate)
                     order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3123,7 +3193,7 @@ class MKChatEngine:
                     items = order.get("items") or []
                     if not items and explicit_item_hint:
                         items = [{"text": explicit_item_hint, "qty": 1}]
-                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req)
+                    order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req, modifiers=_order_mods, tax_rate=_cons_tax_rate)
                     order_draft["order_date"] = (order.get("order_date") or "").strip()
                     state["pending"] = {
                         "kind": "pick_customer",
@@ -3155,7 +3225,7 @@ class MKChatEngine:
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
                 return ChatReply(f"{prefix}\n{ui['need_items']}")
 
-            order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req)
+            order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req, modifiers=_order_mods, tax_rate=_cons_tax_rate)
             order_draft["customer_id"] = resolved_customer_id
             order_draft["order_date"] = (order.get("order_date") or "").strip()
             if not order_draft["lines"]:
@@ -3213,6 +3283,7 @@ class MKChatEngine:
     _INTENT_DISPATCH = {
         "look_book": "_intent_look_book",
         "order_of_application": "_intent_order_of_application",
+        "set_sales_tax": "_intent_set_sales_tax",
         "inventory_guardrail": "_intent_inventory_guardrail",
         "inventory_print": "_intent_inventory_print",
         "product_lookup": "_intent_product_lookup",
@@ -3375,21 +3446,150 @@ class MKChatEngine:
 
     @staticmethod
     def _mentions_discount(text: str) -> bool:
-        """Detect a discount/percent request in an order message. Discounts don't
-        reach InTouch yet (MK is still building the MyCustomers discount fields,
-        2026-07-14) — so we DON'T apply them; we build the order at full price and
-        educate on the confirm screen (weed-garden 2026-07-13, Wendy Coffey's order
-        collapsed when a "30% discount" was silently dropped). Detection only —
-        the parsing feature stays paused."""
+        """Detect a discount/percent mention in an order message. Since 2026-07-18
+        discounts APPLY (extract_order_modifiers); this remains the safety net —
+        a mention that extraction could NOT parse gets the can't-read educate on
+        the confirm screen instead of being silently dropped (the original
+        2026-07-13 Wendy bug class). Tax spans are stripped first: "7% sales tax"
+        is a tax request, not a discount (weed-garden 2026-07-17 F3)."""
         t = (text or "").lower()
+        t = re.sub(r"\d+(?:\.\d+)?\s*%\s*(?:sales\s+)?(?:tax|impuesto)\b", " ", t)
+        t = re.sub(r"(?:sales\s+tax|tax|impuesto(?:\s+de\s+ventas)?)(?:\s+rate)?\s+(?:of|de|at|to|is|a)?\s*\d+(?:\.\d+)?\s*%", " ", t)
         return bool(re.search(r"\bdiscount(?:ed|s)?\b|\bpercent\b|\d+\s*%|%\s*off\b|\b\d+(?:\.\d+)?\s*(?:%|percent|dollars?|\$)?\s*off\b|\$\s*\d+(?:\.\d+)?\s*off\b", t))
 
-    def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict], fulfillment_method: str = "inventory", leave_pending: bool = False, discount_requested: bool = False) -> dict:
+    def _get_tax_rate(self, consultant_id: int) -> float:
+        """Consultant's saved sales tax rate (consultants.tax_rate), 0 if unset."""
+        try:
+            from db import tx as _tx
+            with _tx() as (conn, cur):
+                cur.execute(f"SELECT tax_rate FROM consultants WHERE id = {PH}", (consultant_id,))
+                row = cur.fetchone()
+            return float(row[0]) if row and row[0] is not None else 0.0
+        except Exception:
+            return 0.0
+
+    @staticmethod
+    def _order_money(order: dict) -> dict:
+        """One source of truth for order math (confirm display AND save/queue).
+        Discount clamps: % capped at 100, $ capped at the subtotal (MK's own
+        field limits). Tax base = DISCOUNTED subtotal (verify vs MK's computed
+        display in the live test; adjust here if MK taxes pre-discount).
+        CDS orders never get discount/tax — the fields don't exist on that form.
+        Returns {subtotal, discount_amount, tax_percent, tax_amount, grand_total}."""
+        subtotal = 0.0
+        for ln in order.get("lines") or []:
+            chosen = ln.get("chosen") or {}
+            if chosen.get("_skipped"):
+                continue
+            price = chosen.get("price")
+            if price is not None and str(price).strip():
+                try:
+                    subtotal += float(price) * max(1, int(ln.get("qty") or 1))
+                except Exception:
+                    pass
+
+        if order.get("fulfillment_method") == "cds":
+            return {"subtotal": round(subtotal, 2), "discount_amount": 0.0,
+                    "tax_percent": 0.0, "tax_amount": 0.0,
+                    "grand_total": round(subtotal, 2),
+                    "rec_type": None, "rec_value": None,
+                    "discount_over_total": False, "notes": []}
+
+        # ---- discount: resolve mentions (item-scoped %/$ summed to one flat
+        # total — MK has a single order-level field) or fall back to the legacy
+        # single type/value fields. 2026-07-18 two-discount fix: "charcoal mask
+        # at 20% off, repair set at $100 off" = 20%×mask + $100 (item-capped),
+        # NOT 20%×whole-order with the $100 dropped.
+        notes: list[str] = []
+        mentions = order.get("discount_mentions") or []
+        if mentions:
+            def _line_total(ln):
+                try:
+                    return float((ln.get("chosen") or {}).get("price") or 0) * max(1, int(ln.get("qty") or 1))
+                except Exception:
+                    return 0.0
+
+            def _match_line(target: str):
+                """Fuzzy-match a mention target to an order line (None = order-level)."""
+                if not target:
+                    return None
+                try:
+                    from rapidfuzz import fuzz as _fz
+                except Exception:
+                    return None
+                best, best_score = None, 0
+                for ln in order.get("lines") or []:
+                    chosen = ln.get("chosen") or {}
+                    if chosen.get("_skipped"):
+                        continue
+                    name = (chosen.get("product_name") or ln.get("text") or "")
+                    s = _fz.token_set_ratio(target.lower(), name.lower())
+                    if s > best_score:
+                        best, best_score = ln, s
+                return best if best_score >= 70 else None
+
+            discount = 0.0
+            for men in mentions:
+                ln = _match_line(men.get("target") or "")
+                base = _line_total(ln) if ln is not None else subtotal
+                if men["type"] == "%":
+                    part = round(base * min(float(men["value"]), 100.0) / 100.0, 2)
+                else:
+                    part = float(men["value"])  # no per-item cap (Brian 2026-07-18)
+                discount += part
+            discount = round(discount, 2)
+            if len(mentions) == 1 and mentions[0]["type"] == "%" and not mentions[0].get("target"):
+                rec_type, rec_value = "%", float(mentions[0]["value"])
+            else:
+                rec_type, rec_value = "$", discount
+        else:
+            d_type = order.get("discount_type")
+            d_value = float(order.get("discount_value") or 0)
+            if d_type == "%":
+                d_value = min(d_value, 100.0)
+                discount = round(subtotal * d_value / 100.0, 2)
+                rec_type, rec_value = "%", d_value
+            elif d_type == "$":
+                discount = round(d_value, 2)
+                rec_type, rec_value = "$", discount
+            else:
+                discount = 0.0
+                rec_type, rec_value = None, None
+
+        # Over-total rule (Brian 2026-07-18): if the summed discounts exceed the
+        # retail total, apply NONE of them — the confirm says so and she can
+        # re-enter the discount before confirming. (Replaces the per-item cap.)
+        discount_over_total = False
+        if discount > subtotal:
+            discount = 0.0
+            rec_type, rec_value = None, None
+            discount_over_total = True
+
+        if order.get("no_tax"):
+            pct = 0.0
+        elif order.get("tax_percent_override") is not None:
+            pct = min(float(order["tax_percent_override"]), 100.0)
+        else:
+            pct = min(float(order.get("tax_rate") or 0), 100.0)
+        tax = round((subtotal - discount) * pct / 100.0, 2) if pct > 0 else 0.0
+
+        return {"subtotal": round(subtotal, 2), "discount_amount": discount,
+                "tax_percent": pct, "tax_amount": tax,
+                "grand_total": round(subtotal - discount + tax, 2),
+                "rec_type": rec_type if discount > 0 else None,
+                "rec_value": rec_value if discount > 0 else None,
+                "discount_over_total": discount_over_total,
+                "notes": notes}
+
+    def _make_order_draft(self, cust_first: str, cust_last: str, items: List[dict], fulfillment_method: str = "inventory", leave_pending: bool = False, discount_requested: bool = False, modifiers: dict = None, tax_rate: float = 0.0) -> dict:
+        from .order_parse import is_pure_modifier_item
         lines = []
         for it in items:
             text = (it.get("text") or "").strip()
             if not text:
                 continue
+            if is_pure_modifier_item(text):
+                continue  # "20% off" / "7% sales tax" leaked into items (2026-07-18)
             qty = int(it.get("qty") or 1)
             qty = fix_qty_if_number_is_part_of_name(text, qty)
             if qty < 1:
@@ -3401,6 +3601,16 @@ class MKChatEngine:
             "fulfillment_method": fulfillment_method,
             "leave_pending": leave_pending,
             "discount_requested": discount_requested,
+            # discount/tax modifiers (2026-07-18): set from extract_order_modifiers
+            # at draft time or mid-confirm; consumed by _order_money.
+            # discount_mentions = full list incl. item targets ("mask at 20% off");
+            # legacy type/value only for a single untargeted mention.
+            "discount_mentions": modifiers.get("discounts") if modifiers else None,
+            "discount_type": modifiers.get("discount_type") if modifiers else None,
+            "discount_value": modifiers.get("discount_value") if modifiers else None,
+            "tax_percent_override": modifiers.get("tax_percent_override") if modifiers else None,
+            "no_tax": bool(modifiers.get("no_tax")) if modifiers else False,
+            "tax_rate": tax_rate,  # consultant's saved rate, snapshotted at draft time
         }
 
     def _aggregate_lines_for_preview(self, order: dict) -> List[dict]:
@@ -3585,22 +3795,41 @@ class MKChatEngine:
             disc_str = f"  (-${disc:.2f} off)" if disc > 0 else ""
             out.append(f"• {pl['name']} {fmt_price(price)} x{qty}{disc_str}")
 
-        total_discount = sum(d["amount"] for d in discounts)
+        # Money breakdown (2026-07-18): _order_money is the single source of
+        # truth — same math the yes-path saves and queues. Legacy per-item
+        # "discounts" list still renders above; order-level type/value drive it.
+        money = self._order_money(order)
         if any_prices:
-            if total_discount > 0:
-                discounted_total = max(0.0, total - total_discount)
-                if order_level_discount > 0:
-                    out.append(f"• ${order_level_discount:.2f} off order")
-                out.append(ui["estimated_total"].format(total=f"${discounted_total:.2f}"))
-            else:
-                out.append(ui["estimated_total"].format(total=f"${total:.2f}"))
+            out.append(ui["estimated_total"].format(total=f"${money['subtotal']:.2f}"))
+            if money["discount_amount"] > 0:
+                if money.get("rec_type") == "%":
+                    out.append(ui["order_discount_line_pct"].format(
+                        rate=f"{float(money.get('rec_value') or 0):g}",
+                        amount=f"${money['discount_amount']:.2f}"))
+                else:
+                    out.append(ui["order_discount_line"].format(
+                        amount=f"${money['discount_amount']:.2f}"))
+            if money.get("discount_over_total"):
+                out.append(ui["discount_over_total"])
+            if money["tax_amount"] > 0:
+                out.append(ui["order_tax_line"].format(
+                    rate=f"{money['tax_percent']:g}", amount=f"${money['tax_amount']:.2f}"))
+            if money["discount_amount"] > 0 or money["tax_amount"] > 0:
+                out.append(ui["order_grand_total"].format(total=f"${money['grand_total']:.2f}"))
 
         if fulfillment == "cds":
+            # She asked for a discount/tax on a CDS order — the fields don't
+            # exist on that form; say so ABOVE the finalize reminder instead of
+            # silently showing full price (Brian 2026-07-18).
+            if (order.get("discount_mentions") or order.get("discount_type")
+                    or order.get("tax_percent_override") is not None
+                    or order.get("discount_requested")):
+                out.append(ui["discount_cds_educate"])
             out.append(ui["cds_finalize_reminder"])
 
-        # Discount requested but not applied (feature paused — see _mentions_discount):
-        # order built at full price; tell her to add it in MyCustomers Orders.
-        if order.get("discount_requested"):
+        # Discount mentioned but unparseable — can't-read educate (the applied
+        # path clears this flag; silent drops are the 2026-07-13 bug class).
+        if order.get("discount_requested") and fulfillment != "cds":
             out.append(ui["discount_educate"])
 
         out.append(ui["order_confirm_q"])

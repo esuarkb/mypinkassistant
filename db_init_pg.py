@@ -98,13 +98,29 @@ CREATE TABLE IF NOT EXISTS orders (
   consultant_id BIGINT NOT NULL,
   customer_id BIGINT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   order_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  total NUMERIC(10,2) NULL,
+  total NUMERIC(10,2) NULL,             -- discounted subtotal for MPA-placed orders; InTouch total after nightly import (source of truth)
   source TEXT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  discount_amount NUMERIC(10,2) NULL,   -- flat $ off the whole order (item-level mentions summed)
+  tax_amount NUMERIC(10,2) NULL,        -- computed $ tax stored at queue time
+  discount_type TEXT NULL,              -- what the consultant SAID: '$' or '%' (submitted to InTouch as $ either way)
+  discount_value NUMERIC(10,2) NULL,    -- the number she said (20 for "20% off", 5 for "$5 off")
+  tax_percent NUMERIC(5,2) NULL         -- rate applied at order time (consultants.tax_rate may change later)
 );
 
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id, order_date DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_consultant ON orders(consultant_id, order_date DESC);
+
+-- discount feature (2026-07-18): columns for DBs created before this file carried
+-- them. discount_amount / tax_amount / consultants.tax_rate were hand-ALTERed into
+-- prod long ago but missing here (fresh-install gap); discount_type / discount_value
+-- / tax_percent are new and need the ALTERs run against prod at deploy.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10,2);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(10,2);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_type TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_value NUMERIC(10,2);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_percent NUMERIC(5,2);
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS tax_rate NUMERIC(5,2);
 
 -- order items
 CREATE TABLE IF NOT EXISTS order_items (
