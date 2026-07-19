@@ -106,12 +106,28 @@ class SkuNotCdsEligible(Exception):
     pass
 
 def add_sku_to_bag(page: Page, sku: str, fulfillment_method: str = "inventory") -> None:
-    # search for SKU and wait for results to populate
+    # search for SKU and wait for results to populate. InTouch's LWC search box
+    # can drop the first fill() if its JS listener isn't attached yet (query never
+    # runs — job 9657, 2026-07-18), so on timeout we clear and re-type once before
+    # giving up. Mirrors the proven retry in inspect_cds_chip.py. Attempt 1 waits
+    # 6s (normal items appear in ~1s), attempt 2 re-types and waits the full 12s;
+    # the final timeout propagates un-wrapped so worker.py's retry gate and
+    # predecessor-SKU regex still see the same locator("text=...") error text.
     step("orders", 8, 17, "search_sku", f"searching for SKU {sku}")
-    page.get_by_role("searchbox", name="Note Title").fill(sku)
+    _search_box = page.get_by_role("searchbox", name="Note Title")
     # waits for the SKU to appear in search results
     step("orders", 9, 17, "wait_sku_result", f"waiting for SKU {sku} in results")
-    page.locator(f"text={sku}").first.wait_for(timeout=12000)
+    for _attempt in (1, 2):
+        _search_box.fill("")
+        page.wait_for_timeout(300)
+        _search_box.fill(sku)
+        try:
+            page.locator(f"text={sku}").first.wait_for(timeout=6000 if _attempt == 1 else 12000)
+            break
+        except PlaywrightTimeoutError:
+            if _attempt == 2:
+                raise
+            print(f"[orders] SKU {sku} not in results after attempt {_attempt} — re-typing search")
     page.wait_for_timeout(500)
 
     # check for no-CDS chip before attempting to add (CDS orders only). MK changed

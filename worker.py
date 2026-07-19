@@ -967,10 +967,37 @@ def main():
                                             _good_jids = [_jid for _jid, _pjson in _sw_jobs
                                                           if (json.loads(_pjson).get("SKU") or "").strip() != _failing_sku]
                                             if _bad_jids:
-                                                _bad_user_msg = (
-                                                    f"SKU {_failing_sku} couldn't be found in MyCustomers "
-                                                    f"and may be discontinued."
-                                                )
+                                                # Look up product name from catalog CSV (also tells us
+                                                # whether the SKU is a current product — hoisted above the
+                                                # user message so the wording can be honest, 2026-07-19)
+                                                _prod_name = _failing_sku
+                                                _in_catalog = False
+                                                try:
+                                                    import csv as _csv
+                                                    _cat_path = Path(__file__).resolve().parent / "catalog" / "en.csv"
+                                                    with open(_cat_path, newline="") as _cf:
+                                                        for _crow in _csv.reader(_cf):
+                                                            if _crow and _crow[0].strip() == _failing_sku:
+                                                                _prod_name = _crow[1].strip() if len(_crow) > 1 else _failing_sku
+                                                                _in_catalog = True
+                                                                break
+                                                except Exception:
+                                                    pass
+                                                # SKU in our catalog = current product (catalog mirrors the
+                                                # OPOS scrape; discontinued SKUs fall out of it) → the search
+                                                # miss was transient InTouch flakiness or MyCustomers index
+                                                # lag, NOT discontinuation. Only claim "discontinued" when
+                                                # the SKU is truly absent from the catalog.
+                                                if _in_catalog:
+                                                    _bad_user_msg = (
+                                                        f"SKU {_failing_sku} couldn't be added right now — "
+                                                        f"please try again in a few minutes."
+                                                    )
+                                                else:
+                                                    _bad_user_msg = (
+                                                        f"SKU {_failing_sku} couldn't be found in MyCustomers "
+                                                        f"and may be discontinued."
+                                                    )
                                                 for _jid in _bad_jids:
                                                     mark_job_failed(_jid, raw_err, _bad_user_msg)
                                                 if _good_jids:
@@ -981,19 +1008,7 @@ def main():
                                                             _sw_cur.execute(f"UPDATE jobs SET status='queued', error='', status_msg='Requeued after removing unavailable SKU', attempts=0, claimed_by='', claimed_at='', started_at='' WHERE id={PH_W}", (_jid,))
                                                     _sw_conn.commit()
                                                     print(f"[Worker] SKU {_failing_sku} not found — failed {len(_bad_jids)} job(s), requeued {len(_good_jids)} job(s)")
-                                                # Look up product name from catalog CSV
-                                                _prod_name = _failing_sku
-                                                try:
-                                                    import csv as _csv
-                                                    _cat_path = Path(__file__).resolve().parent / "catalog" / "en.csv"
-                                                    with open(_cat_path, newline="") as _cf:
-                                                        for _crow in _csv.reader(_cf):
-                                                            if _crow and _crow[0].strip() == _failing_sku:
-                                                                _prod_name = _crow[1].strip() if len(_crow) > 1 else _failing_sku
-                                                                break
-                                                except Exception:
-                                                    pass
-                                                # Email admin
+                                                # Email admin (_prod_name from catalog lookup above)
                                                 try:
                                                     _admin_email = "support@mypinkassistant.com"
                                                     if _admin_email:

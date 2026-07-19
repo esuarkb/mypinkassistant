@@ -141,6 +141,18 @@ what Brian needs to decide when to unpark it. (The miss that taught this:
 history — but it was the 3rd distinct consultant on the parked shade/product-
 history family, and went unreported because nothing "failed".)
 
+**Outcome check — chat success ≠ order landed (lesson of 2026-07-19):** for
+every order placed in the window, verify the jobs-table outcome via mpa_query
+(`status`, `error`, `status_msg` on the window's NEW_ORDER_ROW jobs; one job
+per item, so check ALL items of a multi-item order). A failed or partial job
+is a finding even when the chat sequence looks clean — the consultant's
+intent is met in InTouch, not in the chat log. Report the message the
+consultant actually received (toast/user_msg), and never call the day
+"healthy" or an order "placed" without this check. (The miss that taught
+this: 7/18 was reported as "every core task finished" while c97's 2-item
+order had lost an item — job 9657 failed all retries at wait_sku_result and
+the consultant was wrongly told the SKU "may be discontinued".)
+
 **Fix hierarchy (educate before accommodate).** When staging, prefer in order:
 1. **Educate** — point at an existing capability via the help-bubble system
    (`_HELP_TOPICS` / `*_help` intents) or a copy tweak. Cheapest, zero
@@ -150,6 +162,20 @@ history family, and went unreported because nothing "failed".)
 3. **New routing rule** — last resort, only for a phrasing family multiple
    consultants use. Never a rule whose only job is absorbing one person's
    typing style.
+
+**Phrasing-robustness test (Brian, 2026-07-19):** before staging ANY fix, ask
+"what happens when the next consultant tries to do the same thing with
+different words?" A fix that only catches one phrasing of an intent — or a
+keyword/guard that can misfire on a neighboring phrasing — trades one
+consultant's friction today for another's tomorrow. Prefer fixes at the
+mechanism level (extraction, matching, normalization — they cover the whole
+phrasing family); if the only workable fix is a keyword trigger plus guards,
+treat that as a signal to educate or leave it alone instead. Leaving it alone
+is a valid outcome: consultants often recover on their own, and an
+accumulation of narrow keywords is itself a UX cost. (Origin: the F2
+name-edit-during-confirm decline, 2026-07-19 — a "name" keyword branch would
+have caught only some phrasings, missed the consultant's actual "CHANGE to
+Jene", and added new keywords to chat; she recovered via cancel+retype.)
 
 ## Step 5 — The report
 
