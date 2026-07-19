@@ -959,10 +959,35 @@ class MKChatEngine:
                 _rcode = ((_rrow[0] if _rrow else None) or "").strip()
             if _rcode and _ref_base:
                 _ref_link = f"{_ref_base}/r/{_rcode}"
-                return ChatReply(
+                _html = (
                     f'Your referral link: <a href="{_ref_link}" target="_blank">{_ref_link}</a>&nbsp; '
                     f'<button class="fdp-copy copy-link-btn" data-copy="{_ref_link}">Copy Link</button>'
                 )
+                # Seminar referral QR (2026-07-19): ON while system_settings
+                # "referral_qr_enabled" != "0" (missing row = ON). Disable
+                # without a deploy: set that row to "0". Inline SVG generated
+                # locally (qrcode lib) — the link never goes to a third-party
+                # QR service, and no JS so CSP is untouched. QR failure never
+                # breaks the referral reply.
+                from db import get_system_setting as _gss
+                if (_gss("referral_qr_enabled", "1") or "1").strip() != "0":
+                    try:
+                        import re as _re
+                        import qrcode as _qr
+                        import qrcode.image.svg as _qrsvg
+                        _svg = _qr.make(_ref_link, image_factory=_qrsvg.SvgPathImage).to_string(encoding="unicode")
+                        # mm size varies with QR version — force a crisp 180px
+                        _svg = _re.sub(r'width="\d+mm" height="\d+mm"', 'width="180" height="180"', _svg, count=1)
+                        _html += (
+                            '<div style="margin-top:10px;background:#ffffff;border:1px solid #eee;'
+                            'border-radius:12px;padding:10px;display:inline-block;line-height:0;">'
+                            + _svg + '</div>'
+                            '<div style="margin-top:6px;font-size:0.9em;color:#e91e63;">'
+                            'Have them scan to sign up 💗</div>'
+                        )
+                    except Exception as _qr_err:
+                        print(f"[chat] referral QR generation failed: {_qr_err}")
+                return ChatReply(_html)
             return ChatReply('Find your referral link in <a href="/settings">Settings</a>.')
         return None
 

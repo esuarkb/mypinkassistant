@@ -1954,8 +1954,14 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         if _del_m:
             return _claim("delete_customer", {"target": (_del_m.group(2) or "").strip()})
 
-    # Referral link (not pending)
-    if not pending and any(t in lowered for t in ("referral code", "referral link", "my referral", "refer a friend", "refer someone")):
+    # Referral link (not pending). Bare "referral(s)" added 2026-07-19 (Seminar
+    # QR push — it routed to customer lookup as a fuzzy name). Exact word only,
+    # NOT a substring: "referral program" questions stay with billing_help and
+    # "referral from Jane"-style field edits stay untouched.
+    if not pending and (
+        any(t in lowered for t in ("referral code", "referral link", "my referral", "refer a friend", "refer someone"))
+        or re.fullmatch(r"referrals?\s*[?!.]*", lowered.strip())
+    ):
         return _claim("referral")
 
     # MyCustomers link (not pending) — "link to mycustomers", "mycustomers link",

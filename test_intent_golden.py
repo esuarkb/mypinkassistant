@@ -401,6 +401,9 @@ ROUTE_CASES = [
     ("keep 3 charcoal mask on hand",             None, "inventory_threshold"),
     ("delete jane doe",                          None, "delete_customer"),
     ("my referral link",                         None, "referral"),
+    ("referral",                                 None, "referral"),   # bare word, 2026-07-19 Seminar QR push
+    ("Referral?",                                None, "referral"),
+    ("referrals",                                None, "referral"),
     ("update jane's phone number",               None, "edit_request"),
     ("birthdays this month",                     None, "birthday_lookup"),
     ("follow ups",                               None, "followup"),
