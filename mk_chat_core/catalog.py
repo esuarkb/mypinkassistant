@@ -32,6 +32,78 @@ _ORDER_OF_APPLICATION_FALLBACK = (
 )
 
 
+# --- category terms (2026-07-19) ---------------------------------------------
+# The term map + resolver LIVE in intent_router (routing needs them and this
+# module imports intent_router — same pattern as best_matches). Re-exported
+# here for handlers.
+from intent_router import CATEGORY_TERMS, category_slug_for_term  # noqa: F401
+
+CATEGORY_LABELS = {"skincare": "Skin Care", "makeup": "Makeup",
+                   "body": "Body Care", "fragrance": "Fragrance",
+                   "men": "Men's Products"}
+
+
+def _is_mens_product(c: dict) -> bool:
+    """Membership test for the VIRTUAL 'men' category — MK has no Men card, so
+    men's products live scattered (MKMen under skincare, colognes under
+    fragrance, gift sets under body). Brian 2026-07-19."""
+    if (c.get("subcategory") or "") in ("men-care", "for-him", "mens"):
+        return True
+    return bool(re.search(r"\bMKMen\b|\bMen'?s\b|\bCologne\b", c.get("product_name") or "", re.IGNORECASE))
+
+
+# bucket slugs that are MK data noise, never real types — always fold to Other
+# (marykay-skincare / customized-skin-care are "generic skincare" catch-alls,
+# not lines — tapping them just looped back; Brian 2026-07-19)
+_JUNK_SUBS = {"", "other", "hidden-subcategory", "cs-only-products",
+              "skincare-products", "makeup-products", "products",
+              "marykay-skincare", "customized-skin-care"}
+# slug → the term used in tap-links (must resolve via category_slug_for_term)
+CATEGORY_SEND_TERM = {"skincare": "skincare", "makeup": "makeup",
+                      "fragrance": "fragrances", "body": "body care",
+                      "men": "mens"}
+# bucket slugs whose .title() rendering is wrong/ugly
+BUCKET_LABELS = {"section-1-wsl": "While Supplies Last", "cc-cream": "CC Cream",
+                 "marykay-skincare": "Mary Kay Skin Care", "mkmen": "MK Men",
+                 "other": "Other"}
+
+
+def bucket_label(sub_slug: str) -> str:
+    return BUCKET_LABELS.get(sub_slug, sub_slug.replace("-", " ").title())
+
+
+def category_buckets(items: List[dict], min_size: int = 3) -> dict:
+    """Group category items by subcategory for the drill-in view. MK's gtm
+    subs are noisy (singletons, 'Hidden Subcategory', 'Cs Only Products' —
+    Brian 2026-07-19), so junk subs and buckets under min_size fold into
+    'other'. Deterministic: the tap handler recomputes the same buckets."""
+    from collections import OrderedDict
+    raw: dict = {}
+    for c in items:
+        sub = (c.get("subcategory") or "").strip().lower()
+        raw.setdefault(sub if sub not in _JUNK_SUBS else "other", []).append(c)
+    buckets: dict = OrderedDict()
+    other: list = raw.pop("other", [])
+    for sub, its in sorted(raw.items(), key=lambda kv: -len(kv[1])):
+        if len(its) >= min_size:
+            buckets[sub] = its
+        else:
+            other.extend(its)
+    if other:
+        buckets["other"] = other
+    return buckets
+
+
+def products_in_category(catalog: List[dict], slug: str) -> List[dict]:
+    if slug == "men":
+        return [c for c in (catalog or []) if _is_mens_product(c)]
+    return [c for c in (catalog or []) if c.get("category") == slug]
+
+
+def skus_in_category(catalog: List[dict], slug: str) -> set:
+    return {c["sku"] for c in products_in_category(catalog, slug) if c.get("sku")}
+
+
 def get_order_of_application_url(catalog: List[dict]) -> str:
     """Most common non-empty order_of_application_url in the catalog, else the
     2026-07-16 fallback. Cheap to compute per call (~400 rows)."""
@@ -105,6 +177,12 @@ def load_catalog(path: Path) -> List[dict]:
                 "previous_price": prev_price_val,
                 "search_terms": search_terms,
                 "search_string": f"{name} {search_terms}".strip(),
+                # category system (2026-07-19): MK's own taxonomy, captured by
+                # update_catalog from OPOS cards + gtm data; manual CSV edits win.
+                # category ∈ {skincare, makeup, body, fragrance}; subcategory is
+                # MK's fine grain ("mascara", "cleanser", "foundation", ...).
+                "category": (row.get("category") or "").strip(),
+                "subcategory": (row.get("subcategory") or "").strip(),
                 # exposed for best_matches' tie-break: newest same-name SKU wins (2026-07-11)
                 "date_added": (row.get("date_added") or "").strip(),
                 "fact_sheet_url": (row.get("fact_sheet_url") or "").strip(),

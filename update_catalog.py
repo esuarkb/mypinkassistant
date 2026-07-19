@@ -114,8 +114,26 @@ def scrape_products(page, opos_url: str) -> list[dict]:
                 }
                 if (variant) name = name + ' - ' + variant;
 
+                // Category capture (2026-07-19): MK's own taxonomy, two grains.
+                // mk_sub = gtm category ("mascara", "cleanser", ...);
+                // mk_top = the top-level card header ("Skin Care", "Make Up", ...)
+                let mkSub = '';
+                if (qtyEl) {
+                    try {
+                        const gtm = JSON.parse(qtyEl.getAttribute('data-gtmdata') || '{}');
+                        mkSub = gtm.category || '';
+                    } catch (e) {}
+                }
+                let mkTop = '';
+                let card = row.closest('.card') || row.closest('[class*="card"]');
+                while (card && !mkTop) {
+                    const h = card.querySelector('.card-header-title');
+                    if (h) mkTop = h.textContent.trim();
+                    card = card.parentElement ? card.parentElement.closest('.card') : null;
+                }
+
                 if (sku && name && price > 0) {
-                    results.push({ sku, product_name: name, price });
+                    results.push({ sku, product_name: name, price, mk_top: mkTop, mk_sub: mkSub });
                 }
             });
             return results;
@@ -123,6 +141,45 @@ def scrape_products(page, opos_url: str) -> list[dict]:
     """)
     print(f"  Found {len(products)} products.")
     return products
+
+
+# --- Category normalization (2026-07-19) -------------------------------------
+# MK's top-level OPOS cards → our category slugs. "New & Limited Edition" and
+# "While Supplies Last" are merchandising buckets, not categories — items there
+# fall back to the gtm subcategory mapping below.
+_CATEGORY_TOP_MAP = {"Skin Care": "skincare", "Make Up": "makeup",
+                     "Body Care": "body", "Fragrance": "fragrance"}
+
+
+def _category_from_sub(sub: str) -> str:
+    s = (sub or "").lower()
+    if any(k in s for k in ("mascara", "lipstick", "lip", "eye", "brow", "foundation", "concealer",
+                            "powder", "blush", "bronzer", "highlight", "primer", "makeup",
+                            "brushes", "applicator", "palette", "liner", "nail")):
+        return "makeup"
+    if any(k in s for k in ("cleanser", "moisturizer", "serum", "mask", "toner", "anti-aging",
+                            "acne", "exfoliat", "microderm", "repair", "clinical", "skinvigorate",
+                            "sun", "skin")):
+        return "skincare"
+    if any(k in s for k in ("body", "hand", "foot", "feet", "lotion", "wash", "satin")):
+        return "body"
+    if any(k in s for k in ("fragrance", "cologne", "parfum", "perfume", "for-him", "for-her", "scent")):
+        return "fragrance"
+    return ""
+
+
+def best_categories(scraped: list[dict]) -> dict[str, tuple[str, str]]:
+    """Per-SKU (category_slug, subcategory) from the scrape. A SKU can appear
+    under several cards (New & Limited + its real card) — a real card wins."""
+    best: dict[str, tuple[str, str]] = {}
+    for item in scraped:
+        sku = item["sku"]
+        top = _CATEGORY_TOP_MAP.get((item.get("mk_top") or "").strip(), "")
+        sub = (item.get("mk_sub") or "").strip()
+        cur = best.get(sku)
+        if cur is None or (not cur[0] and top):
+            best[sku] = (top or _category_from_sub(sub), sub or (cur[1] if cur else ""))
+    return best
 
 
 def load_catalog(path: Path) -> dict[str, dict]:
@@ -149,6 +206,8 @@ def load_catalog(path: Path) -> dict[str, dict]:
                     "use_up_rate_months":        row.get("use_up_rate_months", ""),
                     "previous_price":           row.get("previous_price", ""),
                     "price_changed_at":         row.get("price_changed_at", ""),
+                    "category":                 row.get("category", ""),
+                    "subcategory":              row.get("subcategory", ""),
                 }
     return catalog
 
@@ -182,7 +241,7 @@ def save_catalog(catalog: dict[str, dict], path: Path, scraped_order: list[dict]
     else:
         rows = sorted(catalog.values(), key=lambda r: r["sku"])
     with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku", "fact_sheet_url", "order_of_application_url", "use_up_rate_months", "previous_price", "price_changed_at"])
+        writer = csv.DictWriter(f, fieldnames=["sku", "product_name", "price", "search_terms", "date_added", "last_seen", "display_name_card", "display_name_sms", "predecessor_sku", "fact_sheet_url", "order_of_application_url", "use_up_rate_months", "previous_price", "price_changed_at", "category", "subcategory"])
         writer.writeheader()
         writer.writerows(rows)
 
@@ -197,6 +256,8 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
     updated_items: list[dict] = []
     labeled_items: list[dict] = []
     scraped_skus = {item["sku"] for item in scraped}
+    cat_map = best_categories(scraped)  # sku -> (category_slug, subcategory)
+    _cat_seen: set[str] = set()  # a dup SKU occurrence must not re-note category
 
     for item in scraped:
         sku       = item["sku"]
@@ -205,8 +266,9 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
 
         today = date.today().isoformat()
         if sku not in catalog:
-            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": "", "fact_sheet_url": "", "order_of_application_url": "", "use_up_rate_months": "", "previous_price": "", "price_changed_at": ""}
-            added_items.append({"sku": sku, "product_name": name, "price": price_str})
+            _cat, _sub = cat_map.get(sku, ("", ""))
+            catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": "", "fact_sheet_url": "", "order_of_application_url": "", "use_up_rate_months": "", "previous_price": "", "price_changed_at": "", "category": _cat, "subcategory": _sub}
+            added_items.append({"sku": sku, "product_name": name, "price": price_str, "category": _cat or "UNCATEGORIZED"})
         else:
             existing = catalog[sku]
             changes = []
@@ -224,6 +286,20 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
                 existing["previous_price"] = existing["price"]
                 existing["price_changed_at"] = today
                 existing["price"] = price_str
+            # Category (2026-07-19): MANUAL WINS — the scrape only fills blanks.
+            # If MK moved a product to a different card, note it in the change
+            # email but keep the stored value (Brian's corrections must stick).
+            if sku not in _cat_seen:
+                _cat_seen.add(sku)
+                _cat, _sub = cat_map.get(sku, ("", ""))
+                if _cat and not (existing.get("category") or "").strip():
+                    existing["category"] = _cat
+                    changes.append({"field": "category", "before": "(empty)", "after": _cat})
+                elif _cat and existing.get("category") and _cat != existing["category"]:
+                    changes.append({"field": "category (MK moved it — stored value KEPT)",
+                                    "before": existing["category"], "after": _cat})
+                if _sub and not (existing.get("subcategory") or "").strip():
+                    existing["subcategory"] = _sub
             existing["last_seen"] = today
             if changes:
                 updated_items.append({"sku": sku, "product_name": name, "changes": changes})
@@ -407,7 +483,8 @@ def _send_change_email(lang_reports: list[dict]) -> None:
                     f"<tr>"
                     f"<td style='padding:6px 12px;color:#2e7d32'>NEW</td>"
                     f"<td style='padding:6px 12px'>{item['sku']}</td>"
-                    f"<td style='padding:6px 12px'>{item['product_name']} — ${item['price']}</td>"
+                    f"<td style='padding:6px 12px'>{item['product_name']} — ${item['price']}"
+                    f"{'  <span style=&quot;color:#888&quot;>[' + item['category'] + ']</span>' if item.get('category') else ''}</td>"
                     f"</tr>"
                 )
             for item in r["updated"]:

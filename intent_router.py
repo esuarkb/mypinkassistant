@@ -224,6 +224,36 @@ def should_use_openai_intent_fallback(message: str) -> bool:
 # Product matching (moved verbatim from mk_chat_core 2026-07-02;
 # mk_chat_core re-imports best_matches for its handler bodies)
 # =====================================================================
+# --- category terms (2026-07-19) ---------------------------------------------
+# Consultant words → category slug. Whole-word matched; covers knowledge levels
+# ("fragrances", "perfumes", "colognes" all → fragrance). Lives HERE because
+# routing needs it and mk_chat_core.catalog imports this module (it re-exports
+# these for handlers). Consumers: category browse, customers-by-category,
+# inventory-by-category, shade lookups.
+CATEGORY_TERMS = {
+    "fragrance": "fragrance", "fragrances": "fragrance", "perfume": "fragrance",
+    "perfumes": "fragrance", "cologne": "fragrance", "colognes": "fragrance",
+    "skincare": "skincare", "skin care": "skincare",
+    "makeup": "makeup", "make up": "makeup", "cosmetics": "makeup",
+    "body care": "body", "body products": "body",
+    # "men" is a VIRTUAL category (2026-07-19): MK has no Men top-level card —
+    # MK Men lives under Skin Care, colognes under Fragrance. products_in_category
+    # selects by subcategory (men-care/for-him) + name patterns.
+    "men": "men", "mens": "men", "men's": "men", "mkmen": "men",
+    "mk men": "men", "for him": "men",
+}
+
+
+def category_slug_for_term(text: str) -> Optional[str]:
+    """Category slug when the text contains a known category term (whole-word;
+    longest terms first so 'skin care' wins over a bare-word collision)."""
+    t = (text or "").lower()
+    for term in sorted(CATEGORY_TERMS, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(term)}\b", t):
+            return CATEGORY_TERMS[term]
+    return None
+
+
 # "for": connector word in exactly two product names ("…Moisturizer for
 # Acne-Prone Skin", "…Lotion for Feet & Legs") — as a query token it scored
 # 85.5 on those two for ANY message containing "for", letting the bare-message
@@ -1227,6 +1257,19 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         ):
             return IntentResult(intent="set_sales_tax", confidence=0.95, raw_text=msg)
 
+    # Category browse (2026-07-19): "what fragrances do we have", "do you sell
+    # perfumes", "show me all skincare products" → the category product list.
+    # First-person shapes ("what fragrances do I have", "in stock") are the
+    # consultant's INVENTORY — leave them to the inventory rules/hijacks.
+    # Customer queries ("skincare customers") lack the we/you-have shape.
+    _cat_browse_slug = category_slug_for_term(lowered)
+    if _cat_browse_slug and "customer" not in lowered and not re.search(r"\b(?:i|my)\b|\bin stock\b|\binventory\b", lowered):
+        if (re.search(r"\b(?:what|which|do)\b.*\b(?:we|you)\b.*\b(?:have|carry|sell|offer|get)\b", lowered)
+                or re.search(r"\bshow (?:me )?(?:all|the)\b", lowered)
+                or re.search(r"\blist\b.*\b(?:all|the)\b", lowered)):
+            return IntentResult(intent="show_all_products", confidence=0.95,
+                                slots={"term": _cat_browse_slug}, raw_text=msg)
+
     # data_query — cross-customer/aggregate queries; must run before recent_orders
     # so "who ordered in May" doesn't get stolen by the broad recent_orders keyword match
     _data_query_triggers = (
@@ -1291,11 +1334,36 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if re.search(r'\bwho\s+(ordered|buys|buy|purchases|purchase|gets|orders)\b', lowered):
         return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
 
-    # "what [product] does [name] use/wear/buy" → that customer's order history.
-    # Seen live 2026-07-02: the LLM split two near-identical phrasings between
-    # product_lookup and recent_orders; this makes it deterministic.
+    # "what [product] does [name] use/wear/buy" → that customer's order history,
+    # FILTERED to the product type (category system 2026-07-19 — previously the
+    # product word was discarded and the full history dumped, weed-garden F2
+    # family c29+c90+c104). The handler validates the filter word and falls
+    # back to full history for generic words ("products", "stuff").
+    _m_use_rule = re.search(r"\b(?:what|which)\s+(.+?)\s+does\s+\w+(?:\s+\w+)?\s+(?:use|wear|buy|order)\b", lowered)
+    if _m_use_rule:
+        return IntentResult(intent="recent_orders", confidence=0.95,
+                            slots={"product_filter": _m_use_rule.group(1).strip()}, raw_text=msg)
     if re.search(r"\b(?:what|which)\b.*\bdoes\s+\w+(?:\s+\w+)?\s+(?:use|wear|buy|order)\b", lowered):
         return IntentResult(intent="recent_orders", confidence=0.95, raw_text=msg)
+
+    # Shade/color questions → the customer's order history filtered to that
+    # product type: "What color foundation is Cynthia Evans?", "Kim smith
+    # foundation shade", "What is her foundation shade?" (weed-garden
+    # 2026-07-15 F2, 3 consultants — previously a word-salad dead-end).
+    _SHADE_STOP = {"is", "the", "a", "an", "does", "do", "did", "her", "his", "their",
+                   "my", "of", "in", "on", "for", "what", "that", "this", "it"}
+    _m_shade = re.search(r"\bwhat\s+(?:colou?r|shade)\s+(?:of\s+)?(\w+)", lowered)
+    if _m_shade and _m_shade.group(1) in _SHADE_STOP:
+        _m_shade = None  # "what color is the kind spirit blush" — product question, not customer
+    if not _m_shade:
+        # end-anchored: "Kim smith foundation shade", "what is her foundation
+        # shade?" — but NOT "what shades does the lipstick come in" (product Q)
+        _m_shade = re.search(r"\b(\w+)\s+(?:shade|colou?r)s?\s*\??\s*$", lowered)
+        if _m_shade and _m_shade.group(1) in _SHADE_STOP:
+            _m_shade = None
+    if _m_shade:
+        return IntentResult(intent="recent_orders", confidence=0.9,
+                            slots={"product_filter": _m_shade.group(1)}, raw_text=msg)
 
     # recent orders
     if (
@@ -1686,6 +1754,10 @@ def _phrase_is_all_product_words(phrase: str, catalog: Optional[List[dict]]) -> 
     from cities like "Eau Claire"/"Grand Island" (share a coincidental word
     like eau/island but not all). Used to yield the city reverse-pattern to
     the customers_by_product block (weed-garden 2026-07-12)."""
+    # category terms count as product words ("skincare customers" was routing
+    # to customers_by_city — 2026-07-19, category system)
+    if category_slug_for_term(phrase):
+        return True
     vocab = _catalog_vocab(catalog)
     if not vocab:
         return False
@@ -1725,6 +1797,26 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         _more_words = set(_more_term.lower().split())
         if not (_more_words & _SHOW_ALL_CRM_TERMS):
             return _claim("show_all_products", {"term": _more_term})
+
+    # ---- 2b. "what <product-type> is <name>" → that customer's filtered
+    # product history ("what foundation is Jeanne" — the most natural shade
+    # phrasing; word-salad'd before, Brian 2026-07-19). Catalog-aware guards,
+    # which is why this lives here and not in parse_intent:
+    #   • the product word must be a catalog word ("foundation" ✓, "state" ✗)
+    #   • the tail must NOT be all catalog words ("the kind spirit blush" is a
+    #     PRODUCT question; "Jeanne" is a customer)
+    #   • color/shade as the product word belong to the shade rule downstream
+    _m_wpi = re.match(r"\s*what\s+(\w+)\s+is\s+(.+?)\s*\??\s*$", msg, re.IGNORECASE)
+    if _m_wpi and catalog:
+        _wpi_word = _m_wpi.group(1).lower()
+        _wpi_tail = _m_wpi.group(2).strip()
+        _wpi_tail_toks = _wpi_tail.split()
+        if (_wpi_word not in {"color", "colour", "shade", "time", "day", "date", "is", "the"}
+                and len(_wpi_tail_toks) <= 3
+                and _wpi_tail_toks[0].lower() not in {"the", "a", "an", "my", "your", "our", "it", "that", "this"}
+                and _wpi_word in _catalog_vocab(catalog)
+                and not _phrase_is_all_product_words(_wpi_tail, catalog)):
+            return _claim("recent_orders", {"product_filter": _wpi_word})
 
     # ---- 3. Classify: keyword rules, then LLM fallback ----
     base = parse_intent(msg, state)
@@ -2129,21 +2221,18 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
             if terms and all(t in _TIME_WORDS or t.isdigit() for t in terms):
                 _product_term = None
 
+            _cat_slug = None
             if _product_term:
-                # Category aliases: map common words to OR-matched product name fragments
-                _FRAGRANCE_TERMS = ["eau de parfum", "eau de toilette", "cologne spray", "body mist"]
-                _CATEGORY_MAP = {
-                    "perfume":   _FRAGRANCE_TERMS,
-                    "fragrance": _FRAGRANCE_TERMS,
-                    "cologne":   _FRAGRANCE_TERMS,
-                    "parfum":    _FRAGRANCE_TERMS,
-                }
-                _category_key = _product_term.lower().strip()
-                _or_terms = _CATEGORY_MAP.get(_category_key) or _CATEGORY_MAP.get(_category_key.rstrip("s"))
+                # Category terms → the real category system (2026-07-19): the
+                # handler resolves the slug to the category's SKU set from the
+                # catalog. Replaces the old fragrance name-fragment or_terms
+                # hack ("skincare customers" now actually works — c116 7/12).
+                _cat_slug = category_slug_for_term(_product_term)
 
             if _product_term and terms:
                 return _claim("customers_by_product",
-                              {"product_term": _product_term, "terms": terms, "or_terms": _or_terms})
+                              {"product_term": _product_term, "terms": terms,
+                               "or_terms": _or_terms, "category": _cat_slug})
 
     # ---- 7. Fallthrough: the classified intent stands. handle_message
     #         dispatches it (recent_orders, customer_spend, cancel,

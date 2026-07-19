@@ -278,6 +278,18 @@ NEGATIVE_GUARD_CASES = [
      "tax as an ORDER modifier must stay with the order flow, not set the rate (discount feature 2026-07-18)"),
     ("New order for Jane Doe: charcoal mask, 20% off", "set_sales_tax",
      "discount phrasing must not drift to the tax intent"),
+    ("what fragrances do I have in stock", "show_all_products",
+     "first-person inventory question must not be claimed by the category browse (2026-07-19)"),
+    ("what color is the kind spirit blush", "recent_orders",
+     "product color question must not become a customer product-history lookup (2026-07-19)"),
+    ("what shades does the lipstick come in", "recent_orders",
+     "product shade-range question must not become a customer product-history lookup (2026-07-19)"),
+    ("what shade is the new lipstick", "recent_orders",
+     "the-prefixed tail is a product question, not a customer (what-X-is-name rule guard)"),
+    ("what state is Jeanne in", "recent_orders",
+     "non-catalog product word must not trigger the what-X-is-name rule"),
+    ("what women's products do we have", "show_all_products",
+     "\\bmen\\b must not match inside 'women's' (virtual men category, 2026-07-19)"),
     ("text liz mayo a reminder", "bulk_text_educate", "single name must not be claimed"),
     ("send a reminder text to liz mayo", "bulk_text_educate", "single name must not be claimed"),
     ("can you create a text message so i can send out to previous orders?",
@@ -574,6 +586,22 @@ ROUTE_CASES = [
     # --- weed-garden 2026-07-12 batch (built 2026-07-13) ---
     # F1: count-question "[category] customers" must not dead-end as a city
     ("How many skincare customers do I have?",        None, "customers_by_product"),
+    # --- category system (2026-07-19) ---
+    ("show all fragrances",                           None, "show_all_products"),
+    ("what fragrances do we have",                    None, "show_all_products"),
+    ("what perfumes do you sell",                     None, "show_all_products"),
+    ("show me all skincare products",                 None, "show_all_products"),
+    ("what men's products do we have",                None, "show_all_products"),  # virtual men category (2026-07-19)
+    ("show all mens products",                        None, "show_all_products"),
+    ("who are my skincare customers",                 None, "customers_by_product"),
+    ("skincare customers",                            None, "customers_by_product"),  # bare — category term beats the city reverse-pattern
+    # shade/product-history filter (2026-07-19; weed-garden F2 family c29+c90+c104)
+    ("What color foundation is Jane Doe?",            None, "recent_orders"),
+    ("what foundation is Jeanne",                     None, "recent_orders"),  # most natural phrasing (Brian 2026-07-19)
+    ("what lipstick is Jane Doe",                     None, "recent_orders"),
+    ("Jane smith foundation shade",                   None, "recent_orders"),
+    ("what is her foundation shade",                  None, "recent_orders"),
+    ("what fragrances do I have in stock",            None, "inventory_count"),
     # F2: business-wide "total amount sold" is data_query, not a customer
     ("What's the total amount sold for the last 12 months", None, "data_query"),
     # F3: "reorder the most" must not substring-hit the leaderboard trigger

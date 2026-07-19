@@ -227,11 +227,65 @@ class MKChatEngine:
         # consultant taps "+N more". Returns before intent logging, as before.
         if intent_result.intent == "show_all_products":
             _more_term = intent_result.slots.get("term", "")
+            # Category browse (2026-07-19): "show all fragrances" / "what
+            # skincare do we have" — a category term lists the whole category
+            # (grouped by subcategory when it's large), not a fuzzy search.
+            from .catalog import (category_slug_for_term, products_in_category,
+                                  CATEGORY_LABELS, CATEGORY_TERMS, CATEGORY_SEND_TERM,
+                                  category_buckets)
+            _cat_slug = _more_term if _more_term in CATEGORY_LABELS else category_slug_for_term(_more_term)
+            if _cat_slug:
+                _cat_items = [c for c in products_in_category(catalog, _cat_slug)
+                              if "(Old SKU)" not in c["product_name"]]
+                # compound drill: "show all skincare timewise repair" /
+                # "show all skincare other" — remainder after the category term
+                # names a bucket. Links carry the category so "Other" can't
+                # lose context and fuzzy-match garbage (Brian 2026-07-19).
+                # strip only the FIRST category-term occurrence — bucket names
+                # can contain the category word themselves ("marykay skincare"
+                # lost its own name and looped; Brian 2026-07-19)
+                _rem = _more_term.lower()
+                for _t in sorted(CATEGORY_TERMS, key=len, reverse=True):
+                    if CATEGORY_TERMS[_t] == _cat_slug:
+                        _m_rem = _re.search(rf"\b{_re.escape(_t)}\b", _rem)
+                        if _m_rem:
+                            _rem = _rem[:_m_rem.start()] + " " + _rem[_m_rem.end():]
+                            break
+                _rem = _re.sub(r"\s+", " ", _rem).strip()
+                if _cat_items and _rem:
+                    _buckets = category_buckets(_cat_items)
+                    _bucket = _buckets.get(_rem.replace(" ", "-"))
+                    if _bucket:
+                        from .catalog import bucket_label
+                        lines = [f"<strong>{CATEGORY_LABELS[_cat_slug]} — {bucket_label(_rem.replace(' ', '-'))}</strong>"]
+                        for m in sorted(_bucket, key=lambda c: c["product_name"]):
+                            lines.append(_fmt_product_list_item(m))
+                        return ChatReply("<br>".join(lines))
+                    # unknown bucket → fall through to whole-category view
+                if _cat_items:
+                    lines = [f"<strong>{CATEGORY_LABELS[_cat_slug]}</strong> — {len(_cat_items)} products"]
+                    if len(_cat_items) <= 50:
+                        for m in sorted(_cat_items, key=lambda c: c["product_name"]):
+                            lines.append(_fmt_product_list_item(m))
+                    else:
+                        # big category → folded subcategory buckets, tap to drill
+                        from .catalog import bucket_label
+                        _send_cat = CATEGORY_SEND_TERM[_cat_slug]
+                        lines.append("That's a lot to list — here it is by type (tap one):")
+                        for _sub, _its in category_buckets(_cat_items).items():
+                            lines.append(f'• <a href="#" data-send="show all {_send_cat} {_sub.replace("-", " ")}">{bucket_label(_sub)}</a> ({len(_its)})')
+                    return ChatReply("<br>".join(lines))
             def _all_words_in_product_more(query: str, product_name: str) -> bool:
                 words = [w for w in query.lower().split() if len(w) >= 2]
                 name_l = product_name.lower()
                 return bool(words) and all(_re.search(rf"\b{_re.escape(w)}\b", name_l) for w in words)
             _all_more = [c for c in catalog if _all_words_in_product_more(_more_term, c["product_name"])]
+            if not _all_more:
+                # subcategory drill-in ("show all mascara") — exact subcategory match
+                _sub_slug = _more_term.lower().strip().replace(" ", "-")
+                _all_more = [c for c in catalog
+                             if (c.get("subcategory") or "") == _sub_slug
+                             and "(Old SKU)" not in c["product_name"]]
             if not _all_more:
                 _all_more = best_matches(catalog, _more_term, limit=20, min_score=50)
             if _all_more:
@@ -544,6 +598,24 @@ class MKChatEngine:
         if intent_result.intent == "inventory_count":
             product_text = intent_result.slots.get("product_text") or _parse_inventory_lookup_text(msg)
             if product_text:
+                # Category inventory (2026-07-19): "what fragrances do I have in
+                # stock" — a category term lists every on-hand item in the
+                # category with a unit total, instead of fuzzy-matching the
+                # word "fragrances" against product names (which found nothing).
+                from .catalog import category_slug_for_term, skus_in_category, CATEGORY_LABELS
+                _inv_cat = category_slug_for_term(product_text)
+                if _inv_cat:
+                    _cat_skus = skus_in_category(catalog, _inv_cat)
+                    with tx() as (conn, cur):
+                        rows = list_inventory(cur, consultant_id=consultant_id)
+                    rows = [r for r in rows if r.get("sku") in _cat_skus and int(r.get("qty_on_hand") or 0) > 0]
+                    if not rows:
+                        return ChatReply(ui["inventory_category_empty"].format(
+                            label=CATEGORY_LABELS[_inv_cat]))
+                    _total = sum(int(r.get("qty_on_hand") or 0) for r in rows)
+                    header = ui["inventory_category_header"].format(
+                        label=CATEGORY_LABELS[_inv_cat], total=_total)
+                    return ChatReply(header + "\n" + _format_inventory_list(rows, catalog))
                 exact = _find_exact_catalog_match(catalog, product_text)
                 if exact:
                     chosen = exact
@@ -1391,15 +1463,23 @@ class MKChatEngine:
         # extracted product term / search terms arrive in slots
         # -------------------------
         if intent_result.intent == "customers_by_product":
-            from crm_store import find_customers_by_product, find_customers_by_category, format_customers_by_product
+            from crm_store import find_customers_by_product, find_customers_by_category, find_customers_by_skus, format_customers_by_product
             from db import tx
             _product_term = intent_result.slots.get("product_term") or ""
             terms = intent_result.slots.get("terms") or []
             _or_terms = intent_result.slots.get("or_terms")
+            _cat_slug = intent_result.slots.get("category")
 
             if _product_term and terms:
                 with tx() as (conn, cur):
-                    if _or_terms:
+                    if _cat_slug:
+                        # category system (2026-07-19): "skincare customers" =
+                        # buyers of any SKU in the category (c116 7/12 ask)
+                        from .catalog import skus_in_category
+                        results = find_customers_by_skus(
+                            cur, consultant_id=consultant_id,
+                            skus=skus_in_category(ctx.catalog, _cat_slug))
+                    elif _or_terms:
                         results = find_customers_by_category(cur, consultant_id=consultant_id, or_terms=_or_terms)
                     else:
                         results = find_customers_by_product(cur, consultant_id=consultant_id, terms=terms)
@@ -1519,6 +1599,30 @@ class MKChatEngine:
                     _msg_for_name = re.sub(re.escape(_date_scrub), " ", msg, flags=re.IGNORECASE).strip() if _date_scrub else msg
                     if _m_use:
                         _msg_for_name = _m_use.group(1)
+
+                    # --- product-type filter (category system 2026-07-19) ---
+                    # route() passes product_filter for shade/does-use phrasings
+                    # ("what shade of foundation does Kim wear"). Split multi
+                    # types ("cleanser and moisturizer"), drop generic words;
+                    # empty result = no filter (full history, old behavior).
+                    _pf_raw = (intent_result.slots or {}).get("product_filter") or ""
+                    _PF_GENERIC = {"product", "products", "item", "items", "thing",
+                                   "things", "stuff", "everything", "anything"}
+                    _PF_SINGULAR = {"lipsticks": "lipstick", "foundations": "foundation",
+                                    "mascaras": "mascara", "cleansers": "cleanser",
+                                    "moisturizers": "moisturizer", "serums": "serum",
+                                    "creams": "cream", "glosses": "gloss"}
+                    _pf_terms = []
+                    for _w in re.split(r"\s*(?:\band\b|&|,|\bplus\b)\s*", _pf_raw.lower()):
+                        _w = _w.strip()
+                        if _w and _w not in _PF_GENERIC:
+                            _pf_terms.append(_PF_SINGULAR.get(_w, _w))
+                    if _pf_terms and not _m_use:
+                        # scrub filter + shade words so they can't pollute the
+                        # name guess ("Kim smith foundation shade" → "Kim smith")
+                        _pf_scrub = r"\b(?:" + "|".join(re.escape(t) for t in _pf_terms) + \
+                                    r"|shade|shades|color|colors|colour|colours|of)\b"
+                        _msg_for_name = re.sub(_pf_scrub, " ", _msg_for_name, flags=re.IGNORECASE)
                     m_clean = re.sub(r"[^\w\s']", " ", _msg_for_name).strip()
                     stop_words = {
                         "last", "recent", "show", "lookup", "order", "orders", "history",
@@ -1527,6 +1631,7 @@ class MKChatEngine:
                         "ordered", "latest", "all", "buy", "bought", "purchase", "purchased",
                         "have", "has", "had", "this", "the", "a",
                         "use", "uses", "wear", "wears",  # "what cleanser does jane use"
+                        "using", "wearing", "buying", "ordering",  # "what foundation is Jeanne using"
                     }
 
                     tokens = []
@@ -1573,6 +1678,7 @@ class MKChatEngine:
                                 "orders_start_date": _start_date,
                                 "orders_end_date": _end_date,
                                 "orders_period_label": _period_label,
+                                "orders_product_filter": _pf_terms,
                             }
                             save_session_state(state, session_id=sid)
 
@@ -1581,6 +1687,17 @@ class MKChatEngine:
                         c = matches[0]
                         customer_id = int(c["id"])
                         customer_name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+
+                        if _pf_terms:
+                            # filtered product-type history (category system
+                            # 2026-07-19): answer the actual question instead
+                            # of dumping the whole history
+                            from crm_store import find_customer_items_like
+                            _items = find_customer_items_like(
+                                cur, consultant_id=consultant_id,
+                                customer_id=customer_id, terms=_pf_terms)
+                            return ChatReply(self._format_product_history(
+                                customer_name, " and ".join(_pf_terms), _items, ui))
 
                         orders = get_recent_orders_for_customer(
                             cur, customer_id=customer_id, limit=limit,
@@ -2077,19 +2194,31 @@ class MKChatEngine:
                     return ChatReply(format_customer_card(c, last_order=last_order, pcp_enrolled=pcp_enrolled))
 
                 if action == "orders":
+                    _pf_terms = pending.get("orders_product_filter") or []
                     with tx() as (conn, cur):
                         limit = int(pending.get("orders_limit") or 3)
                         _sd = pending.get("orders_start_date")
                         _ed = pending.get("orders_end_date")
                         _pl = pending.get("orders_period_label")
-                        orders = get_recent_orders_for_customer(
-                            cur, customer_id=customer_id, limit=limit,
-                            start_date=_sd, end_date=_ed,
-                        )
+                        if _pf_terms:
+                            # product-type filter carried through the picker
+                            # (category system 2026-07-19)
+                            from crm_store import find_customer_items_like
+                            _items = find_customer_items_like(
+                                cur, consultant_id=consultant_id,
+                                customer_id=customer_id, terms=_pf_terms)
+                        else:
+                            orders = get_recent_orders_for_customer(
+                                cur, customer_id=customer_id, limit=limit,
+                                start_date=_sd, end_date=_ed,
+                            )
                     state["last_ref_customer_id"] = None
                     state["last_ref_customer_name"] = None
                     state["last_customer"] = None
                     save_session_state(state, session_id=sid)
+                    if _pf_terms:
+                        return ChatReply(self._format_product_history(
+                            customer_name, " and ".join(_pf_terms), _items, ui))
                     return ChatReply(format_recent_orders(customer_name, orders, period_label=_pl))
 
                 if action == "delete":
@@ -3459,6 +3588,26 @@ class MKChatEngine:
         t = re.sub(r"\d+(?:\.\d+)?\s*%\s*(?:sales\s+)?(?:tax|impuesto)\b", " ", t)
         t = re.sub(r"(?:sales\s+tax|tax|impuesto(?:\s+de\s+ventas)?)(?:\s+rate)?\s+(?:of|de|at|to|is|a)?\s*\d+(?:\.\d+)?\s*%", " ", t)
         return bool(re.search(r"\bdiscount(?:ed|s)?\b|\bpercent\b|\d+\s*%|%\s*off\b|\b\d+(?:\.\d+)?\s*(?:%|percent|dollars?|\$)?\s*off\b|\$\s*\d+(?:\.\d+)?\s*off\b", t))
+
+    @staticmethod
+    def _format_product_history(customer_name: str, filter_label: str,
+                                items: list, ui: dict) -> str:
+        """'What shade of foundation does Kim wear' reply: her matching products,
+        most recent first (category system 2026-07-19; weed-garden F2 family)."""
+        if not items:
+            return ui["product_history_none"].format(name=customer_name, filter=filter_label)
+        lines = [ui["product_history_header"].format(name=customer_name, filter=filter_label)]
+        for it in items:
+            pname = (it.get("product_name") or "").strip()
+            pdate = str(it.get("last_date") or "")[:10]
+            try:
+                from datetime import datetime as _dt
+                d = _dt.strptime(pdate, "%Y-%m-%d")
+                pdate = f"{d.month}/{d.day}/{str(d.year)[2:]}"
+            except Exception:
+                pass
+            lines.append(f"• {pname}" + (f" <span style='color:#888;font-size:0.85em'>(last ordered {pdate})</span>" if pdate else ""))
+        return "\n".join(lines)
 
     def _get_tax_rate(self, consultant_id: int) -> float:
         """Consultant's saved sales tax rate (consultants.tax_rate), 0 if unset."""

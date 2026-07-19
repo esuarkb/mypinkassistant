@@ -1244,6 +1244,68 @@ def find_customers_by_category(cur, consultant_id: int, or_terms: list[str]) -> 
     return list(grouped.values())
 
 
+def find_customer_items_like(cur, consultant_id: int, customer_id: int,
+                             terms: list[str], limit: int = 6) -> list[dict]:
+    """A customer's distinct ordered products matching ANY term (LIKE), most
+    recent first. Category system 2026-07-19: powers 'what shade of foundation
+    does Kim wear' — filter her history to the product type instead of dumping
+    everything (weed-garden F2 family, c29+c90+c104)."""
+    is_sqlite = _is_sqlite_cursor(cur)
+    PH = "?" if is_sqlite else "%s"
+    terms = [t for t in (terms or []) if t]
+    if not terms:
+        return []
+    like = " OR ".join(f"LOWER(oi.product_name) LIKE {PH}" for _ in terms)
+    cur.execute(f"""
+        SELECT oi.product_name, MAX(o.order_date) AS last_date
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.consultant_id = {PH} AND o.customer_id = {PH}
+          AND ({like})
+        GROUP BY oi.product_name
+        ORDER BY last_date DESC
+        LIMIT {int(limit)}
+    """, [consultant_id, int(customer_id)] + [f"%{t.lower()}%" for t in terms])
+    return _rows_to_dicts(cur)
+
+
+def find_customers_by_skus(cur, consultant_id: int, skus: set) -> list[dict]:
+    """Distinct active customers who ordered any of the given SKUs (category
+    system 2026-07-19: 'skincare customers' = customers whose order_items hit
+    the category's SKU set). Same return shape as find_customers_by_product."""
+    is_sqlite = _is_sqlite_cursor(cur)
+    PH = "?" if is_sqlite else "%s"
+    skus = [s for s in (skus or set()) if s]
+    if not skus:
+        return []
+    placeholders = ",".join([PH] * len(skus))
+    query = f"""
+        SELECT c.id, c.first_name, c.last_name, oi.product_name, o.order_date
+        FROM customers c
+        JOIN orders o ON o.customer_id = c.id AND o.consultant_id = {PH}
+        JOIN order_items oi ON oi.order_id = o.id
+        WHERE c.consultant_id = {PH}
+          AND COALESCE(c.source_status, 'active') = 'active'
+          AND oi.sku IN ({placeholders})
+        ORDER BY c.last_name, c.first_name, o.order_date DESC
+    """
+    cur.execute(query, [consultant_id, consultant_id] + skus)
+    rows = _rows_to_dicts(cur)
+    from collections import OrderedDict
+    grouped = OrderedDict()
+    for row in rows:
+        cid = row["id"]
+        if cid not in grouped:
+            grouped[cid] = {"first_name": row["first_name"],
+                            "last_name": row["last_name"], "products": []}
+        pn = (row.get("product_name") or "").strip()
+        _od = row.get("order_date")
+        od = str(_od)[:10] if _od else ""
+        if pn and not any(p["name"] == pn for p in grouped[cid]["products"]):
+            grouped[cid]["products"].append({"name": pn, "date": od})
+    return list(grouped.values())
+
+
 def find_customers_by_product(cur, consultant_id: int, terms: list[str]) -> list[dict]:
     """
     Returns distinct customers who have ordered products matching ALL given terms.
