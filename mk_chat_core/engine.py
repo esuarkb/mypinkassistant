@@ -979,6 +979,7 @@ class MKChatEngine:
                         # mm size varies with QR version — force a crisp 180px
                         _svg = _re.sub(r'width="\d+mm" height="\d+mm"', 'width="180" height="180"', _svg, count=1)
                         _html += (
+                            '<br>'
                             '<div style="margin-top:10px;background:#ffffff;border:1px solid #eee;'
                             'border-radius:12px;padding:10px;display:inline-block;line-height:0;">'
                             + _svg + '</div>'
