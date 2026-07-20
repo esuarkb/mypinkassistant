@@ -2170,6 +2170,14 @@ def admin_diagnostics(request: Request):
     oldest_queued_val = oldest_queued[0] if oldest_queued else None
     oldest_running_val = oldest_running[0] if oldest_running else None
 
+    # Latest job id — monotonic "jobs are happening" heartbeat. Replaced the
+    # Done count card 2026-07-19: retention_cleanup deletes jobs >90 days old,
+    # so the done COUNT is a rolling window that rises AND falls; MAX(id) only
+    # ever climbs.
+    cur.execute("SELECT MAX(id) FROM jobs")
+    _mj = cur.fetchone()
+    latest_job_id = (_mj[0] if _mj else None) or "—"
+
     # 3) Running jobs
     cur.execute(
         """
@@ -2418,7 +2426,7 @@ def admin_diagnostics(request: Request):
       <div class="card"><div class="k">Queued</div><div class="v">{counts_map.get("queued",0)}</div></div>
       <div class="card"><div class="k">Running</div><div class="v">{counts_map.get("running",0)}</div></div>
       <div class="card"><div class="k">Failed</div><div class="v">{counts_map.get("failed",0)}</div></div>
-      <div class="card"><div class="k">Done</div><div class="v">{counts_map.get("done",0)}</div></div>
+      <div class="card"><div class="k">Latest Job</div><div class="v">{latest_job_id}</div></div>
     </div>
 
     <h2 style="margin:16px 0 6px;font-size:16px">Running jobs</h2>
