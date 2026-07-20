@@ -274,6 +274,12 @@ _COMPOUND_WORD_FIXES = [
     (re.compile(r"\btime wise\b"), "timewise"),
     (re.compile(r"\bnight time\b"), "nighttime"),
     (re.compile(r"\bclearproof\b"), "clear proof"),
+    # v2t splits the one-word brand "Chromafusion" into "chroma/chrome fusion";
+    # the split tokens drop every shade to ~62 and mis-rank (Merlot beat
+    # Crystalline). Rejoining restores 93 for the named shade. weed-garden
+    # 2026-07-19-evening (c31, ~40 msgs / 8 cancels).
+    (re.compile(r"\bchroma\s+fusion\b"), "chromafusion"),
+    (re.compile(r"\bchrome\s+fusion\b"), "chromafusion"),
 ]
 
 def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int = 30,

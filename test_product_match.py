@@ -53,6 +53,13 @@ CASES = [
     ("repair go set",               "TimeWise Repair Volu-Firm The Go Set"),   # she SAID go
     ("the go set",                  "The Go Set"),
     ("hydrating go set",            "Mary Kay Hydrating Go Set"),
+
+    # --- Chromafusion v2t split (weed-garden 2026-07-19-evening, c31): voice
+    # writes "chroma fusion"/"chrome fusion"; _COMPOUND_WORD_FIXES rejoins ---
+    ("crystalline chroma fusion eyeshadow", "Crystalline"),  # shade-first, her real word order
+    ("2 chroma fusion merlot",              "Merlot"),
+    ("chrome fusion eye shadow moonstone",  "Moonstone"),
+    ("darling pink chromafusion blush",     "Chromafusion Blush"),  # shade NOT in catalog: family right, shade wrong (coverage, not matcher)
 ]
 
 
