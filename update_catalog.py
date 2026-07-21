@@ -251,7 +251,8 @@ def _normalize_name(name: str) -> str:
     return re.sub(r"[®™\u00ae\u2122\u2020]", "", name).strip().lower()
 
 
-def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, list]:
+def upsert(catalog: dict[str, dict], scraped: list[dict],
+           move_flags: dict | None = None) -> tuple[list, list, list]:
     added_items: list[dict] = []
     updated_items: list[dict] = []
     labeled_items: list[dict] = []
@@ -296,8 +297,18 @@ def upsert(catalog: dict[str, dict], scraped: list[dict]) -> tuple[list, list, l
                     existing["category"] = _cat
                     changes.append({"field": "category", "before": "(empty)", "after": _cat})
                 elif _cat and existing.get("category") and _cat != existing["category"]:
-                    changes.append({"field": "category (MK moved it — stored value KEPT)",
-                                    "before": existing["category"], "after": _cat})
+                    # Manual-wins: MK moved this product to a different card but we
+                    # keep the stored value. Note it ONCE — otherwise it re-fires on
+                    # every run (3x/day) because stored != scraped stays true forever
+                    # (2026-07-20 fix). move_flags records the MK-side category we last
+                    # emailed per sku; unchanged since then = suppress. A genuine NEW
+                    # move (MK relocates it again) still surfaces one email.
+                    _last_flagged = move_flags.get(sku) if move_flags is not None else None
+                    if _last_flagged != _cat:
+                        changes.append({"field": "category_moved",
+                                        "before": existing["category"], "after": _cat})
+                        if move_flags is not None:
+                            move_flags[sku] = _cat
                 if _sub and not (existing.get("subcategory") or "").strip():
                     existing["subcategory"] = _sub
             existing["last_seen"] = today
@@ -491,6 +502,10 @@ def _send_change_email(lang_reports: list[dict]) -> None:
                 for ch in item["changes"]:
                     if ch["field"] == "price":
                         desc = f"Price: ${ch['before']} → ${ch['after']}"
+                    elif ch["field"] == "category":
+                        desc = f"Category set: {ch['before']} → {ch['after']}"
+                    elif ch["field"] == "category_moved":
+                        desc = f"MK moved category to {ch['after']} (we kept {ch['before']})"
                     else:
                         desc = f"Name: {ch['before']} → {ch['after']}"
                     rows_html += (
@@ -611,6 +626,7 @@ def _log_run_history(lang_reports: list[dict]) -> None:
     """
     import json as _json
     log_path = Path(__file__).parent / "logs" / "catalog_change_log.jsonl"
+    # (helpers for category-move de-duplication live just below)
     log_path.parent.mkdir(exist_ok=True)
 
     entry = {"run_at": datetime.now().astimezone().isoformat(), "any_changes": False}
@@ -625,6 +641,32 @@ def _log_run_history(lang_reports: list[dict]) -> None:
 
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(_json.dumps(entry) + "\n")
+
+
+_CATEGORY_FLAGS_PATH = Path(__file__).parent / "logs" / "category_move_flags.json"
+
+
+def _load_category_move_flags() -> dict:
+    """Per-language record of the MK-side category we last emailed for a
+    manual-wins kept-move, keyed {"en": {sku: mk_category}, "es": {...}}. Lets a
+    category divergence be reported ONCE instead of on every run (2026-07-20)."""
+    import json as _json
+    try:
+        with open(_CATEGORY_FLAGS_PATH, encoding="utf-8") as f:
+            data = _json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def _save_category_move_flags(flags: dict) -> None:
+    import json as _json
+    try:
+        _CATEGORY_FLAGS_PATH.parent.mkdir(exist_ok=True)
+        with open(_CATEGORY_FLAGS_PATH, "w", encoding="utf-8") as f:
+            _json.dump(flags, f, indent=2, sort_keys=True)
+    except OSError as e:
+        print(f"  (category move flags not saved: {e})")
 
 
 def main(username: str, password: str) -> None:
@@ -656,6 +698,10 @@ def main(username: str, password: str) -> None:
 
     lang_reports = []
 
+    # Per-language "already emailed this MK category move" memory (2026-07-20):
+    # dedupes manual-wins kept-moves so they don't re-notify every run.
+    move_flags = _load_category_move_flags()
+
     # ── EN: upsert, apply PDF links, save ──
     if not en_scraped:
         print("\n[EN] No products found — skipping.")
@@ -663,7 +709,7 @@ def main(username: str, password: str) -> None:
     else:
         en_path   = CATALOG_DIR / "en.csv"
         en_before = len(en_catalog)
-        en_added, en_updated, en_labeled = upsert(en_catalog, en_scraped)
+        en_added, en_updated, en_labeled = upsert(en_catalog, en_scraped, move_flags=move_flags.setdefault("en", {}))
         for sku, link_data in en_links.items():
             if sku in en_catalog:
                 if link_data.get("fact_sheet_url"):
@@ -685,7 +731,7 @@ def main(username: str, password: str) -> None:
         es_path    = CATALOG_DIR / "es.csv"
         es_catalog = load_catalog(es_path)
         es_before  = len(es_catalog)
-        es_added, es_updated, es_labeled = upsert(es_catalog, es_scraped)
+        es_added, es_updated, es_labeled = upsert(es_catalog, es_scraped, move_flags=move_flags.setdefault("es", {}))
         if en_labeled:
             es_mirrored = _apply_en_replacements(en_labeled, es_catalog)
             es_labeled  = es_labeled + es_mirrored
@@ -696,6 +742,7 @@ def main(username: str, password: str) -> None:
         lang_reports.append({"lang": "es", "added": es_added, "updated": es_updated, "labeled": es_labeled})
 
     _log_run_history(lang_reports)
+    _save_category_move_flags(move_flags)
 
     any_changes = any(
         r["added"] or r["updated"] or r["labeled"]

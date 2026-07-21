@@ -5434,3 +5434,199 @@ Logged in.
 
 Sending change summary email...
   Email sent to support@mypinkassistant.com
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 578 products.
+  Scraping PDF links for 43 products (first-run may take several minutes)...
+    Warning: SKU 10257838: ElementHandle.click: Timeout 30000ms exceeded.
+Call log:
+  - attempting click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dwa593d9fa/hi-res/10004/PH-Beyond-Ultimate-TimeWise-Miracle-Set_.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div data-is-starter-kits="false" data-pid="990342397US10257837" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-variant product-wrapper product-detail product clearfix" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window." data-product-url="/beyond-ultimate-timewise-miracle-set-normal-to-dry-990342397/990342397US10257837.html?lang=en_US">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 20ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dwa593d9fa/hi-res/10004/PH-Beyond-Ultimate-TimeWise-Miracle-Set_.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  2 × retrying click action
+      - waiting 100ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+  10 × retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div data-is-starter-kits="false" data-pid="990342397US10257837" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-variant product-wrapper product-detail product clearfix" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window." data-product-url="/beyond-ultimate-timewise-miracle-set-normal-to-dry-990342397/990342397US10257837.html?lang=en_US">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dwa593d9fa/hi-res/10004/PH-Beyond-Ultimate-TimeWise-Miracle-Set_.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div data-is-starter-kits="false" data-pid="990342397US10257837" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-variant product-wrapper product-detail product clearfix" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window." data-product-url="/beyond-ultimate-timewise-miracle-set-normal-to-dry-990342397/990342397US10257837.html?lang=en_US">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+
+  Found PDF links for 0 of 43 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 578 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 518 SKUs
+  Scraped        : 578 products
+  Total now      : 518 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 518 SKUs
+  Scraped        : 578 products
+  Total now      : 518 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  CHANGED (4):
+    ~ 10203701  name: skincare → makeup
+    ~ 10186363  name: skincare → makeup
+    ~ 10138754  name: skincare → makeup
+    ~ 10135951  name: skincare → makeup
+
+Sending change summary email...
+  Email sent to support@mypinkassistant.com
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 578 products.
+  Scraping PDF links for 43 products (first-run may take several minutes)...
+  Found PDF links for 0 of 43 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 578 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 518 SKUs
+  Scraped        : 578 products
+  Total now      : 518 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 518 SKUs
+  Scraped        : 578 products
+  Total now      : 518 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  CHANGED (4):
+    ~ 10203701  name: skincare → makeup
+    ~ 10186363  name: skincare → makeup
+    ~ 10138754  name: skincare → makeup
+    ~ 10135951  name: skincare → makeup
+
+Sending change summary email...
+  Email sent to support@mypinkassistant.com
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 578 products.
+  Scraping PDF links for 43 products (first-run may take several minutes)...
+  Found PDF links for 0 of 43 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 578 products.
+  Auto-labeled: 10222584 → Mary Kay Ultimate Mascara - Black (Old SKU)
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 518 SKUs
+  Scraped        : 578 products
+  Total now      : 519 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+
+  NEW (1):
+    + 10238957  Mary Kay Ultimate Mascara - Black  $18.00
+
+  OLD SKU LABELED (1):
+    ! 10222584  Mary Kay Ultimate Mascara - Black (Old SKU)  (replaced by 10238957)
+  Auto-labeled: 10222584 → Mary Kay Ultimate Mascara - Black (Old SKU)
+
+[ES] Done.
+  Catalog before : 518 SKUs
+  Scraped        : 578 products
+  Total now      : 519 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  NEW (1):
+    + 10238957  Mary Kay Ultimate Mascara - Black  $18.00
+
+  CHANGED (4):
+    ~ 10203701  name: skincare → makeup
+    ~ 10186363  name: skincare → makeup
+    ~ 10138754  name: skincare → makeup
+    ~ 10135951  name: skincare → makeup
+
+  OLD SKU LABELED (1):
+    ! 10222584  Mary Kay Ultimate Mascara - Black (Old SKU)  (replaced by 10238957)
+
+Sending change summary email...
+  Email sent to support@mypinkassistant.com
