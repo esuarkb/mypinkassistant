@@ -391,6 +391,12 @@ ROUTE_CASES = [
     ("show all satin hands",                     None, "show_all_products"),
     ("print my inventory",                       None, "inventory_print"),
     ("add 3 satin hands to inventory",           None, "inventory_write"),
+    # inventory quantity-SET via natural phrasing (weed-garden 2026-07-20, c31) —
+    # must reach inventory_write, not get eaten by the fuzzy show-detector
+    ("update my inventory for the timewise cleanser to 8", None, "inventory_write"),
+    ("change the satin hands to 5 in my inventory",        None, "inventory_write"),
+    ("correct my inventory for the eye cream to 2",        None, "inventory_write"),
+    ("set charcoal mask to par 3",                None, "inventory_threshold"),  # 'par' set stays threshold, NOT a qty set
     ("add 3 satin hands",                        None, "inventory_guardrail"),
     ("add 3 satin hands to reorder list",        None, "inventory_guardrail"),  # "reorder" must not trip the \border\b order-exit (2026-07-18)
     # sales tax rate intent (discount feature 2026-07-18)

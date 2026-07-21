@@ -280,6 +280,11 @@ _COMPOUND_WORD_FIXES = [
     # 2026-07-19-evening (c31, ~40 msgs / 8 cancels).
     (re.compile(r"\bchroma\s+fusion\b"), "chromafusion"),
     (re.compile(r"\bchrome\s+fusion\b"), "chromafusion"),
+    # spelled-out "four in one" loses to Clear Proof's greedy "cleanser" alias
+    # (90 vs 53) for the product literally named TimeWise 4-in-1 Cleanser; the
+    # digit form "4 in 1" already wins at 93, so normalize to it. weed-garden
+    # 2026-07-20 (c60, voice order). Same Clear Proof family as men('s) cleanser.
+    (re.compile(r"\bfour\s+in\s+one\b"), "4 in 1"),
 ]
 
 def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int = 30,
@@ -734,9 +739,11 @@ def _normalize_inventory_command_text(msg: str) -> str:
     replacements = [
         "to my inventory",
         "from my inventory",
+        "in my inventory",
         "my inventory",
         "to inventory",
         "from inventory",
+        "in inventory",
         "inventory",
     ]
 
@@ -885,6 +892,34 @@ def _parse_inventory_write(msg: str) -> tuple[str | None, int | None, str]:
             return ("set", qty, m.group(1).strip())
 
     return (None, None, "")
+
+
+# Inventory quantity SET via natural phrasing ("update my inventory for the X
+# to 8", "change the X to 5", "correct my X to 3"). The handler already sets
+# quantities (engine _intent_inventory_write, action="set"); this makes it
+# reachable — the literal-"set"-only parser above plus the fuzzy show-detector
+# left it stranded, so a consultant's clean "update ... to N" dumped her list
+# instead of setting. weed-garden 2026-07-20 (c31 April, 2 sessions).
+_INV_SET_VERBS = r"(?:set|update|change|make|correct|adjust)"
+
+
+def _parse_inventory_set(msg: str) -> tuple[int | None, str]:
+    """Returns (qty, product_text) for a natural set-quantity command, else
+    (None, ""). Requires the word 'inventory'; excludes 'par' (threshold sets
+    stay with inventory_threshold) and requires a trailing 'to <number>' target
+    so shows ('show my inventory') and counts ('how many X') never match."""
+    raw = (msg or "").strip()
+    low = raw.lower()
+    if "inventory" not in low or re.search(r"\bpar\b", low):
+        return (None, "")
+    s = _normalize_inventory_command_text(raw)
+    m = re.match(rf"^{_INV_SET_VERBS}\s+(?:for\s+)?(?:the\s+)?(.+?)\s+to\s+(\w+)$",
+                 s, re.IGNORECASE)
+    if m:
+        qty = _parse_small_number(m.group(2))
+        if qty is not None:
+            return (qty, m.group(1).strip())
+    return (None, "")
 
 def _looks_like_bare_inventory_write(msg: str) -> bool:
     s = (msg or "").strip().lower()
@@ -1917,6 +1952,17 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         _count_text = _parse_inventory_lookup_text(msg)
         if _count_text:
             return _claim("inventory_count", {"product_text": _count_text})
+
+    # Inventory: SET a quantity by natural phrasing ("update my inventory for X
+    # to 8", "change the X to 5"). MUST run before the show-detector below —
+    # _looks_like_inventory_show fuzzy-matches ANY message containing ~"inventory"
+    # and would otherwise dump the list instead of setting. The set action is
+    # already built in the handler; this reaches it. weed-garden 2026-07-20 (c31).
+    if "inventory" in lowered:
+        _set_qty, _set_text = _parse_inventory_set(msg)
+        if _set_qty is not None and _set_text:
+            return _claim("inventory_write",
+                          {"action": "set", "qty": int(_set_qty), "product_text": _set_text})
 
     # Inventory: show full list (even mid-flow)
     if _looks_like_inventory_show(msg):

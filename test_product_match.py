@@ -60,6 +60,11 @@ CASES = [
     ("2 chroma fusion merlot",              "Merlot"),
     ("chrome fusion eye shadow moonstone",  "Moonstone"),
     ("darling pink chromafusion blush",     "Chromafusion Blush"),  # shade NOT in catalog: family right, shade wrong (coverage, not matcher)
+
+    # --- spelled-out "four in one" → 4-in-1 (weed-garden 2026-07-20, c60):
+    # must beat Clear Proof's "cleanser" alias, same as the digit form ---
+    ("four in one cleanser normal to dry",  "TimeWise 4-in-1 Cleanser"),
+    ("four in one cleanser combination to oily", "TimeWise 4-in-1 Cleanser"),
 ]
 
 
