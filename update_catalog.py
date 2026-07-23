@@ -252,7 +252,12 @@ def _normalize_name(name: str) -> str:
 
 
 def upsert(catalog: dict[str, dict], scraped: list[dict],
-           move_flags: dict | None = None) -> tuple[list, list, list]:
+           move_flags: dict | None = None,
+           categorize: bool = True) -> tuple[list, list, list]:
+    # categorize=False (ES): don't derive categories from the (Spanish) scrape at
+    # all — ES category/subcategory are mirrored from EN afterward so the two
+    # files can never diverge (EN-lead policy, 2026-07-23). English is the single
+    # source of category truth; MK's ES-site categories are ignored entirely.
     added_items: list[dict] = []
     updated_items: list[dict] = []
     labeled_items: list[dict] = []
@@ -267,7 +272,7 @@ def upsert(catalog: dict[str, dict], scraped: list[dict],
 
         today = date.today().isoformat()
         if sku not in catalog:
-            _cat, _sub = cat_map.get(sku, ("", ""))
+            _cat, _sub = cat_map.get(sku, ("", "")) if categorize else ("", "")
             catalog[sku] = {"sku": sku, "product_name": name, "price": price_str, "search_terms": "", "date_added": today, "last_seen": today, "display_name_card": "", "display_name_sms": "", "predecessor_sku": "", "fact_sheet_url": "", "order_of_application_url": "", "use_up_rate_months": "", "previous_price": "", "price_changed_at": "", "category": _cat, "subcategory": _sub}
             added_items.append({"sku": sku, "product_name": name, "price": price_str, "category": _cat or "UNCATEGORIZED"})
         else:
@@ -290,7 +295,8 @@ def upsert(catalog: dict[str, dict], scraped: list[dict],
             # Category (2026-07-19): MANUAL WINS — the scrape only fills blanks.
             # If MK moved a product to a different card, note it in the change
             # email but keep the stored value (Brian's corrections must stick).
-            if sku not in _cat_seen:
+            # ES skips this entirely (categorize=False) — it mirrors EN below.
+            if categorize and sku not in _cat_seen:
                 _cat_seen.add(sku)
                 _cat, _sub = cat_map.get(sku, ("", ""))
                 if _cat and not (existing.get("category") or "").strip():
@@ -731,12 +737,22 @@ def main(username: str, password: str) -> None:
         es_path    = CATALOG_DIR / "es.csv"
         es_catalog = load_catalog(es_path)
         es_before  = len(es_catalog)
-        es_added, es_updated, es_labeled = upsert(es_catalog, es_scraped, move_flags=move_flags.setdefault("es", {}))
+        # categorize=False: ES doesn't derive categories from its own scrape —
+        # they're mirrored from EN just below (EN-lead policy, 2026-07-23).
+        es_added, es_updated, es_labeled = upsert(es_catalog, es_scraped, categorize=False)
         if en_labeled:
             es_mirrored = _apply_en_replacements(en_labeled, es_catalog)
             es_labeled  = es_labeled + es_mirrored
         if en_catalog:
             _mirror_links_to_es(en_catalog, es_catalog)
+            # EN-lead categories: ES category/subcategory mirror EN exactly, so the
+            # two files can never diverge. English is the single source of category
+            # truth; MK's ES-site categories are ignored (2026-07-23).
+            for _sku, _row in es_catalog.items():
+                _en = en_catalog.get(_sku)
+                if _en is not None:
+                    _row["category"] = _en.get("category", "")
+                    _row["subcategory"] = _en.get("subcategory", "")
         save_catalog(es_catalog, es_path, scraped_order=es_scraped)
         _print_lang_report("es", es_before, es_scraped, es_catalog, es_added, es_updated, es_labeled, es_path)
         lang_reports.append({"lang": "es", "added": es_added, "updated": es_updated, "labeled": es_labeled})
