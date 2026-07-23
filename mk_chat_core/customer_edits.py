@@ -117,6 +117,22 @@ def _looks_like_birthday(s: str) -> bool:
     return False
 
 
+def _looks_like_new_customer_paste(txt: str) -> bool:
+    """True when a mid-confirm input reads as a whole NEW customer pasted in — a
+    leading name (First Last …) plus a phone or birthday somewhere — rather than
+    a single-field correction. During a pending customer-confirm every non-yes/no
+    line is treated as an edit; without this guard a consultant bulk-entering
+    customers who pastes the NEXT person has that person's details written into
+    the customer still on screen. That corrupted 2 InTouch records (jobs 9928/
+    9938, weed-garden 2026-07-22 F1). A real address correction leads with a house
+    number, so requiring a leading NAME keeps this off legitimate edits."""
+    s = (txt or "").strip()
+    toks = s.split()
+    if len(toks) < 3 or not (toks[0].isalpha() and toks[1].isalpha()):
+        return False
+    return bool(_extract_phone_candidate(s)) or _looks_like_birthday(s)
+
+
 def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]:
     """
     Applies 'add/edit' instructions to a pending customer dict.
@@ -219,6 +235,15 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             continue
 
         # --- Guess by format ---
+        # Data-integrity guard (weed-garden 2026-07-22 F1): if this line reads as
+        # a whole NEW customer pasted mid-confirm (leading name + phone/birthday),
+        # do NOT let the format guesses below nibble fields off it into the
+        # pending customer. Leave the customer untouched and note it — safer than
+        # corrupting a record that then lands in InTouch.
+        if _looks_like_new_customer_paste(txt):
+            notes.append(f"Couldn't apply: “{raw}”")
+            continue
+
         # Email guess
         if _looks_like_email(txt):
             c["Email"] = _extract_email(txt)

@@ -296,6 +296,13 @@ NEGATIVE_GUARD_CASES = [
      "bulk_text_educate", "non-outreach phrasing must not be claimed"),
     ("Edit Bobbie hinski order to add 25% off", "edit_request",
      "order-edit phrasing must not be caught by the bare edit_request widening"),
+    # order PLACEMENT with the edit-verb "set" inside a product name must not be
+    # stolen by edit_request (weed-garden 2026-07-21 F2 — 'order' removed from
+    # the edit-field list; these then resolve to new_order via the LLM in prod)
+    ("order timewise repair set for Jane", "edit_request",
+     "order placement, not a customer-info edit"),
+    ("Amanda Pinnock order for Timewise Miracle set normal to dry", "edit_request",
+     "name-leading order placement, not a customer-info edit"),
     # weed-garden 2026-07-08 (F4): stray confirmations with no pending open
     # must not pass as bare names and fuzzy-match a random customer's card
     # ("Yes" → Yessica Manzo). Exact-word exclusion — real names unaffected.
@@ -483,6 +490,9 @@ ROUTE_CASES = [
     ("cancel judy's order",                      None, "submitted_order_edit"),
     ("delete that order from yesterday",         None, "submitted_order_edit"),
     ("delete judy doe",                          None, "delete_customer"),     # no "order" word — delete flow untouched
+    # consultant-id lookups reach unit_query (weed-garden 2026-07-21 F3)
+    ("what is Kelly Smith's consultant id",      None, "unit_query"),
+    ("consultant id for Kelly Smith",            None, "unit_query"),
     # pending-flow guards: mid-flow, guarded rules must NOT claim the message,
     # so the pending flow consumes it (route falls through to the base intent)
     ("charcoal mask",                            _MID_FLOW, "customer_info"),  # bare-name rule; pending flow eats it

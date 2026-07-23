@@ -1203,7 +1203,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "rise and radiate", "rise & radiate",
         "who needs", "who still needs",
         "who hasn't set up", "who haven't set up",
-        "activity status", "career level", "consultant number",
+        "activity status", "career level", "consultant number", "consultant id",
         "new consultant", "new consultants",
         "who is terminating", "terminating consultant",
         "power of pink", "diq", "red jacket",
@@ -1576,10 +1576,17 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if re.match(r'^(new\s+|add\s+|place\s+|start\s+(?:an?\s+)?)?order\s+for\b', lowered):
         return IntentResult(intent="new_order", confidence=0.95, raw_text=msg)
 
-    # edit_request — someone trying to update customer info or an order
-    # Must come before customer_info; exclude "set up/new" to avoid catching new_customer phrases
+    # edit_request — someone trying to update customer INFO (not an order).
+    # Must come before customer_info; exclude "set up/new" to avoid catching new_customer phrases.
+    # "order" is deliberately NOT an edit field (weed-garden 2026-07-21 F2): a
+    # product name containing the edit-verb "set" ("timewise miracle SET") plus
+    # the word "order" was misrouting real order placements to edit_request
+    # (c61 order lost, c92 recovered). edit_request is the customer-info decline;
+    # order placement → new_order, order edits → submitted_order_edit. The
+    # NEGATIVE_GUARD_CASES pin "Edit Bobbie hinski order…" must-not-be-edit_request
+    # encodes this same boundary.
     _has_edit_verb  = bool(re.search(r"\b(update|change|edit|fix|correct|set|modify)\b", lowered))
-    _has_edit_field = bool(re.search(r"\b(address|phone|email|birthday|birthdate|name|order)\b", lowered))
+    _has_edit_field = bool(re.search(r"\b(address|phone|email|birthday|birthdate|name)\b", lowered))
     _is_setup_phrase = bool(re.search(r"\b(set\s+up|new|add|an\s+order)\b", lowered))
     if _has_edit_verb and _has_edit_field and not _is_setup_phrase:
         return IntentResult(intent="edit_request", confidence=0.95, raw_text=msg)

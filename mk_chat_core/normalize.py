@@ -100,10 +100,41 @@ def normalize_state(state: str) -> str:
 
 # NUMBER_WORDS / _parse_small_number moved to intent_router.py (2026-07-02)
 
+# Spelled-out two-word states, mapped to their 2-letter code (source of truth =
+# STATE_MAP). Only the multi-word names cause the split problem — single-word
+# states already parse cleanly — so this is scoped to them.
+_MULTIWORD_STATE_TO_ABBR = {
+    name: abbr for abbr, name in STATE_MAP.items() if " " in name and "," not in name
+}
+
+
+def _abbreviate_trailing_two_word_state(txt: str) -> str:
+    """Swap a spelled-out two-word state ("New Mexico") for its 2-letter code,
+    but ONLY when it sits in the state position — immediately before the trailing
+    zip, or at the very end of the line. That anchor is what distinguishes a
+    STATE ("… Alamogordo New Mexico 88310") from a CITY named e.g. "New York"
+    (which is followed by its own state/zip, never directly by the zip). Lets the
+    positional parsers, which fold a bare two-word state's first word into the
+    city, split it correctly; normalize_state() turns the code back into the full
+    name downstream. weed-garden 2026-07-22."""
+    for name, abbr in _MULTIWORD_STATE_TO_ABBR.items():
+        new, n = re.subn(
+            rf"\b{re.escape(name)}\b(?=\s+\d{{5}}(?:-\d{{4}})?\s*$|\s*$)",
+            abbr, txt, count=1, flags=re.IGNORECASE,
+        )
+        if n:
+            return new
+    return txt
+
 STREET_SUFFIXES = (
     "st", "street", "rd", "road", "ave", "avenue", "blvd", "boulevard",
     "dr", "drive", "ln", "lane", "ct", "court", "cir", "circle",
-    "pkwy", "parkway", "hwy", "highway", "pl", "place", "way"
+    "pkwy", "parkway", "hwy", "highway", "pl", "place", "way",
+    # added 2026-07-22 (weed-garden F1 tail: Gladys Saldana "1210 Paiute Trail"
+    # mis-split). Unambiguous street suffixes only — no common words like
+    # run/pass/path/point that could cause NEW mis-splits.
+    "trail", "trl", "loop", "terrace", "ter", "cove",
+    "crossing", "xing", "square", "plaza", "pike",
 )
 
 def _append_unit_suffix_if_present(street: str, extra: str) -> tuple:
@@ -154,11 +185,14 @@ def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
 
     # Normalize whitespace
     txt = re.sub(r"\s+", " ", raw).strip()
+    # Two-word state in the state position → 2-letter code, so it isn't folded
+    # into the city (weed-garden 2026-07-22).
+    txt = _abbreviate_trailing_two_word_state(txt)
 
     # Special case: "31 W East st madison, WI 35976"
     # Split street at a real street suffix, then treat the rest as city/state/zip.
     m = re.match(
-        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
+        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way|trail|trl|loop|terrace|ter|cove|crossing|xing|square|plaza|pike)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s*,\s*(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt,
         re.IGNORECASE,
     )
@@ -178,7 +212,7 @@ def _parse_address_line_raw(s: str) -> Optional[Dict[str, str]]:
     # Special case (no comma): "232 Queens St Sun Prairie WI 53590"
     # Same suffix-split logic as above but without requiring a comma before state.
     m = re.match(
-        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
+        r"^(?P<street>.+?\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|dr|drive|ln|lane|ct|court|cir|circle|pkwy|parkway|hwy|highway|pl|place|way|trail|trl|loop|terrace|ter|cove|crossing|xing|square|plaza|pike)\b)\s+(?P<city>[A-Za-z][A-Za-z .'\-]+)\s+(?P<state>[A-Za-z]{2,}(?:\s+[A-Za-z]+)?)\s+(?P<zip>\d{5})(?:-\d{4})?(?P<extra>\s+.*)?$",
         txt,
         re.IGNORECASE,
     )
