@@ -35,11 +35,24 @@ def send_failure_text(message: str) -> None:
     # so the push mirror lives here too. Push fires BEFORE the SMS cooldown
     # check — push has no cost/window, so it should never be suppressed by
     # the SMS-specific cooldown. Push problems must never break the SMS path.
+    #
+    # 2026-07-25: a DELIVERED push now suppresses the SMS. ProjectBroadcast
+    # only sends 9am-9pm (noon-9pm Sundays), so the text is redundant when
+    # push worked and useless for the afterhours failures push exists to
+    # catch. SMS stays as the automatic fallback: send_push_to_admins returns
+    # 0 (never raises) when push reached nobody — no VAPID key, no admin
+    # subscriptions, subscription rotted, or an internal error — so the texts
+    # come back on their own exactly when push stops working.
+    delivered = 0
     try:
         from push_notify import send_push_to_admins
-        send_push_to_admins("🚨 MPA Failure", message, url="/admin")
+        delivered = send_push_to_admins("🚨 MPA Failure", message, url="/admin")
     except Exception as _pe:
         print("[Worker] Push mirror failed:", _pe)
+
+    if delivered:
+        print(f"[Worker] SMS skipped — push delivered to {delivered} device(s)")
+        return
 
     if not PB_API_KEY or not PB_CONTACT_ID:
         print("[Worker] Missing PB credentials")
