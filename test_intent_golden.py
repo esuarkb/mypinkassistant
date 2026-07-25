@@ -625,6 +625,22 @@ ROUTE_CASES = [
     ("What's the total amount sold for the last 12 months", None, "data_query"),
     # F3: "reorder the most" must not substring-hit the leaderboard trigger
     ("What product does Norma Boettcher reorder the most?", None, ("recent_orders", "<llm-skipped>", "unknown")),
+
+    # --- CDS PO Box address gate (2026-07-25) ---
+    # With cds_need_address pending open (order confirmed, but the address on
+    # file is a PO Box / missing), the consultant's address reply MUST fall
+    # through to the pending flow. That means route() may only hand it a
+    # NON-interrupting base intent — if a future rule with
+    # interrupts_pending=True starts claiming address lines, the reply gets
+    # hijacked and the CDS order never queues.
+    ("444 4th St, Arab, AL 35976",
+     {"pending": {"kind": "cds_need_address"}}, ("new_customer", "customer_info", "unknown", "<llm-skipped>")),
+    ("333 3rd st arab al 35976",
+     {"pending": {"kind": "cds_need_address"}}, ("new_customer", "customer_info", "unknown", "<llm-skipped>")),
+    # "cancel" mid-ask must keep reaching the cancel intent (interrupts_pending
+    # =True by design — it clears the pending order)
+    ("cancel",
+     {"pending": {"kind": "cds_need_address"}}, "cancel"),
 ]
 
 

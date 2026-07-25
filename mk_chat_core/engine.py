@@ -51,6 +51,7 @@ from .normalize import (
     STREET_SUFFIXES,
     birthday_display,
     format_phone_display,
+    is_po_box,
     no,
     normalize_birthday,
     normalize_city,
@@ -2822,6 +2823,47 @@ class MKChatEngine:
                 state["pending"] = None
                 return self._continue_resolving_and_reply(state, order_draft, consultant_id, sid, catalog, ui)
 
+            if kind == "cds_need_address":
+                # CDS order was confirmed but the address on file is a PO Box or
+                # missing — we asked for a physical address (gate in the
+                # order_confirm 'yes' branch). Parse the reply, stash it on the
+                # order as cds_address_override, and finish the queueing the
+                # 'yes' deferred. Bad parse / another PO Box → re-ask (stay
+                # pending); 'no'/'cancel' → drop the order like a confirm reject.
+                order = pending["order"]
+
+                if no(msg) or (msg or "").strip().lower() in ("cancel", "cancelar"):
+                    state["pending"] = None
+                    state["last_ref_customer_id"] = None
+                    state["last_ref_customer_name"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(ui["order_reject"])
+
+                _addr = parse_address_line(msg) or {}
+                _a_street = (_addr.get("Street") or "").strip()
+                if _a_street and is_po_box(_a_street):
+                    return ChatReply(ui["cds_address_still_pobox"])
+                # Canonicalize the state — fill_cds_address picks it from a
+                # dropdown by exact full name ("Alabama"), so "al"/"alabama"
+                # must become the canonical spelling before it hits the payload.
+                _a_state = normalize_state((_addr.get("State") or "").strip())
+                _canon_states = {v.lower(): v for v in STATE_MAP.values()}
+                _canon_states["washington, d.c."] = "Washington, D.C."
+                _a_state = _canon_states.get(_a_state.lower(), "")
+                _a_city = (_addr.get("City") or "").strip()
+                _a_zip = (_addr.get("Postal Code") or "").strip()
+                if not (_a_street and _a_city and _a_state and _a_zip):
+                    return ChatReply(ui["cds_address_parse_fail"])
+                if (_addr.get("Street2") or "").strip():
+                    _a_street = f"{_a_street} {_addr['Street2'].strip()}"
+                order["cds_address_override"] = {
+                    "street": _a_street,
+                    "city": _a_city,
+                    "state": _a_state,
+                    "postal_code": _a_zip,
+                }
+                return self._queue_confirmed_order(order, state, sid, consultant_id, ui)
+
             if kind == "order_confirm":
                 order = pending["order"]
 
@@ -2976,130 +3018,27 @@ class MKChatEngine:
                 # ... keep your existing yes/no handling below ...
 
                 if yes(msg):
-                    cust_first = order["customer"]["First Name"]
-                    cust_last = order["customer"]["Last Name"]
-
-                    # Compute discount + tax before saving — _order_money is the
-                    # single source of truth (same math the confirm displayed).
-                    _money = self._order_money(order)
-                    _total_discount = _money["discount_amount"]
-                    _tax_amount = _money["tax_amount"]
-                    _order_discounts = []
-                    if _total_discount > 0:
-                        _d_label = (f"{_money.get('rec_value'):g}% off"
-                                    if _money.get("rec_type") == "%"
-                                    else f"${_total_discount:.2f} off")
-                        _order_discounts = [{"amount": _total_discount, "line_idx": None, "label": _d_label}]
-
-                    # 1) Save order + items to CRM (permanent, even if Playwright fails)
-                    # CDS orders are skipped here — left pending in InTouch for the
-                    # consultant to finalize. The nightly import brings them back in
-                    # their final form, avoiding stale/duplicate records.
-                    from crm_store import get_customer_id_by_name, create_order_from_confirmed, upsert_customer_from_pending
-
-                    _fulfillment = order.get("fulfillment_method", "inventory")
-                    if _fulfillment != "cds":
-                        with tx() as (conn, cur):
-                            customer_id = order.get("customer_id")
-                            if not customer_id:
-                                customer_id = get_customer_id_by_name(cur, consultant_id, cust_first, cust_last)
-                            if customer_id is None:
-                                customer_id = upsert_customer_from_pending(
-                                    cur,
-                                    consultant_id=consultant_id,
-                                    customer={"First Name": cust_first, "Last Name": cust_last},
-                                )
-                            customer_id = int(customer_id)
-                            create_order_from_confirmed(
-                                cur,
-                                consultant_id=consultant_id,
-                                customer_id=customer_id,
-                                order_lines=order["lines"],
-                                source="chat",
-                                order_date=(order.get("order_date") or None),
-                                discounts=_order_discounts,
-                                tax_amount=_tax_amount,
-                                discount_type=_money.get("rec_type"),
-                                discount_value=_money.get("rec_value"),
-                                tax_percent=(_money["tax_percent"] if _tax_amount > 0 else None),
-                            )
-
-                    # 2) Queue jobs for worker/playwright
-                    _leave_pending = bool(order.get("leave_pending", False))
-                    _order_date = (order.get("order_date") or "").strip() or None
-
-                    # For CDS orders, include customer address in payload so Playwright
-                    # can fill it in if InTouch reports a missing delivery address
-                    _cds_address = {}
-                    if _fulfillment == "cds":
-                        from crm_store import get_customer_id_by_name as _get_cid_by_name
-                        with tx() as (_cds_conn, _cds_cur):
-                            _cds_cid = order.get("customer_id") or _get_cid_by_name(_cds_cur, consultant_id, cust_first, cust_last)
-                            if _cds_cid:
-                                _cds_cur.execute(
-                                    f"SELECT street, city, state, postal_code FROM customers WHERE consultant_id={PH} AND id={PH} LIMIT 1",
-                                    (consultant_id, int(_cds_cid)),
-                                )
-                                _cds_row = _cds_cur.fetchone()
-                                if _cds_row:
-                                    _cds_address = {
-                                        "street": (_cds_row["street"] if isinstance(_cds_row, dict) else _cds_row[0]) or "",
-                                        "city": (_cds_row["city"] if isinstance(_cds_row, dict) else _cds_row[1]) or "",
-                                        "state": normalize_state((_cds_row["state"] if isinstance(_cds_row, dict) else _cds_row[2]) or ""),
-                                        "postal_code": (_cds_row["postal_code"] if isinstance(_cds_row, dict) else _cds_row[3]) or "",
-                                    }
-
-                    _first_job = True
-                    for line in order["lines"]:
-                        sku = (line["chosen"].get("sku") or "").strip()
-                        if not sku:
-                            continue
-                        qty = int(line["qty"])
-                        for _ in range(max(1, qty)):
-                            payload = {
-                                "First Name": cust_first,
-                                "Last Name": cust_last,
-                                "SKU": sku,
-                                "fulfillment_method": _fulfillment,
-                                "leave_pending": _leave_pending,
-                                "order_date": _order_date,
-                            }
-                            if _cds_address:
-                                payload.update(_cds_address)
-                            if _first_job and (_total_discount > 0 or _tax_amount > 0):
-                                # first job of the batch carries the order-level
-                                # modifiers; process_order_batch reads rows[0].
-                                # tax goes as the RATE — MK's field is a percent.
-                                payload["discount_amount"] = _total_discount
-                                payload["tax_percent"] = _money["tax_percent"]
-                            insert_job(
-                                "NEW_ORDER_ROW",
-                                payload,
-                                consultant_id=consultant_id,
-                            )
-                            _first_job = False
-
-                    # 3) Decrement personal inventory for each ordered item (skip for CDS)
-                    if _fulfillment != "cds":
-                        with tx() as (conn, cur):
-                            for line in order["lines"]:
-                                sku = (line["chosen"].get("sku") or "").strip()
-                                if not sku:
-                                    continue
-                                qty = int(line["qty"])
-                                upsert_inventory_quantity(
-                                    cur,
-                                    consultant_id=consultant_id,
-                                    sku=sku,
-                                    qty_delta=-qty,
-                                )
-
-                    state["pending"] = None
-                    state["last_ref_customer_id"] = None
-                    state["last_ref_customer_name"] = None
-                    state["last_customer"] = None
-                    save_session_state(state, session_id=sid)
-                    return ChatReply(ui["order_confirmed"].format(first=cust_first, last=cust_last))
+                    # CDS gate: MK can't ship to a PO Box ("Orders cannot ship to
+                    # PO Box" toast on the Sales Ticket page, 2026-07-25), and a
+                    # missing address fails the same way. Catch both HERE — the one
+                    # choke point every confirmed order passes through, whichever
+                    # path built the draft — and ask for a physical address in chat.
+                    # The reply is collected by the cds_need_address pending branch,
+                    # stored on the order as cds_address_override (this order only —
+                    # MyCustomers stays source of truth), and rides the job payload
+                    # so orders.py fills it via the Add New Address dialog when
+                    # InTouch pops the address error toast.
+                    if (order.get("fulfillment_method", "inventory") == "cds"
+                            and not (order.get("cds_address_override") or {}).get("street")):
+                        _gate_street = (self._fetch_cds_address(consultant_id, order).get("street") or "").strip()
+                        if not _gate_street or is_po_box(_gate_street):
+                            _cust = order.get("customer") or {}
+                            _cname = f"{_cust.get('First Name', '')} {_cust.get('Last Name', '')}".strip() or "this customer"
+                            state["pending"] = {"kind": "cds_need_address", "order": order}
+                            save_session_state(state, session_id=sid)
+                            _key = "cds_ask_address_pobox" if _gate_street else "cds_ask_address_missing"
+                            return ChatReply(ui[_key].format(name=_cname))
+                    return self._queue_confirmed_order(order, state, sid, consultant_id, ui)
 
                 if no(msg):
                     state["pending"] = None
@@ -3110,6 +3049,166 @@ class MKChatEngine:
 
                 return ChatReply(ui["reply_yes_no_adjust"])
         return None
+
+    def _fetch_cds_address(self, consultant_id: int, order: dict) -> dict:
+        """Customer's address from our DB (synced from MyCustomers), keyed the
+        way the NEW_ORDER_ROW payload wants it (street/city/state/postal_code).
+        Returns {} when the customer or address is unknown."""
+        from db import tx
+        from crm_store import get_customer_id_by_name
+        _cust = order.get("customer") or {}
+        with tx() as (conn, cur):
+            cid = order.get("customer_id") or get_customer_id_by_name(
+                cur, consultant_id,
+                (_cust.get("First Name") or "").strip(),
+                (_cust.get("Last Name") or "").strip(),
+            )
+            if not cid:
+                return {}
+            cur.execute(
+                f"SELECT street, city, state, postal_code FROM customers WHERE consultant_id={PH} AND id={PH} LIMIT 1",
+                (consultant_id, int(cid)),
+            )
+            row = cur.fetchone()
+        if not row:
+            return {}
+        def _col(r, key, idx):
+            return (r[key] if isinstance(r, dict) else r[idx]) or ""
+        return {
+            "street": _col(row, "street", 0),
+            "city": _col(row, "city", 1),
+            "state": normalize_state(_col(row, "state", 2)),
+            "postal_code": _col(row, "postal_code", 3),
+        }
+
+    def _queue_confirmed_order(self, order: dict, state: dict, sid, consultant_id: int, ui: dict) -> ChatReply:
+        """Finalize a confirmed order: save to CRM (non-CDS), queue NEW_ORDER_ROW
+        jobs, decrement inventory (non-CDS), clear session state. Extracted
+        verbatim from the order_confirm 'yes' branch (2026-07-25) so the
+        cds_need_address flow can finish the same way after collecting a
+        physical address."""
+        from db import tx
+        cust_first = order["customer"]["First Name"]
+        cust_last = order["customer"]["Last Name"]
+
+        # Compute discount + tax before saving — _order_money is the
+        # single source of truth (same math the confirm displayed).
+        _money = self._order_money(order)
+        _total_discount = _money["discount_amount"]
+        _tax_amount = _money["tax_amount"]
+        _order_discounts = []
+        if _total_discount > 0:
+            _d_label = (f"{_money.get('rec_value'):g}% off"
+                        if _money.get("rec_type") == "%"
+                        else f"${_total_discount:.2f} off")
+            _order_discounts = [{"amount": _total_discount, "line_idx": None, "label": _d_label}]
+
+        # 1) Save order + items to CRM (permanent, even if Playwright fails)
+        # CDS orders are skipped here — left pending in InTouch for the
+        # consultant to finalize. The nightly import brings them back in
+        # their final form, avoiding stale/duplicate records.
+        from crm_store import get_customer_id_by_name, create_order_from_confirmed, upsert_customer_from_pending
+
+        _fulfillment = order.get("fulfillment_method", "inventory")
+        if _fulfillment != "cds":
+            with tx() as (conn, cur):
+                customer_id = order.get("customer_id")
+                if not customer_id:
+                    customer_id = get_customer_id_by_name(cur, consultant_id, cust_first, cust_last)
+                if customer_id is None:
+                    customer_id = upsert_customer_from_pending(
+                        cur,
+                        consultant_id=consultant_id,
+                        customer={"First Name": cust_first, "Last Name": cust_last},
+                    )
+                customer_id = int(customer_id)
+                create_order_from_confirmed(
+                    cur,
+                    consultant_id=consultant_id,
+                    customer_id=customer_id,
+                    order_lines=order["lines"],
+                    source="chat",
+                    order_date=(order.get("order_date") or None),
+                    discounts=_order_discounts,
+                    tax_amount=_tax_amount,
+                    discount_type=_money.get("rec_type"),
+                    discount_value=_money.get("rec_value"),
+                    tax_percent=(_money["tax_percent"] if _tax_amount > 0 else None),
+                )
+
+        # 2) Queue jobs for worker/playwright
+        _leave_pending = bool(order.get("leave_pending", False))
+        _order_date = (order.get("order_date") or "").strip() or None
+
+        # For CDS orders, include the delivery address in the payload so
+        # Playwright can fill it if InTouch reports a missing/PO Box address.
+        # A chat-collected override (cds_need_address flow) wins over the DB row.
+        _cds_address = {}
+        if _fulfillment == "cds":
+            _ovr = order.get("cds_address_override") or {}
+            if (_ovr.get("street") or "").strip():
+                _cds_address = {
+                    "street": (_ovr.get("street") or "").strip(),
+                    "city": (_ovr.get("city") or "").strip(),
+                    "state": normalize_state((_ovr.get("state") or "").strip()),
+                    "postal_code": (_ovr.get("postal_code") or "").strip(),
+                }
+            else:
+                _cds_address = self._fetch_cds_address(consultant_id, order)
+                if not (_cds_address.get("street") or "").strip():
+                    _cds_address = {}
+
+        _first_job = True
+        for line in order["lines"]:
+            sku = (line["chosen"].get("sku") or "").strip()
+            if not sku:
+                continue
+            qty = int(line["qty"])
+            for _ in range(max(1, qty)):
+                payload = {
+                    "First Name": cust_first,
+                    "Last Name": cust_last,
+                    "SKU": sku,
+                    "fulfillment_method": _fulfillment,
+                    "leave_pending": _leave_pending,
+                    "order_date": _order_date,
+                }
+                if _cds_address:
+                    payload.update(_cds_address)
+                if _first_job and (_total_discount > 0 or _tax_amount > 0):
+                    # first job of the batch carries the order-level
+                    # modifiers; process_order_batch reads rows[0].
+                    # tax goes as the RATE — MK's field is a percent.
+                    payload["discount_amount"] = _total_discount
+                    payload["tax_percent"] = _money["tax_percent"]
+                insert_job(
+                    "NEW_ORDER_ROW",
+                    payload,
+                    consultant_id=consultant_id,
+                )
+                _first_job = False
+
+        # 3) Decrement personal inventory for each ordered item (skip for CDS)
+        if _fulfillment != "cds":
+            with tx() as (conn, cur):
+                for line in order["lines"]:
+                    sku = (line["chosen"].get("sku") or "").strip()
+                    if not sku:
+                        continue
+                    qty = int(line["qty"])
+                    upsert_inventory_quantity(
+                        cur,
+                        consultant_id=consultant_id,
+                        sku=sku,
+                        qty_delta=-qty,
+                    )
+
+        state["pending"] = None
+        state["last_ref_customer_id"] = None
+        state["last_ref_customer_name"] = None
+        state["last_customer"] = None
+        save_session_state(state, session_id=sid)
+        return ChatReply(ui["order_confirmed"].format(first=cust_first, last=cust_last))
 
     def _intent_data_query(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
@@ -3406,14 +3505,10 @@ class MKChatEngine:
                 prefix = ui["got_it_ordering_for"].format(name=customer_line)
                 return ChatReply(f"{prefix}\n{propose_top(top, current_qty=order_draft['lines'][nxt]['qty'], ui=ui, original_text=order_draft['lines'][nxt].get('text'))}")
 
-            # CDS orders require an address — hard block before showing confirm
-            if fulfillment_method == "cds" and not self._customer_has_address(consultant_id, order_draft.get("customer_id")):
-                cust_name = f"{cust_first} {cust_last}".strip()
-                return ChatReply(
-                    f"CDS orders ship directly to the customer, so {cust_name} needs an address on file in "
-                    f"<a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a> before this order can be placed. "
-                    "Please add her address there and try again."
-                )
+            # CDS address handling (missing or PO Box) lives at the order_confirm
+            # 'yes' choke point now (2026-07-25) — it covers EVERY path that can
+            # build a draft (this one, the customer picker, awaiting_order_items)
+            # and asks for a physical address in chat instead of hard-blocking.
 
             state["pending"] = {"kind": "order_confirm", "order": order_draft}
 
@@ -3832,28 +3927,6 @@ class MKChatEngine:
                 groups[key]["price"] = price
 
         return list(groups.values())
-
-    def _customer_has_address(self, consultant_id: int, customer_id: int | None) -> bool:
-        if not customer_id:
-            return False
-        conn = db_connect()
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                f"SELECT street FROM customers WHERE consultant_id={PH} AND id={PH} LIMIT 1",
-                (int(consultant_id), int(customer_id)),
-            )
-            row = cur.fetchone()
-            if not row:
-                return False
-            street = (row["street"] if isinstance(row, dict) else row[0]) or ""
-            return bool(street.strip())
-        finally:
-            try:
-                cur.close()
-            except Exception:
-                pass
-            conn.close()
 
     def _get_order_readiness_warning(self, customer_row: dict | None) -> str:
         if not customer_row:

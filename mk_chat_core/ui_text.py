@@ -47,6 +47,12 @@ UI_EN = {
     "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
     "order_reject": "Okay — paste the corrected order and I'll rebuild the summary.",
 
+    # CDS address gate (PO Box / missing address) — order_confirm 'yes' branch
+    "cds_ask_address_pobox": "One more thing — the address I have for {name} is a PO Box, and Mary Kay can't ship CDS orders to a PO Box. What's the full street address? (like: <strong>444 4th St, Anytown, AL 35976</strong>), or type <strong>cancel</strong> if you don't have the address yet.",
+    "cds_ask_address_missing": "One more thing — CDS orders ship directly to the customer, and I don't have an address on file for {name}. What's the full street address? (like: <strong>444 4th St, Anytown, AL 35976</strong>), or type <strong>cancel</strong> if you don't have the address yet.",
+    "cds_address_still_pobox": "That's still a PO Box — Mary Kay needs a physical street address for CDS delivery. What's the full street address? (like: <strong>444 4th St, Anytown, AL 35976</strong>)",
+    "cds_address_parse_fail": "I couldn't read that as a complete address. Please send the street, city, state, and zip together — like: <strong>444 4th St, Anytown, AL 35976</strong> — or type <strong>cancel</strong>.",
+
     "no_catalog_match": "I couldn't find that product in the catalog. Try rewording it (brand, line, or shade helps), or say <strong>cancel</strong> to start over.",
     "no_customer_found": "I couldn't find {name} in your saved customers. You can type <strong>help</strong> to see things you can do in chat.",
     "no_customer_found_yet": "I couldn't find {name} in your saved customers yet. You can type <strong>help</strong> to see things you can do in chat.",
@@ -275,6 +281,12 @@ UI_ES = {
     "cust_reject": "No hay problema — envíame la info corregida del cliente y lo intento de nuevo.",
     "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",
     "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
+
+    # CDS address gate (PO Box / missing address) — order_confirm 'yes' branch
+    "cds_ask_address_pobox": "Una cosa más — la dirección que tengo para {name} es un apartado postal (PO Box), y Mary Kay no puede enviar pedidos CDS a un PO Box. ¿Cuál es la dirección física completa? (como: <strong>444 4th St, Anytown, AL 35976</strong>), o escribe <strong>cancelar</strong> si aún no tienes la dirección.",
+    "cds_ask_address_missing": "Una cosa más — los pedidos CDS se envían directamente al cliente, y no tengo una dirección registrada para {name}. ¿Cuál es la dirección física completa? (como: <strong>444 4th St, Anytown, AL 35976</strong>), o escribe <strong>cancelar</strong> si aún no tienes la dirección.",
+    "cds_address_still_pobox": "Eso sigue siendo un apartado postal (PO Box) — Mary Kay necesita una dirección física para la entrega CDS. ¿Cuál es la dirección física completa? (como: <strong>444 4th St, Anytown, AL 35976</strong>)",
+    "cds_address_parse_fail": "No pude leer eso como una dirección completa. Envía la calle, ciudad, estado y código postal juntos — como: <strong>444 4th St, Anytown, AL 35976</strong> — o escribe <strong>cancelar</strong>.",
 
     "no_catalog_match": "No pude encontrar ese producto en el catálogo. Intenta describirlo de otra forma (marca, línea o tono ayuda), o di `cancelar` para empezar de nuevo.",
     "no_customer_found": "No encontré a {name} en tus clientes guardados. Puedes escribir <strong>ayuda</strong> para ver lo que puedes hacer en el chat.",

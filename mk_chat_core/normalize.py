@@ -320,6 +320,20 @@ def _normalize_street(s: str) -> str:
     return re.sub(r'\b(\d+)(St|Nd|Rd|Th)\b', lambda m: m.group(1) + m.group(2).lower(), titled)
 
 
+# PO Box detection — MK cannot ship CDS orders to a PO Box ("Orders cannot
+# ship to PO Box" error toast on the Sales Ticket page, 2026-07-25).
+# Anchored at the start of the street line so "123 Box Elder Rd" doesn't match.
+_PO_BOX_RE = re.compile(
+    r"^\s*(?:p\.?\s*o\.?\s*box|post\s+office\s+box|p\.?\s*o\.?\s*b\.?(?![a-z])|box)\s*#?\s*\d",
+    re.IGNORECASE,
+)
+
+def is_po_box(street: str) -> bool:
+    """True if a street line is a PO Box ('PO Box 123', 'P.O. Box 123',
+    'POB 123', 'Post Office Box 123', 'Box 42') — no physical delivery."""
+    return bool(_PO_BOX_RE.match(street or ""))
+
+
 def normalize_city(city: str) -> str:
     s = (city or "").strip()
     if not s:

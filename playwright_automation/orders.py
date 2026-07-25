@@ -237,11 +237,62 @@ def _read_intouch_error(page: Page) -> str:
         return "Unknown InTouch error"
 
 
+def _click_set_primary_for(page: Page, street: str) -> bool:
+    """Click 'Set As Primary' on the saved-address card showing `street`.
+
+    InTouch does NOT auto-select a newly added address when the customer
+    already has one (the PO Box stays Primary and the order keeps failing —
+    live test on Jane Poboxtoo, 2026-07-25). The cards are LWC shadow DOM,
+    so instead of walking markup we match geometrically: pick the
+    'Set As Primary' button closest on screen to the street text.
+    Returns False when there is nothing to click — with a single saved
+    address InTouch already made it Primary and no button exists (that is
+    the original no-address flow, which worked without this)."""
+    btns = page.get_by_role("button", name="Set As Primary")
+    n_btns = btns.count()
+    if n_btns == 0:
+        return False
+    street_texts = page.get_by_text(street, exact=False)
+    street_boxes = []
+    for i in range(street_texts.count()):
+        try:
+            b = street_texts.nth(i).bounding_box()
+        except Exception:
+            b = None
+        if b:
+            street_boxes.append(b)
+    best_i = None
+    best_d = None
+    for i in range(n_btns):
+        try:
+            bb = btns.nth(i).bounding_box()
+        except Exception:
+            bb = None
+        if not bb:
+            continue
+        for tb in street_boxes:
+            d = (abs((bb["y"] + bb["height"] / 2) - (tb["y"] + tb["height"] / 2))
+                 + abs((bb["x"] + bb["width"] / 2) - (tb["x"] + tb["width"] / 2)))
+            if best_d is None or d < best_d:
+                best_i, best_d = i, d
+    if best_i is None:
+        # street text not locatable (render variation) — with exactly one
+        # candidate button it can only be the address we just added
+        if n_btns != 1:
+            return False
+        best_i = 0
+    target = btns.nth(best_i)
+    target.scroll_into_view_if_needed()
+    target.click()
+    page.wait_for_timeout(1500)
+    return True
+
+
 def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code: str, first_name: str = "", last_name: str = "") -> None:
     from mk_chat_core import normalize_state
     state = normalize_state(state)
     page.wait_for_timeout(1500)
-    step("orders.cds_address", 1, 5, "open_address_dialog", "clicking 'Add New Address' (up to 4 attempts)")
+    step("orders.cds_address", 1, 6, "open_address_dialog", "clicking 'Add New Address' (up to 4 attempts)")
     add_address_btn = page.get_by_role("button", name="Add New Address").first
     first_name_field = page.locator('[id^="AddressFirstName-"]')
     for _ in range(4):
@@ -256,7 +307,7 @@ def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code
     else:
         raise RuntimeError("CDS address dialog failed to open after 4 attempts.")
 
-    step("orders.cds_address", 2, 5, "fill_address_fields", "filling name/street/city/postal fields")
+    step("orders.cds_address", 2, 6, "fill_address_fields", "filling name/street/city/postal fields")
     first_name_field.fill(first_name)
     page.wait_for_timeout(100)
     page.locator('[id^="AddressLastName-"]').fill(last_name)
@@ -268,22 +319,31 @@ def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code
     page.locator('[id^="PostalCode-"]').fill(postal_code)
     page.wait_for_timeout(100)
 
-    step("orders.cds_address", 3, 5, "select_state", f"selecting state '{state}' from dropdown")
+    step("orders.cds_address", 3, 6, "select_state", f"selecting state '{state}' from dropdown")
     dialog = page.get_by_role("dialog")
     dialog.get_by_role("button", name="Select an option").click()
     page.wait_for_timeout(700)
     dialog.get_by_role("option", name=state, exact=True).click()
     page.wait_for_timeout(700)
 
-    step("orders.cds_address", 4, 5, "submit_address_dialog", "clicking dialog 'Add New Address'")
+    step("orders.cds_address", 4, 6, "submit_address_dialog", "clicking dialog 'Add New Address'")
     page.get_by_role("dialog").get_by_role("button", name="Add New Address").click()
-    step("orders.cds_address", 5, 5, "wait_dialog_closed", "waiting for address dialog to close")
+    step("orders.cds_address", 5, 6, "wait_dialog_closed", "waiting for address dialog to close")
     try:
         first_name_field.wait_for(state="hidden", timeout=10000)
     except PlaywrightTimeoutError:
         pass
     page.wait_for_timeout(1000)
     print(f"[Orders] CDS address filled: {street}, {city}, {state} {postal_code}")
+
+    # Make the new address the shipping address. When the customer already has
+    # a saved address (the PO Box case) InTouch keeps IT selected as Primary
+    # and Save and Review fails again — the new card must be clicked Primary.
+    # Single-address customers have no 'Set As Primary' button (InTouch already
+    # selected the only address) and _click_set_primary_for returns False.
+    step("orders.cds_address", 6, 6, "set_new_address_primary", f"clicking 'Set As Primary' on the '{street}' card")
+    _made_primary = _click_set_primary_for(page, street)
+    print(f"[Orders] CDS new address 'Set As Primary' clicked: {_made_primary}")
 
 
 def finalize_order(page: Page, leave_pending: bool = False, discount_amount: float = 0.0, tax_percent: float = 0.0, cds_address: dict | None = None) -> list[str]:
