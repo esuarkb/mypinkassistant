@@ -157,14 +157,19 @@ def _pick_hero_item(items: list[dict]) -> dict:
 
 def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int = 5) -> list[dict]:
     """
-    Return up to `limit` pending follow-ups for a consultant, most overdue first.
+    Return up to `limit` pending follow-ups for a consultant, most urgent first:
+    2-day window before 2-week before 2-month, and within each window the ones
+    closest to falling out of it first.
     Each result dict has: followup_id, order_id, customer_id, first_name, last_name,
     phone, product_name, followup_window, days_since_order, sms_body, is_first_contact
     """
     is_sqlite = _SQLITE
 
     # Build date-window conditions
-    # We union across all three windows so we can sort by overdue-ness
+    # We union across all three windows so we can sort by urgency. Sorting on
+    # days_ago alone (as this did until 2026-07-26) put 2-month cards first,
+    # which is backwards: the windows are 1-4 / 10-18 / 50-70 days, so a 2-day
+    # card expires in days while a 2-month card has weeks of slack.
     if is_sqlite:
         window_sql = """
             SELECT
@@ -224,7 +229,7 @@ def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int =
                 AND cf.followup_window = w.window_days
                 AND cf.completed_at IS NOT NULL
           )
-        ORDER BY w.days_ago DESC
+        ORDER BY w.window_days ASC, w.days_ago DESC, w.order_id ASC
         LIMIT {PH2} OFFSET {PH2}
     """
 
