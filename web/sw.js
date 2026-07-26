@@ -22,7 +22,10 @@ self.addEventListener('push', function (event) {
     var options = {
         body: data.body || '',
         data: { url: data.url || '/admin' },
-        badge: '/web/icon-192.png',
+        // Android draws the badge from the alpha channel only and discards
+        // colour, so the full MPA tile flattened to a solid blob. badge-96 is
+        // the lone M on transparency — the glyph survives the monochrome pass.
+        badge: '/web/badge-96.png',
         icon: '/web/icon-192.png',
         tag: data.tag || 'mpa-alert',
     };

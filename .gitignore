@@ -45,3 +45,7 @@ explore_output.txt
 followup_texts_review.csv
 icon_preview*.html
 reports_page.png
+
+# Icon design exploration renders (3.8MB of comparison sheets) — the
+# production assets live in web/ and the masters in brand/
+brand/exploration/
