@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from db import connect, is_postgres
+from demo_accounts import is_demo_account
 from mk_chat_core import insert_job
 
 PH = "%s" if is_postgres() else "?"
@@ -84,6 +85,7 @@ def run() -> None:
         queued = 0
         skipped_failures = 0
         skipped_pending = 0
+        skipped_demo = 0
 
         for row in consultants:
             if isinstance(row, dict):
@@ -94,6 +96,12 @@ def run() -> None:
             else:
                 cid, email, failures = row[0], row[1], int(row[2] or 0)
                 last_failure_at = row[3]
+
+            # Demo accounts hold fabricated data — a sync would overwrite it
+            if is_demo_account(cid):
+                print(f"[Scheduler] Skipping {email} — demo account")
+                skipped_demo += 1
+                continue
 
             # Skip consultants with too many consecutive login failures,
             # but retry once the cooldown has passed since the last failure
@@ -123,7 +131,8 @@ def run() -> None:
             f"[Scheduler] Done — "
             f"queued {queued} FULL_SYNC job(s), "
             f"skipped {skipped_failures} (login failures), "
-            f"skipped {skipped_pending} (already pending)"
+            f"skipped {skipped_pending} (already pending), "
+            f"skipped {skipped_demo} (demo accounts)"
         )
 
         # Bring up enough workers for the sweep (ceil(queued/50), capped by

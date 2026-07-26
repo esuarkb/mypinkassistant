@@ -17,6 +17,7 @@ from playwright.sync_api import sync_playwright
 from playwright_automation.login import login_intouch
 from auth_core import decrypt_intouch_password
 from db import tx, is_postgres
+from demo_accounts import is_demo_account
 
 PCP_APP_URL  = "https://apps.marykayintouch.com/enrolled-preferred-customers"
 PCP_API_FRAG = "FOReports/api/report?id=customer-pcp-enrolled"
@@ -94,6 +95,10 @@ def get_consultants(cur, consultant_id: int | None) -> list:
               AND billing_status IN ('active', 'trialing')
             ORDER BY id
         """)
+        # Sweep mode only: demo accounts hold fabricated PCP data. An explicit
+        # --consultant-id still works, so the guard can be overridden on purpose.
+        return [r for r in cur.fetchall()
+                if not is_demo_account(r["id"] if isinstance(r, dict) else r[0])]
     return cur.fetchall()
 
 
