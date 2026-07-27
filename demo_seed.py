@@ -30,7 +30,8 @@ import csv
 import random
 import re
 import sys
-from collections import defaultdict
+from calendar import monthrange
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 
 import psycopg2
@@ -45,6 +46,12 @@ CATALOG = "catalog/en.csv"
 # Follow-up windows are 1-4 / 10-18 / 50-70 days (followup_store.py:201), so
 # these three offsets land dead centre in each of the 2+2+2 buckets.
 ORDER_DAY_OFFSETS = [2, 14, 60]
+
+# followup_store.get_pending_birthday_followups returns EVERY birthday in the
+# current calendar month with no limit, and the follow-up list appends that
+# block under the 5 order cards. 23 July birthdays buried them (Brian,
+# 2026-07-26), so the current month is capped.
+CURRENT_MONTH_MAX = 5
 
 cfg = dotenv_values(".env.production")
 DATABASE_URL = cfg["DATABASE_URL"]
@@ -167,8 +174,9 @@ def load_catalog():
 
 
 def build_birthdays(today):
-    """100 MM-DD birthdays: every ISO week of the year covered, plus clusters
-    in the current week and current month so the demo queries are never empty."""
+    """100 MM-DD birthdays: every ISO week of the year covered, a cluster in the
+    rolling this-week/next-week windows so those demo queries are never empty,
+    and the current calendar month capped so it can't bury the follow-up list."""
     year = today.year
     weeks = defaultdict(list)
     d = date(year, 1, 1)
@@ -198,8 +206,6 @@ def build_birthdays(today):
 
     picks += spread(span(0, 6), 9)      # "this week"  (today..+6)
     picks += spread(span(7, 13), 5)     # "next week"  (+7..+13)
-    this_month = [d for days in weeks.values() for d in days if d.month == today.month]
-    picks += [rnd.choice(this_month) for _ in range(10)]    # rest of "this month"
 
     # 3. fill the rest at random across the year
     all_days = [d for days in weeks.values() for d in days]
@@ -207,6 +213,32 @@ def build_birthdays(today):
         picks.append(rnd.choice(all_days))
 
     picks = picks[:100]
+
+    # 4. cap the CURRENT month at CURRENT_MONTH_MAX (see the constant for why).
+    #    The one-per-ISO-week picks are never moved, so every week of the year
+    #    keeps its birthday; that also sets the floor, since ~5 ISO weeks touch
+    #    any month. Surplus relocates to whichever months are leanest, keeping
+    #    its day-of-month where the target month is long enough.
+    protected, rest = picks[:len(weeks)], picks[len(weeks):]
+    room = CURRENT_MONTH_MAX - sum(1 for d in protected if d.month == today.month)
+
+    kept, surplus = [], []
+    for d in rest:
+        if d.month == today.month and room <= 0:
+            surplus.append(d)
+        else:
+            if d.month == today.month:
+                room -= 1
+            kept.append(d)
+
+    counts = Counter(d.month for d in protected + kept)
+    for d in surplus:
+        target = min((m for m in range(1, 13) if m != today.month),
+                     key=lambda m: (counts[m], m))
+        kept.append(date(year, target, min(d.day, monthrange(year, target)[1])))
+        counts[target] += 1
+
+    picks = protected + kept
     rnd.shuffle(picks)
     return [f"{d.month:02d}-{d.day:02d}" for d in picks]
 
