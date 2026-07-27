@@ -158,6 +158,7 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "show_all_products":     {"llm_allowed": False, "interrupts_pending": True,  "description": "'show all <term>' product list expansion (UI tap)"},  # answered before intent logging — special-cased in handle_message, not dispatched
     "look_book":             {"llm_allowed": False, "interrupts_pending": True,  "description": "current Look Book PDF link"},
     "order_of_application":  {"llm_allowed": False, "interrupts_pending": True,  "description": "Order of Application skincare chart PDF link"},
+    "conversion_chart":       {"llm_allowed": False, "interrupts_pending": True,  "description": "MK old-shade -> new-shade conversion chart PDF links (foundation / concealer / setting powder / lip liner / range & category)"},
     "inventory_guardrail":   {"llm_allowed": False, "interrupts_pending": True,  "description": "inventory-style write missing the word 'inventory' — coach the phrasing"},
     "inventory_print":       {"llm_allowed": False, "interrupts_pending": True,  "description": "inventory print / PDF report link"},
     "inventory_count":       {"llm_allowed": False, "interrupts_pending": True,  "description": "how many X do I have on hand"},
@@ -1894,6 +1895,20 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
             or "what order do i apply" in lowered or "what order to apply" in lowered
             or "which goes on first" in lowered or "what goes on first" in lowered):
         return _claim("order_of_application")
+
+    # Shade conversion charts (Brian, 2026-07-27, post-webinar request). Kept to
+    # phrases that pair a shade/colour word with "conversion"/"chart" so it can't
+    # steal the parked shade-history family ("What shade of foundation has Kim
+    # Shaw ordered?" — weed-garden 2026-07-19, 3rd consultant). Bare "conversion"
+    # is deliberately NOT a trigger. Claims mid-flow like the OOA chart: looking
+    # up a customer's new shade while building her order is the whole use case.
+    if ("conversion chart" in lowered or "conversion charts" in lowered
+            or "shade conversion" in lowered or "color conversion" in lowered
+            or "colour conversion" in lowered or "shade chart" in lowered
+            or "conversion sheet" in lowered
+            or "tabla de conversion" in lowered or "tabla de conversión" in lowered
+            or "conversion de tonos" in lowered or "conversión de tonos" in lowered):
+        return _claim("conversion_chart")
 
     # Inventory-style write without the word "inventory" — coach phrasing (not pending)
     if not pending and _looks_like_bare_inventory_write(msg):

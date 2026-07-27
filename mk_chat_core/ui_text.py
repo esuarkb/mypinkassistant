@@ -6,6 +6,10 @@ parsers match on them.
 """
 
 UI_EN = {
+    # Which dict this is. Lets helpers that only receive `ui` pick a
+    # language-specific asset (e.g. the Spanish edition of a conversion chart
+    # PDF) without an identity check against UI_ES. Added 2026-07-27.
+    "lang": "en",
     "empty_prompt": "Say something like: “new customer Jane Doe …” or “order for Jane Doe: …”",
     "canceled": "Okay — canceled. Ready for your new customer or order.",
 
@@ -209,7 +213,7 @@ UI_EN = {
     # chat_help cheat-sheet (moved verbatim from render.py's _build_chat_help_html
     # 2026-07-11; text unchanged, just relocated so it lives with the rest of
     # the UI strings)
-    "chat_help_base": "<strong>Here are some things you can do in chat:</strong>\n\n<strong>Customers</strong>\n• Look up a customer — just type their name: <em>Jane Doe</em>\n• Add a customer — <em>New customer Jane Doe, 555-1234, jane@gmail.com</em>\n• What someone ordered — <em>What did Jane order</em>\n\n<strong>Orders</strong>\n• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>\n• Look up a product & price — <em>Satin hands</em> or <em>How much is the charcoal mask</em>\n\n<strong>Your customers</strong>\n• By city — <em>Customers in Huntsville</em>\n• Lapsed — <em>Who hasn't ordered in 3 months</em>\n• Top spenders — <em>Who are my top customers</em>\n• Birthdays — <em>Who has birthdays this month</em>\n\n<strong>Inventory</strong>\n• Check stock — <em>How many TimeWise moisturizers do I have</em>\n• Set a par — <em>Set charcoal mask par to 3</em>\n\n<strong>Other</strong>\n• Current Look Book — <em>Look book</em>\n• Order of Application chart — <em>Order of application</em>\n• Your referral link — <em>My referral link</em>",
+    "chat_help_base": "<strong>Here are some things you can do in chat:</strong>\n\n<strong>Customers</strong>\n• Look up a customer — just type their name: <em>Jane Doe</em>\n• Add a customer — <em>New customer Jane Doe, 555-1234, jane@gmail.com</em>\n• What someone ordered — <em>What did Jane order</em>\n\n<strong>Orders</strong>\n• Place an order — <em>Order for Jane: 2 lipsticks and a foundation</em>\n• Look up a product & price — <em>Satin hands</em> or <em>How much is the charcoal mask</em>\n\n<strong>Your customers</strong>\n• By city — <em>Customers in Huntsville</em>\n• Lapsed — <em>Who hasn't ordered in 3 months</em>\n• Top spenders — <em>Who are my top customers</em>\n• Birthdays — <em>Who has birthdays this month</em>\n\n<strong>Inventory</strong>\n• Check stock — <em>How many TimeWise moisturizers do I have</em>\n• Set a par — <em>Set charcoal mask par to 3</em>\n\n<strong>Other</strong>\n• Current Look Book — <em>Look book</em>\n• Order of Application chart — <em>Order of application</em>\n• Shade conversion charts — <em>Conversion chart</em>\n• Your referral link — <em>My referral link</em>",
     "chat_help_team_extra": "\n\n<strong>Your team</strong>\n• <em>Who is on my team</em>\n• <em>Who hasn't set up MyShop</em>\n• <em>Who is close to a Great Start bundle</em>\n• <em>Who is on Sarah's team</em>",
 
     # catalog.py product-lookup strings (bundle E, 2026-07-11)
@@ -217,6 +221,20 @@ UI_EN = {
     "product_fact_sheet_link": "Product Fact Sheet",
     "product_order_of_application_link": "Order of Application",
     "order_of_application_reply": 'Here\'s the <a href="{url}" target="_blank">Order of Application chart</a>&nbsp; <button class="fdp-copy copy-link-btn" data-copy="{url}">Copy Link</button>',
+
+    # Shade conversion charts (2026-07-27). MK-hosted PDFs, target="_blank" like
+    # the OOA chart. Labels are MK's own document titles so consultants recognize
+    # them; note MK titles the powder one "Chart", not "Conversion Chart".
+    "conversion_chart_header": "<strong>Shade conversion charts</strong>",
+    "conversion_chart_row": '• <a href="{url}" target="_blank">{label}</a>',
+    "conversion_chart_single": 'Here\'s the <a href="{url}" target="_blank">{label}</a>',
+    "conversion_chart_more": "\n\nSay <em>conversion charts</em> to see them all.",
+    "conversion_chart_label_foundation": "TimeWise 3D Foundation — New Shade Conversions",
+    "conversion_chart_label_concealer": "Concealer Shade Conversion",
+    "conversion_chart_label_powder": "Silky Setting Powder Chart",
+    "conversion_chart_label_lip_liner": "Waterproof Lip Liner Conversion Chart",
+    "conversion_chart_label_range": "TimeWise 3D Foundations Range and Category Chart",
+    "product_conversion_chart_link": "Shade Conversion Chart",
     "sales_tax_set": "✅ Sales tax rate set to <strong>{rate}%</strong>. I'll add it to your My Inventory orders from now on — say <strong>no tax</strong> on an order to skip it, or set the rate to 0 to turn it off.",
     "sales_tax_cleared": "✅ Sales tax turned off. Your orders will not include tax.",
     "sales_tax_show": "Your sales tax rate is <strong>{rate}%</strong>. Say <em>set my sales tax to 7.5%</em> to change it, or set it to 0 to turn it off.",
@@ -240,6 +258,7 @@ UI_EN = {
 }
 
 UI_ES = {
+    "lang": "es",
     "empty_prompt": "Di algo como: “nuevo cliente Jane Doe …” o “pedido para Jane Doe: …”",
     "canceled": "Listo — cancelado. Estoy listo para tu nuevo cliente o pedido.",
 
@@ -443,7 +462,7 @@ UI_ES = {
 
     # chat_help cheat-sheet (moved verbatim from render.py's _build_chat_help_html
     # 2026-07-11; this Spanish copy already existed in render.py -- relocated only)
-    "chat_help_base": '<strong>Aquí hay algunas cosas que puedes hacer en el chat:</strong>\n\n<strong>Clientes</strong>\n• Buscar un cliente — solo escribe su nombre: <em>Jane Doe</em>\n• Agregar un cliente — <em>Nuevo cliente Jane Doe, 555-1234, jane@gmail.com</em>\n• Qué ordenó alguien — <em>¿Qué ordenó Jane?</em>\n\n<strong>Pedidos</strong>\n• Hacer un pedido — <em>Pedido para Jane: 2 labiales y una base</em>\n• Buscar un producto y precio — <em>Satin hands</em> o <em>¿Cuánto cuesta la mascarilla de carbón?</em>\n\n<strong>Tus clientes</strong>\n• Por ciudad — <em>Clientes en Houston</em>\n• Sin pedidos recientes — <em>¿Quién no ha ordenado en 3 meses?</em>\n• Mejores compradoras — <em>¿Cuáles son mis mejores clientes?</em>\n• Cumpleaños — <em>¿Quién cumple años este mes?</em>\n\n<strong>Inventario</strong>\n• Verificar existencias — <em>¿Cuántas mascarillas de carbón tengo?</em>\n• Establecer mínimo — <em>Set charcoal mask par to 3</em>\n\n<strong>Otro</strong>\n• Look Book actual — <em>Look book</em>\n• Orden de aplicación — <em>Orden de aplicación</em>\n• Tu enlace de referido — <em>Mi enlace de referido</em>',
+    "chat_help_base": '<strong>Aquí hay algunas cosas que puedes hacer en el chat:</strong>\n\n<strong>Clientes</strong>\n• Buscar un cliente — solo escribe su nombre: <em>Jane Doe</em>\n• Agregar un cliente — <em>Nuevo cliente Jane Doe, 555-1234, jane@gmail.com</em>\n• Qué ordenó alguien — <em>¿Qué ordenó Jane?</em>\n\n<strong>Pedidos</strong>\n• Hacer un pedido — <em>Pedido para Jane: 2 labiales y una base</em>\n• Buscar un producto y precio — <em>Satin hands</em> o <em>¿Cuánto cuesta la mascarilla de carbón?</em>\n\n<strong>Tus clientes</strong>\n• Por ciudad — <em>Clientes en Houston</em>\n• Sin pedidos recientes — <em>¿Quién no ha ordenado en 3 meses?</em>\n• Mejores compradoras — <em>¿Cuáles son mis mejores clientes?</em>\n• Cumpleaños — <em>¿Quién cumple años este mes?</em>\n\n<strong>Inventario</strong>\n• Verificar existencias — <em>¿Cuántas mascarillas de carbón tengo?</em>\n• Establecer mínimo — <em>Set charcoal mask par to 3</em>\n\n<strong>Otro</strong>\n• Look Book actual — <em>Look book</em>\n• Orden de aplicación — <em>Orden de aplicación</em>\n• Tablas de conversión de tonos — <em>Tabla de conversión</em>\n• Tu enlace de referido — <em>Mi enlace de referido</em>',
     "chat_help_team_extra": '\n\n<strong>Tu equipo</strong>\n• <em>¿Quiénes son mis consultoras?</em>\n• <em>¿Quién no ha configurado MyShop?</em>\n• <em>¿Quién está cerca de un paquete Gran Inicio?</em>\n• <em>¿Quién es el equipo de Sarah?</em>',
 
     # catalog.py product-lookup strings (bundle E, 2026-07-11)
@@ -451,6 +470,20 @@ UI_ES = {
     "product_fact_sheet_link": "Ficha del producto",
     "product_order_of_application_link": "Orden de aplicación",
     "order_of_application_reply": 'Aquí está la <a href="{url}" target="_blank">tabla de Orden de aplicación</a>&nbsp; <button class="fdp-copy copy-link-btn" data-copy="{url}">Copiar enlace</button>',
+
+    # Tablas de conversión de tonos (2026-07-27). MK publica edición en español
+    # del corrector, el polvo y el delineador; base y "Range and Category" solo
+    # existen en inglés, así que esas dos enlazan al PDF en inglés.
+    "conversion_chart_header": "<strong>Tablas de conversión de tonos</strong>",
+    "conversion_chart_row": '• <a href="{url}" target="_blank">{label}</a>',
+    "conversion_chart_single": 'Aquí está la <a href="{url}" target="_blank">{label}</a>',
+    "conversion_chart_more": "\n\nDi <em>tablas de conversión</em> para verlas todas.",
+    "conversion_chart_label_foundation": "TimeWise 3D Foundation — Conversión de tonos nuevos (inglés)",
+    "conversion_chart_label_concealer": "Concealer — Conversión de tonos",
+    "conversion_chart_label_powder": "Información del Silky Setting Powder",
+    "conversion_chart_label_lip_liner": "Tabla de conversión del Waterproof Lip Liner",
+    "conversion_chart_label_range": "TimeWise 3D Foundations — Range and Category Chart (inglés)",
+    "product_conversion_chart_link": "Tabla de conversión de tonos",
     "sales_tax_set": "✅ Tasa de impuesto de ventas establecida en <strong>{rate}%</strong>. La agregaré a tus pedidos de My Inventory de ahora en adelante — di <strong>sin impuesto</strong> en un pedido para omitirla, o establécela en 0 para desactivarla.",
     "sales_tax_cleared": "✅ Impuesto de ventas desactivado. Tus pedidos no incluirán impuesto.",
     "sales_tax_show": "Tu tasa de impuesto de ventas es <strong>{rate}%</strong>. Di <em>establecer mi impuesto de ventas en 7.5%</em> para cambiarla, o establécela en 0 para desactivarla.",

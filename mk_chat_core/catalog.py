@@ -32,6 +32,80 @@ _ORDER_OF_APPLICATION_FALLBACK = (
 )
 
 
+# --- shade conversion charts (2026-07-27) ------------------------------------
+# MK's old-shade -> new-shade charts, requested after the 7/26 webinar. These are
+# Salesforce ContentDocuments. The InTouch PAGE that lists them
+# (/s/timewise-3d-foundations) is login-gated and so is the /s/file-preview?docId=
+# link its own "Download Now" buttons use -- but the shepherd download endpoint
+# below serves the PDF to anyone holding the docId. Verified anonymously on
+# 2026-07-27 from a cookieless browser context AND plain curl; both byte-identical
+# to the authenticated fetch. That's what lets this be a pure link intent like
+# order_of_application: no Playwright, no session, no local copy of MK's PDF.
+#
+# Link-rot note: a docId survives new VERSIONS of a document but NOT a
+# replacement document, so a chart can 404 silently. Cheap future guard is a HEAD
+# check on these in run_ui_recon.py, which already texts Brian on changes.
+_SHEPHERD_DOWNLOAD = "https://mk.marykayintouch.com/sfc/servlet.shepherd/document/download/"
+
+# Order here is the order they're offered in the picker: the three Brian asked
+# for first, then the two extras found while searching the Document Library.
+# "es" is None where MK publishes no Spanish edition (we serve the English one).
+# "terms" pick a single chart when the consultant names one; keep them narrow --
+# they're matched against the raw message, which already contains "conversion".
+#
+# "card_terms" is the STRICTER set used to hang a chart off a product card (see
+# _fmt_product_lookup_single). It must match the product NAME, so bare "timewise"
+# or "setting" would be far too greedy there — dozens of unrelated products carry
+# those words. The range/category chart is cross-product, so it gets no card
+# terms and only ever appears in the picker.
+CONVERSION_CHARTS = [
+    {"key": "foundation", "en": "069R300000XEup1IAD", "es": None,
+     "terms": ("foundation", "3d", "timewise"),
+     "card_terms": ("3d foundation", "timewise 3d")},
+    {"key": "concealer",  "en": "069R300000KibbbIAB", "es": "069R300000KiwZTIAZ",
+     "terms": ("concealer", "corrector", "corrective"),
+     "card_terms": ("concealer",)},
+    {"key": "powder",     "en": "0692G00000QACihQAH", "es": "0692G00000QAIOGQA5",
+     "terms": ("powder", "silky", "setting"),
+     "card_terms": ("silky setting powder", "setting powder")},
+    {"key": "lip_liner",  "en": "0692G00000QACj3QAH", "es": "0692G00000QARqEQAX",
+     "terms": ("lip liner", "lipliner", "liner", "delineador"),
+     "card_terms": ("lip liner", "lipliner")},
+    {"key": "range",      "en": "069R300000XFKzWIAX", "es": None,
+     "terms": ("range", "category", "categoria", "categoría"),
+     "card_terms": ()},
+]
+
+
+def conversion_chart_url(chart: dict, lang: str = "en") -> str:
+    """Shepherd download URL for a CONVERSION_CHARTS row, Spanish edition when
+    MK publishes one and the consultant is on Spanish."""
+    doc = (chart.get("es") if lang == "es" else None) or chart["en"]
+    return _SHEPHERD_DOWNLOAD + doc
+
+
+def find_conversion_chart(message: str) -> Optional[dict]:
+    """The one chart a message names, or None to show the whole picker. Returns
+    None on a tie too -- "foundation and concealer conversion charts" is better
+    served by the full list than by an arbitrary pick."""
+    lowered = (message or "").lower()
+    hits = [c for c in CONVERSION_CHARTS if any(t in lowered for t in c["terms"])]
+    return hits[0] if len(hits) == 1 else None
+
+
+def conversion_chart_for_product(product_name: str) -> Optional[dict]:
+    """The conversion chart belonging to a product, for its lookup card. Used
+    only when the product has no order_of_application_url: the OOA chart is a
+    SKINCARE chart, so makeup rows (3D foundation, Silky Setting Powder) show no
+    chart link at all today. Brian, 2026-07-27."""
+    lowered = (product_name or "").lower()
+    return next(
+        (c for c in CONVERSION_CHARTS
+         if any(t in lowered for t in c["card_terms"])),
+        None,
+    )
+
+
 # --- category terms (2026-07-19) ---------------------------------------------
 # The term map + resolver LIVE in intent_router (routing needs them and this
 # module imports intent_router — same pattern as best_matches). Re-exported
@@ -232,6 +306,13 @@ def _fmt_product_lookup_single(m: dict, ui: dict = None) -> str:
         links.append(f'<a href="{m["fact_sheet_url"]}" target="_blank">{ui["product_fact_sheet_link"]}</a>')
     if m.get("order_of_application_url"):
         links.append(f'<a href="{m["order_of_application_url"]}" target="_blank">{ui["product_order_of_application_link"]}</a>')
+    else:
+        # No OOA chart on this row (it's a skincare chart, so makeup never has
+        # one) — offer the product's shade conversion chart in that slot instead.
+        _chart = conversion_chart_for_product(m.get("product_name") or "")
+        if _chart:
+            _url = conversion_chart_url(_chart, ui.get("lang", "en"))
+            links.append(f'<a href="{_url}" target="_blank">{ui["product_conversion_chart_link"]}</a>')
     if links:
         parts.append(" &bull; ".join(links))
     return "<br>".join(parts)

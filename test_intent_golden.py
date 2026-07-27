@@ -270,6 +270,17 @@ NEGATIVE_GUARD_CASES = [
      "filler 'add a note' inside a real order entry must still be parsed as an order"),
     ("New order for Jane: cc cream, mascara", "order_of_application",
      "real order entry must not be caught by the order_of_application phrase rule"),
+    # The conversion_chart rule requires a shade/colour word PAIRED with
+    # conversion/chart, so the parked shade-history family stays untouched
+    # (weed-garden 2026-07-19: 3rd distinct consultant on that family).
+    ("What shade of foundation has Jane Doe ordered?", "conversion_chart",
+     "shade-history question must not be claimed by the conversion chart rule"),
+    ("what shade does Jane Doe wear", "conversion_chart",
+     "shade-history question must not be claimed by the conversion chart rule"),
+    ("silky setting powder", "conversion_chart",
+     "bare product name must still be a product lookup, not the chart picker"),
+    ("New order for Jane: 3d foundation ivory 2", "conversion_chart",
+     "real order entry naming a shade must not be caught by the chart rule"),
     ("Details for Jane Doe", "product_lookup",
      "customer-details request must not be claimed by the bare-message product rule via the 'for' token (weed-garden 2026-07-17 F1)"),
     ("Add one lipstick to a new order for Jane Doe", "inventory_guardrail",
@@ -388,6 +399,12 @@ ROUTE_CASES = [
     ("spanish look book",                        None, "look_book"),
     ("order of application",                      None, "order_of_application"),   # weed-garden 2026-07-16, c78
     ("what order do i apply these",              None, "order_of_application"),
+    # Shade conversion charts (Brian, 2026-07-27)
+    ("conversion chart",                         None, "conversion_chart"),
+    ("conversion charts",                        None, "conversion_chart"),
+    ("foundation conversion chart",              None, "conversion_chart"),
+    ("do you have the concealer shade conversion", None, "conversion_chart"),
+    ("silky setting powder conversion chart",    None, "conversion_chart"),
     # birthday "+N more" tap sends "show all birthdays <period>" — must expand
     # the birthday list, not run a product lookup (bug report 2026-07-17)
     ("show all birthdays in July",               None, "birthday_lookup"),
@@ -508,6 +525,7 @@ ROUTE_CASES = [
     ("okay",                                     None,      "unknown"),
     ("spanish look book",                        _MID_FLOW, "look_book"),      # look book works even mid-order
     ("order of application",                      _MID_FLOW, "order_of_application"),  # OOA chart works mid-order too
+    ("conversion chart",                         _MID_FLOW, "conversion_chart"),   # looking up a new shade mid-order is the use case
     ("print my inventory",                       _MID_FLOW, "inventory_print"),
     # mid-draft add/remove must NOT be claimed by the submitted-order rule —
     # the pending flow edits the draft (route falls through to the base intent)

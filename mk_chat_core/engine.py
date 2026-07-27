@@ -393,6 +393,38 @@ class MKChatEngine:
             return ChatReply(ui["order_of_application_reply"].format(url=url))
         return None
 
+    def _intent_conversion_chart(self, ctx) -> Optional[ChatReply]:
+        """Static links to MK's old-shade -> new-shade charts (Brian, 2026-07-27,
+        after the 7/26 webinar). Same shape as order_of_application: MK-hosted
+        PDFs, no auth, works mid-order. Naming one product ("concealer conversion
+        chart") answers with just that chart; anything vaguer shows the picker."""
+        intent_result = ctx.intent_result
+        ui = ctx.ui
+        if intent_result.intent != "conversion_chart":
+            return None
+
+        from .catalog import (CONVERSION_CHARTS, conversion_chart_url,
+                              find_conversion_chart)
+        lang = ctx.language or "en"
+
+        def _label(chart):
+            return ui[f"conversion_chart_label_{chart['key']}"]
+
+        one = find_conversion_chart(ctx.lowered or ctx.message or "")
+        if one:
+            return ChatReply(
+                ui["conversion_chart_single"].format(
+                    url=conversion_chart_url(one, lang), label=_label(one))
+                + ui["conversion_chart_more"]
+            )
+
+        rows = "\n".join(
+            ui["conversion_chart_row"].format(
+                url=conversion_chart_url(c, lang), label=_label(c))
+            for c in CONVERSION_CHARTS
+        )
+        return ChatReply(f"{ui['conversion_chart_header']}\n{rows}")
+
     def _intent_set_sales_tax(self, ctx) -> Optional[ChatReply]:
         """Set or show the consultant's sales tax rate (consultants.tax_rate).
         Rate auto-applies to My Inventory orders at confirm time; 0/unset = no
@@ -3536,6 +3568,7 @@ class MKChatEngine:
     _INTENT_DISPATCH = {
         "look_book": "_intent_look_book",
         "order_of_application": "_intent_order_of_application",
+        "conversion_chart": "_intent_conversion_chart",
         "set_sales_tax": "_intent_set_sales_tax",
         "inventory_guardrail": "_intent_inventory_guardrail",
         "inventory_print": "_intent_inventory_print",
