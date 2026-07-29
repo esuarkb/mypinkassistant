@@ -40,6 +40,7 @@ UI_EN = {
     "need_items": "What items should I add to the order?",
     "got_it_ordering_for": "Got it — order for {name}.",
     "no_matches": "No close matches. Try different words (brand, line, or shade helps), say <strong>skip</strong> to skip this item, or <strong>cancel</strong> to start over.",
+    "modifier_noted_item_confirm": "Got it — I'll apply that to the order total. First, about this item:",
     "reply_yes_no_qty": "Reply yes, no, skip, or cancel — or add a quantity like 'x2'",
     "order_adjust_hint": "You can also <strong>add</strong> or <strong>remove</strong> a product, or <strong>cancel</strong> to start over.",
 
@@ -132,6 +133,7 @@ UI_EN = {
 
     # Feature-help bubbles (2026-07-06, Brian-approved copy)
     "order_help": "<strong>Ordering in chat:</strong> just say the customer and what she wants — like <em>\"Order for Jane Doe, charcoal mask x2 and satin lips set.\"</em><br>I'll match each item and you confirm with <strong>yes</strong>, <strong>no</strong>, or <strong>skip</strong>. When you approve the order, I enter it in MyCustomers for you automatically.<br>Shipping straight to her? Start with <em>\"CDS order for Jane Doe…\"</em> — I'll build the order in MyCustomers and <strong>leave it pending</strong>, so you can pop in, add samples, and submit it for processing when it's just right.",
+    "followup_names_missing": "Couldn't find in your customers: {names}",
     "followup_help": "<strong>Follow-ups (2+2+2):</strong> I track who bought recently and remind you to check in — 2 days, 2 weeks, and 2 months after each order, the Mary Kay way.<br>Say <strong>follow ups</strong> and I'll show cards for everyone who's due, each with a <strong>tap-to-text</strong> button that opens a ready-to-send message right from your phone.",
     "sync_help": "<strong>How syncing works:</strong> customers and orders you enter here go <strong>to</strong> MyCustomers within a couple of minutes.<br>Changes made <strong>in</strong> MyCustomers (edits, orders placed there, your team reports) come back to me overnight, every night.<br>So if something looks out of date today, it almost always catches up by tomorrow morning.",
     "billing_help": "<strong>Your subscription:</strong> $5.99/month, every feature included, cancel anytime — no contracts, no tiers.<br>Manage or cancel from the <a href='/settings'>Settings page</a>.<br>Love MPA? Say <strong>referral link</strong> — friends you refer get a 30-day free trial, and you get a free month when they subscribe. 💗",
@@ -290,6 +292,7 @@ UI_ES = {
     "need_items": "¿Qué artículos debo agregar al pedido?",
     "got_it_ordering_for": "Listo — pedido para {name}.",
     "no_matches": "No encontré coincidencias cercanas. Prueba con otras palabras (marca, línea o tono ayuda), escribe <strong>skip</strong> para omitir este artículo, o <strong>cancel</strong> para empezar de nuevo.",
+    "modifier_noted_item_confirm": "Anotado — lo aplicaré al total del pedido. Primero, sobre este artículo:",
     "reply_yes_no_qty": "Responde sí/no — o escribe una cantidad como `2` o `x2`.",
     "order_adjust_hint": "También puedes <strong>add</strong> o <strong>remove</strong> un producto, o <strong>cancel</strong> para empezar de nuevo.",
 
@@ -382,6 +385,7 @@ UI_ES = {
 
     # Feature-help bubbles (2026-07-06, Brian-approved copy)
     "order_help": "<strong>Pedidos por chat:</strong> solo dime la clienta y lo que quiere — como <em>\"Order for Jane Doe, charcoal mask x2 and satin lips set.\"</em><br>Yo encuentro cada producto y tú confirmas con <strong>yes</strong>, <strong>no</strong> o <strong>skip</strong>. Cuando apruebes el pedido, lo registro en MyCustomers automáticamente.<br>¿Envío directo a tu clienta? Empieza con <em>\"CDS order for…\"</em> — armo el pedido en MyCustomers y <strong>lo dejo pendiente</strong>, para que entres, agregues muestras y lo envíes a procesar cuando esté perfecto.",
+    "followup_names_missing": "No encontré en tus clientas: {names}",
     "followup_help": "<strong>Seguimientos (2+2+2):</strong> llevo el control de quién compró recientemente y te recuerdo dar seguimiento — a los 2 días, 2 semanas y 2 meses de cada pedido, al estilo Mary Kay.<br>Di <strong>follow ups</strong> y te muestro tarjetas de cada clienta pendiente, con un botón de <strong>texto</strong> que abre un mensaje listo para enviar desde tu teléfono.",
     "sync_help": "<strong>Cómo funciona la sincronización:</strong> las clientas y pedidos que registras aquí llegan <strong>a</strong> MyCustomers en un par de minutos.<br>Los cambios hechos <strong>en</strong> MyCustomers (ediciones, pedidos, tus reportes de equipo) me llegan cada noche.<br>Así que si algo se ve desactualizado hoy, casi siempre se corrige para mañana en la mañana.",
     "billing_help": "<strong>Tu suscripción:</strong> $5.99 al mes, todas las funciones incluidas, cancela cuando quieras — sin contratos ni niveles.<br>Administra o cancela desde la <a href='/settings'>página de Configuración</a>.<br>¿Te encanta MPA? Di <strong>referral link</strong> — tus amigas reciben 30 días gratis, y tú un mes gratis cuando se suscriben. 💗",

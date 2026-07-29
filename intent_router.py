@@ -522,7 +522,13 @@ _ORDER_LOOKUP_RE = re.compile(
 # cross-customer/history lookups ("who last ordered X", "what was the last
 # foundation ordered by Y", "which customers ordered Z"). Guards both the
 # strong-shape shortcut and the score path below.
-_ORDER_QUESTION_RE = re.compile(r"^\s*(?:who|what|which|whose|when|where|why|how)\b", re.IGNORECASE)
+# has/have/did/does/do added 2026-07-28 (weed-garden F7, 2 consultants):
+# "Has Kitty ever ordered CC cream?" classified recent_orders, then this
+# guard missed the auxiliary-verb question shape and the entry-shape flip
+# turned a history question into an ORDER PROPOSAL. Auxiliary-leading
+# sentences are questions; no natural order entry starts with them (the flip
+# only runs when the message already classified as a lookup).
+_ORDER_QUESTION_RE = re.compile(r"^\s*(?:who|what|which|whose|when|where|why|how|has|have|did|does|do)\b", re.IGNORECASE)
 
 
 def _looks_like_new_order_entry(text: str) -> bool:
@@ -1149,6 +1155,116 @@ def _parse_inventory_threshold(msg: str) -> tuple[int | None, str]:
     return None, ""
 
 
+# data_query trigger phrases — module-level because they're consulted from THREE
+# places: the parse_intent data_query claim, and the followup claims in both
+# parse_intent and route() (which defer to data_query when a timeframe phrase
+# co-occurs, e.g. "who ordered last month I should follow up with" — Kim,
+# 2026-07-28: now that data_query results render follow-up dots, the time-scoped
+# list IS the follow-up answer; the bare followup list would ignore "last month").
+_DATA_QUERY_TRIGGERS = (
+    "who ordered in",
+    "who ordered the",
+    "who ordered a ",
+    "who has ordered",
+    # moved from _unit_triggers 2026-07-11: "who ordered <time>" defaults
+    # to customers (see comment there); bare forms land here so they get
+    # a customer answer instead of recent_orders' "Who is the customer?"
+    "ordered this month",
+    "ordered last month",
+    "ordered this week",
+    "ordered last week",
+    "how many orders",
+    "total orders",
+    "total revenue",
+    "total sales",
+    # business-sales phrasings (weed-garden 2026-07-12, c110): claim here
+    # BEFORE the customer_spend / customer_info catch-alls, which both
+    # word-salad'd "What's the total amount sold for the last 12 months".
+    "amount sold",
+    "total amount sold",
+    "how much have i sold",
+    "how much did i sell",
+    "how many customers",
+    "how much revenue",
+    "how much did i make",
+    "how much have i made",
+    "orders in ",
+    "orders last ",
+    "orders this ",
+    # customers who have never placed any order
+    "never ordered",
+    "never actually ordered",
+    "never purchased",
+    "never bought",
+    "never placed an order",
+    # customers who have placed exactly one order
+    "only ordered once",
+    "ordered only once",
+    "ordered just once",
+    "ordered exactly once",
+    "only bought once",
+    "only purchased once",
+    "only placed one order",
+    # online / myshop order queries
+    "online order",
+    "myshop order",
+    "my shop order",
+    "online orders",
+    "myshop orders",
+    "most recent online",
+    "latest online",
+    "recent online",
+    "online sale",
+    "online sales",
+)
+
+# Timeframe-scoped subset of the triggers above. route()'s customers_by_product
+# rule defers on these so time-scoped phrasings with extra words ("who ordered
+# last month I should follow up with") reach data_query — its all-time-words
+# product test can't catch them because "should follow up" looks like a product.
+# Deliberately NOT the full trigger list: "who ordered the <product>" must keep
+# going to customers_by_product.
+# "follow up with <names>" → the tail, when it names people rather than a
+# generic group (weed-garden 2026-07-28 F3: Kim typed "Follow up with Barb
+# Simmerman" and then a SIX-name list, and both got the generic followup list).
+# Timeframe tails never reach this — the data_query deferral runs first.
+_FOLLOWUP_NAMES_RE = re.compile(r"follow[\s-]?ups?\s+(?:with|for|on)\s+(.+)$")
+# First-WORD matches (word-boundary, so "her" never blocks "Herminia"):
+_FOLLOWUP_GENERIC_FIRST_WORDS = {"customer", "customers", "everyone", "anyone",
+                                 "anybody", "somebody", "someone", "them", "all",
+                                 "client", "clients", "people", "today", "tomorrow",
+                                 "her", "him", "she", "he", "these", "those", "who"}
+_FOLLOWUP_GENERIC_PREFIXES = ("my ", "this ", "next ", "last ")
+
+
+def _followup_names_text(lowered: str) -> str | None:
+    # Interrogatives ("Who should I follow up with today?") are asking for the
+    # LIST — the tail is never a name.
+    if re.match(r"^\s*(?:who|what|which|when|should|do|does|can)\b", lowered):
+        return None
+    m = _FOLLOWUP_NAMES_RE.search(lowered)
+    if not m:
+        return None
+    tail = m.group(1).strip(" ?!.")
+    if not tail:
+        return None
+    if tail.split()[0] in _FOLLOWUP_GENERIC_FIRST_WORDS or tail.startswith(_FOLLOWUP_GENERIC_PREFIXES):
+        return None
+    return tail
+
+
+_DQ_TIMEFRAME_TRIGGERS = (
+    "who ordered in",
+    "ordered this month",
+    "ordered last month",
+    "ordered this week",
+    "ordered last week",
+    "orders in ",
+    "orders last ",
+    "orders this ",
+)
+
+
 def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     msg = (message or "").strip()
     msg = msg.replace('’', "'").replace('‘', "'")  # normalize iOS curly apostrophes
@@ -1221,7 +1337,13 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         # meaning customers and dead-ended. Unit views keep their explicit
         # phrasings ("which consultants ordered…", "team…").
     )
-    if any(t in lowered for t in _unit_triggers):
+    # …but never inside an explicit order command (weed-garden 2026-07-28, F5:
+    # "Add order gor Rosalind … great start mascara …" → unit_query "No
+    # consultants", and she concluded the app was broken. Product names brush
+    # against director trigger words; a message that opens as an order IS an
+    # order). Unit queries are questions — none start "add/new/create order".
+    _is_order_command = bool(re.match(r"^\s*(?:add|new|create|place)\b.{0,30}\border\b|^\s*order\s+for\b", lowered))
+    if not _is_order_command and any(t in lowered for t in _unit_triggers):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
 
     # car program questions (director-only feature)
@@ -1263,9 +1385,14 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # reached the LLM, and an LLM answer of "lapsed_customers" won in route()
     # (its lapsed claim runs before its followup heuristic) — a coin flip on a
     # phrase our own bulk-text educate copy tells consultants to type.
+    # …but a co-occurring data_query timeframe ("who ordered last month I should
+    # follow up with") means the time-scoped dot list is the better answer —
+    # defer so the data_query claim below picks it up.
     _followup_kw = ("follow up", "follow-up", "followup", "follow ups", "followups")
-    if any(t in lowered for t in _followup_kw):
-        return IntentResult(intent="followup", confidence=0.95, raw_text=msg)
+    if any(t in lowered for t in _followup_kw) and not any(t in lowered for t in _DATA_QUERY_TRIGGERS):
+        _fnt = _followup_names_text(lowered)
+        return IntentResult(intent="followup", confidence=0.95, raw_text=msg,
+                            slots={"names_text": _fnt} if _fnt else {})
 
     # leaderboard — the "…the most" triggers are word-boundaried so "reorder
     # the most" doesn't substring-match "order the most" (weed-garden 2026-07-12:
@@ -1314,63 +1441,7 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
 
     # data_query — cross-customer/aggregate queries; must run before recent_orders
     # so "who ordered in May" doesn't get stolen by the broad recent_orders keyword match
-    _data_query_triggers = (
-        "who ordered in",
-        "who ordered the",
-        "who ordered a ",
-        "who has ordered",
-        # moved from _unit_triggers 2026-07-11: "who ordered <time>" defaults
-        # to customers (see comment there); bare forms land here so they get
-        # a customer answer instead of recent_orders' "Who is the customer?"
-        "ordered this month",
-        "ordered last month",
-        "ordered this week",
-        "ordered last week",
-        "how many orders",
-        "total orders",
-        "total revenue",
-        "total sales",
-        # business-sales phrasings (weed-garden 2026-07-12, c110): claim here
-        # BEFORE the customer_spend / customer_info catch-alls, which both
-        # word-salad'd "What's the total amount sold for the last 12 months".
-        "amount sold",
-        "total amount sold",
-        "how much have i sold",
-        "how much did i sell",
-        "how many customers",
-        "how much revenue",
-        "how much did i make",
-        "how much have i made",
-        "orders in ",
-        "orders last ",
-        "orders this ",
-        # customers who have never placed any order
-        "never ordered",
-        "never actually ordered",
-        "never purchased",
-        "never bought",
-        "never placed an order",
-        # customers who have placed exactly one order
-        "only ordered once",
-        "ordered only once",
-        "ordered just once",
-        "ordered exactly once",
-        "only bought once",
-        "only purchased once",
-        "only placed one order",
-        # online / myshop order queries
-        "online order",
-        "myshop order",
-        "my shop order",
-        "online orders",
-        "myshop orders",
-        "most recent online",
-        "latest online",
-        "recent online",
-        "online sale",
-        "online sales",
-    )
-    if any(t in lowered for t in _data_query_triggers):
+    if any(t in lowered for t in _DATA_QUERY_TRIGGERS):
         return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
     # "who ordered/buys/purchases X" — cross-customer product query
     if re.search(r'\bwho\s+(ordered|buys|buy|purchases|purchase|gets|orders)\b', lowered):
@@ -1387,6 +1458,25 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
                             slots={"product_filter": _m_use_rule.group(1).strip()}, raw_text=msg)
     if re.search(r"\b(?:what|which)\b.*\bdoes\s+\w+(?:\s+\w+)?\s+(?:use|wear|buy|order)\b", lowered):
         return IntentResult(intent="recent_orders", confidence=0.95, raw_text=msg)
+
+    # "Has NAME (ever) ordered PRODUCT (before)?" → that customer's history
+    # filtered to the product (weed-garden 2026-07-28 F7, promoted at the 2nd
+    # consultant: c114 "Has Kitty ever ordered CC cream?" 7/19 + c60 7/28 —
+    # both got an ORDER PROPOSAL for a history question). Pronoun subjects
+    # ("has she ever ordered…") are skipped — pronoun resolution was removed
+    # by design (2026-06-04); those fall through to the parser's re-ask.
+    _m_has_ordered = re.search(
+        r"\bhas\s+([a-z]+(?:\s+[a-z]+)?)\s+(?:ever\s+)?(?:ordered|bought|purchased)\s+(.+?)\s*(?:before|yet)?\s*\??\s*$",
+        lowered,
+    )
+    if _m_has_ordered:
+        _ho_name = _m_has_ordered.group(1).strip()
+        _ho_prod = _m_has_ordered.group(2).strip()
+        _HO_PRONOUNS = {"she", "he", "they", "anyone", "any", "it", "this", "that"}
+        if _ho_name.split()[0] not in _HO_PRONOUNS and _ho_prod:
+            return IntentResult(intent="recent_orders", confidence=0.95,
+                                slots={"product_filter": _ho_prod, "customer_guess": _ho_name},
+                                raw_text=msg)
 
     # Shade/color questions → the customer's order history filtered to that
     # product type: "What color foundation is Cynthia Evans?", "Kim smith
@@ -1902,10 +1992,20 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
     # Shaw ordered?" — weed-garden 2026-07-19, 3rd consultant). Bare "conversion"
     # is deliberately NOT a trigger. Claims mid-flow like the OOA chart: looking
     # up a customer's new shade while building her order is the whole use case.
+    # Broadened 2026-07-28 (weed-garden F1, 3 consultants day one): typo'd
+    # "converstion/convertion chart", "comparison chart", bare "chart(s)" as the
+    # WHOLE message, "<chart-category> chart" ("mascara chart"), and
+    # "conversion for <shade>". Still never bare "conversion", and the
+    # shade-history guard above holds (those phrasings lack "chart"/"conversion").
     if ("conversion chart" in lowered or "conversion charts" in lowered
             or "shade conversion" in lowered or "color conversion" in lowered
             or "colour conversion" in lowered or "shade chart" in lowered
             or "conversion sheet" in lowered
+            or re.search(r"\bconvers?t?ion\s+charts?\b", lowered)      # converstion/convertion typos
+            or "comparison chart" in lowered or "comparison charts" in lowered
+            or re.fullmatch(r"charts?\s*[?!.]*", lowered.strip())       # bare "chart(s)" — nothing else in MPA is a chart
+            or re.search(r"\b(?:foundation|concealer|lip\s*liner|setting\s+powder|powder|mascara|lipstick|blush|shade|colou?r)s?\s+charts?\b", lowered)
+            or re.search(r"\bconversion\s+for\s+\S", lowered)           # "conversion for ivory n 160"
             or "tabla de conversion" in lowered or "tabla de conversión" in lowered
             or "conversion de tonos" in lowered or "conversión de tonos" in lowered):
         return _claim("conversion_chart")
@@ -2211,18 +2311,25 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         _pl_slots["source"] = "intent"
         return IntentResult(intent="product_lookup", confidence=base.confidence, slots=_pl_slots, raw_text=msg)
 
-    # Follow-up trigger — 2+2+2 (not pending)
-    if not pending:
+    # Follow-up trigger — 2+2+2 (not pending). Defers to data_query when a
+    # timeframe phrase co-occurs ("who ordered last month I should follow up
+    # with") — the time-scoped dot list answers both halves of that ask.
+    if not pending and not any(t in lowered for t in _DATA_QUERY_TRIGGERS):
         _followup_triggers = ("follow up", "followup", "follow-up", "any follow", "follow ups", "followups")
         _more_triggers = ("any more", "more follow", "next follow")
         _is_followup = any(t in lowered for t in _followup_triggers)
         _is_more = any(t in lowered for t in _more_triggers)
         if _is_followup or _is_more:
-            return _claim("followup", {"more": bool(_is_more)})
+            _fu_slots = {"more": bool(_is_more)}
+            _fnt = _followup_names_text(lowered)
+            if _fnt:
+                _fu_slots["names_text"] = _fnt
+            return _claim("followup", _fu_slots)
 
     # Customer search by product — "repair customers", "customers who use X",
-    # "who bought X" (not pending; skips pasted customer entries and tag edits)
-    if not pending and not _looks_like_full_customer_entry(msg) and not re.match(r'^\s*tags?\s*:', msg, re.IGNORECASE) and not re.match(r'^\s*(new|add|create)\s+customer\b', msg, re.IGNORECASE):
+    # "who bought X" (not pending; skips pasted customer entries, tag edits, and
+    # timeframe-scoped phrasings which belong to data_query — see _DQ_TIMEFRAME_TRIGGERS)
+    if not pending and not _looks_like_full_customer_entry(msg) and not re.match(r'^\s*tags?\s*:', msg, re.IGNORECASE) and not re.match(r'^\s*(new|add|create)\s+customer\b', msg, re.IGNORECASE) and not any(t in lowered for t in _DQ_TIMEFRAME_TRIGGERS):
         _product_term = None
         _or_terms = None
 

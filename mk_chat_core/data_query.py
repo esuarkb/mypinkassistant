@@ -59,6 +59,7 @@ Rules:
 - When joining, always qualify consultant_id with a table alias (e.g. c.consultant_id = {consultant_id})
 - Do not use LIMIT unless the user asks for a specific number
 - Always SELECT first_name, last_name from customers when returning individual customers
+- When returning individual customers, ALSO select c.id AS customer_id and c.phone — they are hidden from the user but enable follow-up buttons
 - Use table aliases: customers AS c, orders AS o, order_items AS oi
 - order_date is a timestamp column — use date range comparisons for filtering (works on both SQLite and PostgreSQL). Always use >= start AND < exclusive_end:
   - This month:  o.order_date >= '{this_month}-01' AND o.order_date < '{next_month}-01'
@@ -194,11 +195,159 @@ def _handle_data_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
                 rows = [dict(zip(col_names, r)) for r in raw_rows]
             else:
                 rows = [dict(r) if hasattr(r, "keys") else r for r in raw_rows] if raw_rows else []
+            # Pink-dot upgrade (2026-07-28): customer-shaped results render as
+            # follow-up cards instead of bullet links. Needs the cursor for the
+            # first-contact check, so it runs inside the tx.
+            cards = _build_followup_cards(rows, consultant_id, cur)
     except Exception as e:
         print(f"[DataQuery] DB error: {e}")
         return ChatReply(ui["data_query_error"])
 
+    if cards is not None:
+        from followup_store import render_followup_cards
+        from auth_core import get_consultant_full as _gcf
+        _first = ((_gcf(consultant_id) or {}).get("first_name") or "").strip()
+        n = len(cards)
+        header = f"{n} customer{'s' if n != 1 else ''}:"
+        html = render_followup_cards(cards[:20], _first)
+        if n > 20:
+            rest = render_followup_cards(cards[20:], _first)
+            html += (
+                f"\n<details><summary style='cursor:pointer;color:var(--pink);font-weight:600'>"
+                f"+ {n - 20} more</summary>\n{rest}\n</details>"
+            )
+        return ChatReply(f"{header}\n{html}")
+
     return ChatReply(_format_data_query_results(rows, msg, ui=ui))
+
+
+def _build_followup_cards(rows: list, consultant_id: int, cur) -> list | None:
+    """If a data_query result is customer-shaped — names + customer_id + phone,
+    with no extra columns except dates — turn it into follow-up card dicts for
+    render_followup_cards (card_type "generic", window-0 script). Returns None
+    to fall back to the plain bullet formatter (aggregates, money/count reports,
+    oversized lists)."""
+    if not rows or len(rows) > 60 or not isinstance(rows[0], dict):
+        return None
+    cols = list(rows[0].keys())
+    needed = {"first_name", "last_name", "customer_id", "phone"}
+    if not needed.issubset(cols):
+        return None
+    extra = [c for c in cols if c not in needed and c != "id"]
+    date_cols = [c for c in extra if "date" in c.lower()]
+    if len(date_cols) != len(extra):
+        return None  # money/count/etc. columns → this is a report, not a follow-up list
+
+    date_col = date_cols[0] if date_cols else None
+    if date_col:  # most recent first, matching the main followups list
+        rows = sorted(rows, key=lambda r: str(r.get(date_col) or ""), reverse=True)
+
+    ph = "%s" if _PG() else "?"
+
+    # One card per customer ("who ordered last month" may return one row per order).
+    # A windowed 2-day/2-week/2-month card TRUMPS the generic script whenever the
+    # customer's latest order is 0-90 days old (Brian, 2026-07-28) — the generic
+    # only catches customers outside every window (91+ days, or never ordered).
+    from followup_store import WINDOWS, _pick_hero_item
+
+    def _window_for(days: int):
+        if days == 0:
+            return 2  # ordered today — the 2-day "how are you enjoying it" reads fine
+        for w, (lo, hi) in WINDOWS.items():
+            if lo <= days <= hi:
+                return w
+        return None
+
+    seen, cards = set(), []
+    for r in rows:
+        cid = r.get("customer_id")
+        if cid is None or cid in seen:
+            continue
+        seen.add(cid)
+        base = {
+            "customer_id":   cid,
+            "first_name":    (r.get("first_name") or "").strip(),
+            "last_name":     (r.get("last_name") or "").strip(),
+            "phone":         (r.get("phone") or "").strip(),
+            "missing_phone": not (r.get("phone") or "").strip(),
+        }
+
+        # Latest order → window + product context where possible
+        if _PG():
+            _days_expr = "EXTRACT(DAY FROM NOW() - order_date::timestamptz)::INT"
+        else:
+            _days_expr = "CAST(julianday('now') - julianday(order_date) AS INTEGER)"
+        cur.execute(
+            f"SELECT id, {_days_expr} AS days_ago "
+            f"FROM orders WHERE customer_id = {ph} AND consultant_id = {ph} "
+            f"ORDER BY order_date DESC LIMIT 1",
+            (cid, consultant_id),
+        )
+        o = cur.fetchone()
+        order_id = days_ago = None
+        if o:
+            order_id = o["id"] if isinstance(o, dict) else o[0]
+            days_ago = (o["days_ago"] if isinstance(o, dict) else o[1]) or 0
+        window = _window_for(days_ago) if days_ago is not None else None
+
+        if window and not base["missing_phone"]:
+            # Skip the windowed card if that exact follow-up was already sent
+            cur.execute(
+                f"SELECT 1 FROM customer_followups WHERE order_id = {ph} AND followup_window = {ph} AND completed_at IS NOT NULL",
+                (order_id, window),
+            )
+            already = cur.fetchone() is not None
+        else:
+            already = False
+
+        if window and not already:
+            cur.execute(
+                f"SELECT sku, product_name, unit_price FROM order_items WHERE order_id = {ph}",
+                (order_id,),
+            )
+            irows = cur.fetchall()
+            items = [dict(i) if isinstance(i, dict) else {"sku": i[0], "product_name": i[1], "unit_price": i[2]} for i in irows]
+            hero = _pick_hero_item(items)
+            cards.append({**base,
+                "card_type":    "order",
+                "order_id":     order_id,
+                "window_days":  window,
+                "days_ago":     days_ago,
+                "product_name": hero.get("product_name") or "your recent products",
+                "hero_sku":     hero.get("sku") or None,
+                "item_count":   len(items),
+            })
+        else:
+            meta = ""
+            if days_ago is not None:
+                base["days_ago"] = days_ago
+                meta = f"ordered {days_ago}d ago"
+            elif date_col and r.get(date_col):
+                meta = f"ordered {str(r[date_col])[:10]}"
+            cards.append({**base, "card_type": "generic", "meta": meta})
+
+    # Batch first-contact check (both followup tables), one query each
+    ids = [c["customer_id"] for c in cards]
+    ph = ",".join(["%s" if _PG() else "?"] * len(ids))
+    contacted = set()
+    for tbl in ("customer_followups", "customer_birthday_followups"):
+        cur.execute(
+            f"SELECT DISTINCT customer_id FROM {tbl} WHERE consultant_id = {'%s' if _PG() else '?'} "
+            f"AND completed_at IS NOT NULL AND customer_id IN ({ph})",
+            [consultant_id] + ids,
+        )
+        contacted |= {(row["customer_id"] if isinstance(row, dict) else row[0]) for row in cur.fetchall()}
+    for c in cards:
+        c["is_first_contact"] = c["customer_id"] not in contacted
+
+    # Actionable dots first, most recent order first within each group
+    cards.sort(key=lambda c: (c["missing_phone"], c["days_ago"] if c.get("days_ago") is not None else 10**6))
+    return cards
+
+
+def _PG() -> bool:
+    from db import is_postgres
+    return is_postgres()
 
 
 def _format_data_query_results(rows: list, original_msg: str, ui: dict = None) -> str:

@@ -356,13 +356,20 @@ _MOD_DISC_PATS = (
 )
 
 
+def _normalize_postfix_dollar(t: str) -> str:
+    """"20$ discount" → "$20 discount". Every modifier pattern expects the $
+    BEFORE the number; c38 typed it after — three attempts nagged/mis-matched
+    and her $20 discount was silently lost (weed-garden 2026-07-28 F2)."""
+    return re.sub(r"(\d+(?:\.\d+)?)\s*\$", r"$\1", t or "")
+
+
 def strip_modifier_text(text: str) -> str:
     """Remove discount/tax phrasing from an ITEM string so catalog matching
     sees only the product words. The LLM parser often keeps modifier text in
     the item ("repair set $50 off"), which craters match scores (93 → 55) and
     scrambled the picker order — the Go Set outranked the real repair sets
     (Brian 2026-07-18). Returns "" when nothing product-like remains."""
-    t = text or ""
+    t = _normalize_postfix_dollar(text or "")
     for pat in _MOD_TAX_PATS + _MOD_DISC_PATS:
         t = re.sub(pat, " ", t, flags=re.IGNORECASE)
     t = re.sub(r"\s+", " ", t).strip(" -—,.")
@@ -386,7 +393,7 @@ def extract_order_modifiers(message: str) -> dict:
       no_tax: True                  ("no tax", "without tax", "sin impuesto")
       discount_type: '$' | '%'      with discount_value: float
     """
-    t = (message or "").lower()
+    t = _normalize_postfix_dollar((message or "").lower())
     mods: dict = {}
 
     # tax first — blank its span before discount matching

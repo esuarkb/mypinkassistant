@@ -315,6 +315,8 @@ chat.addEventListener("click", function(e) {
                     ? { card_type: "birthday", customer_id: customerId }
                     : cardType === "pcp"
                     ? { card_type: "pcp", customer_id: customerId, quarter: card.dataset.quarter || "" }
+                    : cardType === "generic"
+                    ? { card_type: "generic", customer_id: customerId }
                     : { card_type: "order", order_id: orderId, followup_window: followupWindow };
                 fetch("/followup/complete", {
                     method: "POST",
@@ -380,6 +382,8 @@ chat.addEventListener("click", function(e) {
                 ? { card_type: "birthday", customer_id: customerId }
                 : cardType === "pcp"
                 ? { card_type: "pcp", customer_id: customerId, quarter: card.dataset.quarter || "" }
+                : cardType === "generic"
+                ? { card_type: "generic", customer_id: customerId }
                 : { card_type: "order", order_id: orderId, followup_window: followupWindow };
             fetch("/followup/complete", {
                 method: "POST",

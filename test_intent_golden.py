@@ -128,6 +128,22 @@ CASES = [
     ("who ordered last month",                  "data_query",        "kw"),
     ("ordered last month",                      "data_query",        "kw"),
     ("who ordered last quarter?",               "data_query",        "kw"),
+    # Timeframe + followup words → data_query (dot cards ARE the followup
+    # answer); the followup claims and customers_by_product both defer
+    # (Kim via Brian, 2026-07-28)
+    ("who ordered last month I should follow up with", "data_query", "kw"),
+    ("who ordered last week that I need to follow up with", "data_query", "kw"),
+    # …but bare followup phrasings still get the main followup list
+    ("followups",                               "followup",          "kw"),
+    ("do i have any followups",                 "followup",          "kw"),
+    # weed-garden 2026-07-28 batch (F3 named followups, F5 great-start guard,
+    # F7 has-ever-ordered; F1 chart pins live in ROUTE_CASES — route-level rule):
+    ("follow up with jane doe",                 "followup",          "kw"),
+    ("follow up with jane doe and amy smith",   "followup",          "kw"),
+    ("great start",                             "unit_query",        "kw"),
+    ("who is on track for great start",         "unit_query",        "kw"),
+    ("has jane doe ever ordered cc cream",      "recent_orders",     "kw"),
+    ("Has Kitty ever ordered CC cream?",        "recent_orders",     "kw"),
 
     # --- new_customer "create X" rule (positive pin for the F4 list-guard) ---
     ("create nichole giveaway",                 "new_customer",      "kw"),
@@ -275,6 +291,15 @@ NEGATIVE_GUARD_CASES = [
     # (weed-garden 2026-07-19: 3rd distinct consultant on that family).
     ("What shade of foundation has Jane Doe ordered?", "conversion_chart",
      "shade-history question must not be claimed by the conversion chart rule"),
+    # weed-garden 2026-07-28 batch — the new rules must steal nothing:
+    ("add order for jane doe great start mascara and cleanser", "unit_query",
+     "product words brushing director triggers inside an order command stay an order (F5)"),
+    ("jane doe ordered cc cream and lipstick", "recent_orders",
+     "statement shape must still flip to new_order — F7 guard is questions-only"),
+    ("who ordered foundation last month", "conversion_chart",
+     "data_query timeframe question must not be claimed by the broadened chart rule"),
+    ("follow up with customers who ordered last month", "followup",
+     "timeframe followup ask belongs to data_query dots, not the bare followup list"),
     ("what shade does Jane Doe wear", "conversion_chart",
      "shade-history question must not be claimed by the conversion chart rule"),
     ("silky setting powder", "conversion_chart",
@@ -405,6 +430,12 @@ ROUTE_CASES = [
     ("foundation conversion chart",              None, "conversion_chart"),
     ("do you have the concealer shade conversion", None, "conversion_chart"),
     ("silky setting powder conversion chart",    None, "conversion_chart"),
+    # broadened 2026-07-28 (weed-garden F1, 3 consultants day one)
+    ("mascara chart",                            None, "conversion_chart"),
+    ("foundation converstion chart",             None, "conversion_chart"),   # typo
+    ("what is the conversion for ivory in 160",  None, "conversion_chart"),
+    ("comparison charts",                        None, "conversion_chart"),
+    ("charts",                                   None, "conversion_chart"),   # bare — nothing else is a chart
     # birthday "+N more" tap sends "show all birthdays <period>" — must expand
     # the birthday list, not run a product lookup (bug report 2026-07-17)
     ("show all birthdays in July",               None, "birthday_lookup"),

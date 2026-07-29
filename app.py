@@ -1963,6 +1963,13 @@ async def followup_complete(request: Request):
         from followup_store import complete_pcp_followup
         with tx() as (conn, cur):
             ok = complete_pcp_followup(cur, consultant_id=int(cid), customer_id=int(customer_id), quarter=quarter)
+    elif card_type == "generic":
+        customer_id = data.get("customer_id")
+        if not customer_id:
+            return JSONResponse({"ok": False}, status_code=400)
+        from followup_store import complete_generic_followup
+        with tx() as (conn, cur):
+            ok = complete_generic_followup(cur, consultant_id=int(cid), customer_id=int(customer_id))
     else:
         order_id = data.get("order_id")
         followup_window = data.get("followup_window")

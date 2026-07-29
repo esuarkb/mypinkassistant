@@ -32,12 +32,28 @@ PH = "%s" if is_postgres() else "?"
 NOW_SQL = "NOW()" if is_postgres() else "datetime('now')"
 _SQLITE = not is_postgres()
 
-# Days-since-order ranges for each window
+# Days-since-order ranges for each window.
+#
+# CONTIGUOUS as of 2026-07-28 (Brian). The old ranges were (1,4)/(10,18)/(50,70),
+# which left dead zones at days 5-9, 19-49 and 71+. Measured against production
+# that stranded 37% of all recent orders in the 19-49 gap alone — a customer who
+# ordered three to seven weeks ago simply never surfaced for a follow-up.
+#
+# Boundaries are picked so the existing script copy still reads true: the 2-week
+# script's "week 2-3 is when most people notice a difference" holds through day
+# 35, and the 2-month script's "getting close to finishing" holds from day 36.
+# Day 0 is deliberately excluded — the order was just placed.
 WINDOWS = {
-    2:  (1,  4),
-    14: (10, 18),
-    60: (50, 70),
+    2:  (1,  7),
+    14: (8,  35),
+    60: (36, 90),
 }
+
+# Hide a customer's OTHER cards for this many days after any completed follow-up.
+# With contiguous windows a customer stays eligible continuously for 90 days, so
+# without this they resurface as 2-day -> 2-week -> 2-month and the list reads as
+# nagging. This keeps it a daily triage tool rather than a guilt pile.
+RECENT_CONTACT_SUPPRESSION_DAYS = 10
 
 # Strips MK boilerplate from product names to make them text-friendly
 # e.g. "Mary Kay® CC Cream Sunscreen Broad Spectrum SPF 15* - Medium to Deep Natural" → "CC Cream"
@@ -118,22 +134,27 @@ def _detect_category(product_lower: str) -> str:
     return "fallback"
 
 
-def _followup_message(product_name: str, customer_first: str, consultant_first: str, is_first_contact: bool, window_days: int, item_count: int = 1, sku: str = None) -> str:
-    from followup_scripts import SCRIPTS
-    import re as _re
+def _followup_message(product_name: str, customer_first: str, consultant_first: str, is_first_contact: bool, window_days: int, item_count: int = 1, sku: str = None, customer_id: int = 0) -> str:
+    if window_days == 0:
+        # Generic / ad-hoc follow-up — no product context. Pick by customer_id so
+        # the opener is stable for a given person but varies across a list.
+        from followup_scripts import GENERIC
+        body = GENERIC[(customer_id or 0) % len(GENERIC)].format(c=customer_first)
+    else:
+        from followup_scripts import SCRIPTS
 
-    clean = _clean_product_name(product_name, sku=sku)
-    category = _detect_category(product_name.lower())
-    window = window_days if window_days in (2, 14, 60) else 2
-    slot = "single" if item_count == 1 else "multi"
+        clean = _clean_product_name(product_name, sku=sku)
+        category = _detect_category(product_name.lower())
+        window = window_days if window_days in (2, 14, 60) else 2
+        slot = "single" if item_count == 1 else "multi"
 
-    template = SCRIPTS[category][slot][window]
+        template = SCRIPTS[category][slot][window]
 
-    skincare_type   = _detect_skincare_type(product_name.lower())
-    color_type      = _detect_color_type(product_name.lower())
-    fragrance_type  = _detect_fragrance_type(product_name.lower())
+        skincare_type   = _detect_skincare_type(product_name.lower())
+        color_type      = _detect_color_type(product_name.lower())
+        fragrance_type  = _detect_fragrance_type(product_name.lower())
 
-    body = template.format(p=clean, c=customer_first, t=skincare_type, ct=color_type, ft=fragrance_type)
+        body = template.format(p=clean, c=customer_first, t=skincare_type, ct=color_type, ft=fragrance_type)
 
     if is_first_contact:
         # Strip any opening "Hey {name}, " or "Hey {name}! " and inject the intro
@@ -155,21 +176,26 @@ def _pick_hero_item(items: list[dict]) -> dict:
     return max(items, key=lambda i: float(i.get("unit_price") or 0))
 
 
-def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int = 5) -> list[dict]:
+def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int = 5,
+                          missing_phone: bool = False) -> tuple[list[dict], int]:
     """
-    Return up to `limit` pending follow-ups for a consultant, most urgent first:
-    2-day window before 2-week before 2-month, and within each window the ones
-    closest to falling out of it first.
-    Each result dict has: followup_id, order_id, customer_id, first_name, last_name,
-    phone, product_name, followup_window, days_since_order, sms_body, is_first_contact
+    Return (rows, total) — up to `limit` pending follow-ups starting at `offset`,
+    most recent order first, plus the total number eligible so the caller can
+    render a "+N more" link.
+
+    With missing_phone=True the phone filter is inverted: it returns the eligible
+    customers who have NO phone on file. Those can't be texted, so they render as
+    a separate group prompting the consultant to add a number in MyCustomers —
+    previously they were silently dropped from the list entirely.
+
+    Each row dict has: order_id, customer_id, first_name, last_name, phone,
+    days_ago, window_days, product_name, hero_sku, item_count, is_first_contact
     """
     is_sqlite = _SQLITE
 
-    # Build date-window conditions
-    # We union across all three windows so we can sort by urgency. Sorting on
-    # days_ago alone (as this did until 2026-07-26) put 2-month cards first,
-    # which is backwards: the windows are 1-4 / 10-18 / 50-70 days, so a 2-day
-    # card expires in days while a 2-month card has weeks of slack.
+    # One row per order that currently falls in a follow-up window. The windows
+    # are contiguous (see WINDOWS), so an order stays eligible from day 1 to 90
+    # and moves between windows as it ages.
     if is_sqlite:
         window_sql = """
             SELECT
@@ -181,9 +207,9 @@ def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int =
                 c.phone,
                 CAST(julianday('now') - julianday(o.order_date) AS INTEGER) AS days_ago,
                 CASE
-                    WHEN CAST(julianday('now') - julianday(o.order_date) AS INTEGER) BETWEEN 1  AND 4  THEN 2
-                    WHEN CAST(julianday('now') - julianday(o.order_date) AS INTEGER) BETWEEN 10 AND 18 THEN 14
-                    WHEN CAST(julianday('now') - julianday(o.order_date) AS INTEGER) BETWEEN 50 AND 70 THEN 60
+                    WHEN CAST(julianday('now') - julianday(o.order_date) AS INTEGER) BETWEEN 1  AND 7  THEN 2
+                    WHEN CAST(julianday('now') - julianday(o.order_date) AS INTEGER) BETWEEN 8  AND 35 THEN 14
+                    WHEN CAST(julianday('now') - julianday(o.order_date) AS INTEGER) BETWEEN 36 AND 90 THEN 60
                     ELSE NULL
                 END AS window_days
             FROM orders o
@@ -203,9 +229,9 @@ def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int =
                 c.phone,
                 EXTRACT(DAY FROM NOW() - o.order_date::timestamptz)::INT AS days_ago,
                 CASE
-                    WHEN EXTRACT(DAY FROM NOW() - o.order_date::timestamptz)::INT BETWEEN 1  AND 4  THEN 2
-                    WHEN EXTRACT(DAY FROM NOW() - o.order_date::timestamptz)::INT BETWEEN 10 AND 18 THEN 14
-                    WHEN EXTRACT(DAY FROM NOW() - o.order_date::timestamptz)::INT BETWEEN 50 AND 70 THEN 60
+                    WHEN EXTRACT(DAY FROM NOW() - o.order_date::timestamptz)::INT BETWEEN 1  AND 7  THEN 2
+                    WHEN EXTRACT(DAY FROM NOW() - o.order_date::timestamptz)::INT BETWEEN 8  AND 35 THEN 14
+                    WHEN EXTRACT(DAY FROM NOW() - o.order_date::timestamptz)::INT BETWEEN 36 AND 90 THEN 60
                     ELSE NULL
                 END AS window_days
             FROM orders o
@@ -217,27 +243,77 @@ def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int =
 
     PH2 = "?" if is_sqlite else "%s"
 
-    full_sql = f"""
-        SELECT w.order_id, w.customer_id, w.first_name, w.last_name, w.phone,
-               w.days_ago, w.window_days
-        FROM ({window_sql}) w
+    # Cutoff for the recent-contact suppression (see RECENT_CONTACT_SUPPRESSION_DAYS)
+    if is_sqlite:
+        _cutoff = f"datetime('now', '-{RECENT_CONTACT_SUPPRESSION_DAYS} days')"
+    else:
+        _cutoff = f"NOW() - INTERVAL '{RECENT_CONTACT_SUPPRESSION_DAYS} days'"
+
+    phone_cond = (
+        "(w.phone IS NULL OR w.phone = '')" if missing_phone
+        else "w.phone IS NOT NULL AND w.phone <> ''"
+    )
+
+    where_sql = f"""
         WHERE w.window_days IS NOT NULL
-          AND w.phone IS NOT NULL AND w.phone <> ''
+          AND {phone_cond}
           AND NOT EXISTS (
               SELECT 1 FROM customer_followups cf
               WHERE cf.order_id = w.order_id
                 AND cf.followup_window = w.window_days
                 AND cf.completed_at IS NOT NULL
           )
-        ORDER BY w.window_days ASC, w.days_ago DESC, w.order_id ASC
+          AND NOT EXISTS (
+              SELECT 1 FROM customer_followups rc
+              WHERE rc.customer_id = w.customer_id
+                AND rc.consultant_id = {PH2}
+                AND rc.completed_at IS NOT NULL
+                AND rc.completed_at > {_cutoff}
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM customer_birthday_followups rb
+              WHERE rb.customer_id = w.customer_id
+                AND rb.consultant_id = {PH2}
+                AND rb.completed_at IS NOT NULL
+                AND rb.completed_at > {_cutoff}
+          )
+    """
+
+    # Sort is days_ago ASC (most recent order first) as of 2026-07-28. The old
+    # sort led with window_days to protect short-lived cards from expiring
+    # unseen; with contiguous windows nothing expires early any more, so freshest
+    # first is both what Brian asked for and the likeliest to convert.
+    #
+    # ONE CARD PER CUSTOMER (rn = 1, their most recent eligible order). With
+    # contiguous windows a repeat customer easily has two orders in range at
+    # once — e.g. 12 and 45 days ago — and without the dedupe she'd appear
+    # twice in the same list.
+    full_sql = f"""
+        SELECT r.order_id, r.customer_id, r.first_name, r.last_name, r.phone,
+               r.days_ago, r.window_days
+        FROM (
+            SELECT w.*, ROW_NUMBER() OVER (
+                PARTITION BY w.customer_id ORDER BY w.days_ago ASC, w.order_id ASC
+            ) AS rn
+            FROM ({window_sql}) w
+            {where_sql}
+        ) r
+        WHERE r.rn = 1
+        ORDER BY r.days_ago ASC, r.order_id ASC
         LIMIT {PH2} OFFSET {PH2}
     """
 
-    cur.execute(full_sql, (consultant_id, consultant_id, limit, offset))
+    _base_params = (consultant_id, consultant_id, consultant_id, consultant_id)
+
+    cur.execute(f"SELECT COUNT(DISTINCT w.customer_id) FROM ({window_sql}) w {where_sql}", _base_params)
+    _cnt_row = cur.fetchone()
+    total = (_cnt_row[0] if not isinstance(_cnt_row, dict) else list(_cnt_row.values())[0]) or 0
+
+    cur.execute(full_sql, _base_params + (limit, offset))
 
     rows = cur.fetchall()
     if not rows:
-        return []
+        return [], total
 
     def _g(row, key, idx):
         try:
@@ -299,9 +375,10 @@ def get_pending_followups(cur, consultant_id: int, offset: int = 0, limit: int =
             "hero_sku":         hero_sku,
             "item_count":       len(items),
             "is_first_contact": is_first_contact,
+            "missing_phone":    missing_phone,
         })
 
-    return results
+    return results, total
 
 
 def complete_followup(cur, consultant_id: int, order_id: int, followup_window: int) -> bool:
@@ -337,6 +414,23 @@ def complete_followup(cur, consultant_id: int, order_id: int, followup_window: i
             (consultant_id, customer_id, order_id, followup_window),
         )
     return True
+
+
+def complete_generic_followup(cur, consultant_id: int, customer_id: int) -> bool:
+    """Mark an ad-hoc (window 0) follow-up done, anchored to the customer's most
+    recent order so it satisfies customer_followups' NOT NULL order_id and feeds
+    the recent-contact suppression. A customer with no orders at all has nothing
+    to anchor to — the dot stays checked client-side but nothing is stored."""
+    cur.execute(
+        f"SELECT id FROM orders WHERE customer_id = {PH} AND consultant_id = {PH} "
+        f"ORDER BY order_date DESC LIMIT 1",
+        (customer_id, consultant_id),
+    )
+    row = cur.fetchone()
+    if not row:
+        return True
+    order_id = row["id"] if isinstance(row, dict) else row[0]
+    return complete_followup(cur, consultant_id, order_id, 0)
 
 
 def get_pending_birthday_followups(cur, consultant_id: int) -> list[dict]:
@@ -507,6 +601,8 @@ def _birthday_message(customer_first: str, consultant_first: str, is_first_conta
 
 
 def _window_label(window_days: int) -> str:
+    if window_days == 0:
+        return "follow-up"
     if window_days == 2:
         return "2-day follow-up"
     if window_days == 14:
@@ -523,13 +619,61 @@ def render_followup_cards(followups: list[dict], consultant_first: str) -> str:
     import html as _html
     parts = ['<div class="followup-list">']
     for f in followups:
+        ctype = f.get("card_type")
+
+        # "+N more" tap-to-send link (same pattern as birthday search cards)
+        if ctype == "link":
+            parts.append(f'<a href="#" data-send="{_html.escape(f["send"], quote=True)}">{_html.escape(f["text"])}</a>')
+            continue
+        # plain informational line, no action
+        if ctype == "note":
+            parts.append(f'<div style="color:#999;font-size:13px;padding:4px 0 2px;">{_html.escape(f["text"])}</div>')
+            continue
+
         first     = f["first_name"]
         last      = f["last_name"]
         phone     = f["phone"]
         is_first  = f["is_first_contact"]
         clean_phone = "".join(c for c in phone if c.isdigit() or c == "+")
 
-        if f.get("card_type") == "birthday":
+        # In a follow-up window but no phone on file — can't text, so no circle
+        # button; prompt to add a number instead (previously silently hidden)
+        if f.get("missing_phone"):
+            if f.get("days_ago") is not None:
+                _ctx = f'ordered {f["days_ago"]}d ago &bull; '
+            else:
+                _ctx = f'{_html.escape(f["meta"])} &bull; ' if f.get("meta") else ""
+            parts.append(
+                f'<div class="followup-card" data-card-type="nophone">'
+                f'<div class="followup-info">'
+                f'<span class="followup-name">{_html.escape(first)} {_html.escape(last)}</span>'
+                f'<span class="followup-meta">📱 No phone on file &bull; {_ctx}'
+                f'<a href="https://apps.marykayintouch.com/customer-list" target="_blank">add a number in MyCustomers</a></span>'
+                f'</div>'
+                f'</div>'
+            )
+            continue
+
+        # Ad-hoc dot from a customer data query — window-0 generic script,
+        # completes by customer_id (server anchors it to her latest order)
+        if ctype == "generic":
+            customer_id = f["customer_id"]
+            sms_text = _followup_message("", first, consultant_first, is_first, 0, customer_id=customer_id)
+            sms_uri  = f"sms:{clean_phone}&body={quote(sms_text)}"
+            msg_attr = _html.escape(sms_text, quote=True)
+            meta     = _html.escape(f.get("meta") or "follow-up")
+            parts.append(
+                f'<div class="followup-card" data-card-type="generic" data-customer-id="{customer_id}" data-phone="{clean_phone}" data-msg="{msg_attr}" data-sms="{sms_uri}">'
+                f'<button class="followup-circle" data-card-type="generic" data-customer-id="{customer_id}" aria-label="Send text">○</button>'
+                f'<div class="followup-info">'
+                f'<span class="followup-name">{_html.escape(first)} {_html.escape(last)}</span>'
+                f'<span class="followup-meta">💗 {meta}</span>'
+                f'</div>'
+                f'</div>'
+            )
+            continue
+
+        if ctype == "birthday":
             customer_id      = f["customer_id"]
             bday_day         = f["bday_day"]
             bday_month_name  = f["bday_month_name"]

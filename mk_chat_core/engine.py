@@ -1489,9 +1489,47 @@ class MKChatEngine:
         # Follow-up trigger (2+2+2)
         # -------------------------
         if intent_result.intent == "followup":
-            _is_more = bool(intent_result.slots.get("more"))
             from followup_store import get_pending_followups, get_pending_birthday_followups, render_followup_cards
             from db import tx
+            from auth_core import get_consultant_full as _gcf0
+
+            # "Follow up with <name(s)>" — resolve the named customers and show
+            # their dot cards (windowed script when in a 1-90d window, generic
+            # otherwise; 📱 card when phone-less). Weed-garden 2026-07-28 F3.
+            _names_text = (intent_result.slots or {}).get("names_text")
+            if _names_text:
+                import re as _re
+                from crm_store import find_customers_by_name
+                from .data_query import _build_followup_cards
+                _cf = ((_gcf0(consultant_id) or {}).get("first_name") or "").strip()
+                _segs = [s.strip(" .!?") for s in _re.split(r",|\band\b|&", _names_text) if s.strip(" .!?")]
+                _rows, _missing, _seen = [], [], set()
+                with tx() as (conn, cur):
+                    for _seg in _segs[:15]:
+                        _m = find_customers_by_name(cur, consultant_id, _seg, limit=1)
+                        if _m:
+                            _r0 = _m[0] if isinstance(_m[0], dict) else dict(_m[0])
+                            _cid0 = _r0.get("id")
+                            if _cid0 in _seen:
+                                continue
+                            _seen.add(_cid0)
+                            _rows.append({"first_name": _r0.get("first_name") or "",
+                                          "last_name": _r0.get("last_name") or "",
+                                          "customer_id": _cid0,
+                                          "phone": _r0.get("phone") or ""})
+                        else:
+                            _missing.append(_seg)
+                    _cards = _build_followup_cards(_rows, consultant_id, cur) if _rows else []
+                _parts = []
+                if _cards:
+                    _parts.append(render_followup_cards(_cards, _cf))
+                if _missing:
+                    _parts.append(ctx.ui["followup_names_missing"].format(names=", ".join(_missing)))
+                if _parts:
+                    return ChatReply("\n".join(_parts))
+                return None  # nothing resolved and nothing missing?? fall through
+
+            _is_more = bool(intent_result.slots.get("more"))
             _offset = 0
             if _is_more:
                 _offset = state.get("followup_offset") or 0
@@ -1499,12 +1537,27 @@ class MKChatEngine:
             _consultant_first = (_gcf(consultant_id) or {}).get("first_name") or ""
             _consultant_first = _consultant_first.strip()
             with tx() as (conn, cur):
-                _order_followups = get_pending_followups(cur, consultant_id=consultant_id, offset=_offset, limit=5)
-                _bday_followups = get_pending_birthday_followups(cur, consultant_id=consultant_id) if _offset == 0 else []
-            _followups = _order_followups + _bday_followups
+                _order_followups, _order_total = get_pending_followups(cur, consultant_id=consultant_id, offset=_offset, limit=5)
+                if _offset == 0:
+                    _bday_followups = get_pending_birthday_followups(cur, consultant_id=consultant_id)
+                    _nophone, _nophone_total = get_pending_followups(cur, consultant_id=consultant_id, offset=0, limit=3, missing_phone=True)
+                else:
+                    _bday_followups, _nophone, _nophone_total = [], [], 0
             state["followup_offset"] = _offset + len(_order_followups)
             save_session_state(state, session_id=sid)
-            return ChatReply(render_followup_cards(_followups, _consultant_first))
+
+            # Compose: order cards (+N more) → birthday cards (+N more) → no-phone cards
+            _cards = list(_order_followups)
+            _rem = _order_total - _offset - len(_order_followups)
+            if _rem > 0:
+                _cards.append({"card_type": "link", "text": f"+{_rem} more", "send": "more followups"})
+            _cards += _bday_followups[:5]
+            if len(_bday_followups) > 5:
+                _cards.append({"card_type": "link", "text": f"+{len(_bday_followups) - 5} more birthdays", "send": "show all birthdays this month"})
+            _cards += _nophone
+            if _nophone_total > len(_nophone):
+                _cards.append({"card_type": "note", "text": f"+{_nophone_total - len(_nophone)} more without a phone number"})
+            return ChatReply(render_followup_cards(_cards, _consultant_first))
         return None
 
     def _intent_customers_by_product(self, ctx) -> Optional[ChatReply]:
@@ -1656,7 +1709,12 @@ class MKChatEngine:
                     # the token heuristic (which pulls the product word into one-word names)
                     _m_use = re.search(r"\b(?:what|which)\b.*\bdoes\s+(\w+(?:\s+\w+)?)\s+(?:use|wear|buy|order)\b", lowered)
                     _msg_for_name = re.sub(re.escape(_date_scrub), " ", msg, flags=re.IGNORECASE).strip() if _date_scrub else msg
-                    if _m_use:
+                    # route() captured the name directly ("Has NAME ever ordered X?"
+                    # — weed-garden 2026-07-28 F7); trust it over the token heuristic
+                    _cg = (intent_result.slots or {}).get("customer_guess")
+                    if _cg:
+                        _msg_for_name = _cg
+                    elif _m_use:
                         _msg_for_name = _m_use.group(1)
 
                     # --- product-type filter (category system 2026-07-19) ---
@@ -2775,6 +2833,32 @@ class MKChatEngine:
                     order["lines"][line_index]["chosen"] = {"sku": "", "_skipped": True}
                     state["pending"] = None
                     return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
+
+                # Discount/tax typed while confirming an item (weed-garden
+                # 2026-07-28 F2: c38 typed "add a 20$ discount" twice during
+                # item confirms, got the yes/no nag both times, and the
+                # discount was silently lost). Stash the modifier on the order
+                # and re-ask the SAME item confirm.
+                from .order_parse import extract_order_modifiers as _eom_ic
+                _mods_ic = _eom_ic(msg)
+                if _mods_ic or self._mentions_discount(msg):
+                    if _mods_ic:
+                        if "discounts" in _mods_ic:
+                            order["discount_mentions"] = _mods_ic["discounts"]
+                            order["discount_type"] = _mods_ic.get("discount_type")
+                            order["discount_value"] = _mods_ic.get("discount_value")
+                            order["discount_requested"] = False
+                        if "tax_percent_override" in _mods_ic:
+                            order["tax_percent_override"] = _mods_ic["tax_percent_override"]
+                            order["no_tax"] = False
+                        if _mods_ic.get("no_tax"):
+                            order["no_tax"] = True
+                            order["tax_percent_override"] = None
+                    else:
+                        order["discount_requested"] = True
+                    save_session_state(state, session_id=sid)
+                    _qty_ic = int(order["lines"][line_index].get("qty") or 1)
+                    return ChatReply(ui["modifier_noted_item_confirm"] + "\n\n" + propose_top(top, current_qty=_qty_ic, ui=ui))
 
                 if looks_like_command(msg):
                     return ChatReply(

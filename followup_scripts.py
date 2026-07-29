@@ -20,6 +20,19 @@
 #   14 = 2-week follow-up (days 10–18 after order)
 #   60 = 2-month follow-up (days 50–70 after order)
 
+# ── Generic (window 0) ────────────────────────────────────────────────────────
+# Used for ad-hoc follow-up dots on custom-timeframe customer queries ("who
+# ordered last month"), where there may be no meaningful hero product — and the
+# customer may not remember what they ordered either. Product-free on purpose.
+#
+# A LIST so more can be added later and rotated deterministically by customer_id
+# (Brian, 2026-07-28: "we will curate a list ... keep it a little random"). With
+# a single entry the rotation is a no-op, so adding entries needs no code change.
+GENERIC = [
+    "Hey {c}, it's been a little while and I wanted to see how you're doing. Anything you are running low on or can I send you the newest digital catalog to explore?",
+]
+
+
 SCRIPTS = {
 
     # ── Skincare ──────────────────────────────────────────────────────────────
