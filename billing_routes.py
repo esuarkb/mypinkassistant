@@ -414,14 +414,33 @@ def billing_start(request: Request):
         # must NOT become their retroactive "referral" (and trigger a reward) just by
         # visiting the billing page. Lapsed/canceled accounts still qualify: a win-back
         # via a friend's link is a real referral.
+        event_trial_days = 0
         if ref_id_int == 0 and billing_status not in ("active", "trialing"):
             session_ref_code = (request.session.get("referral_code") or "").strip()
             if session_ref_code:
-                from app import apply_referral
+                from app import apply_referral, resolve_referral
                 ok, _ = apply_referral(cid_int, session_ref_code)
                 if ok:
                     request.session.pop("referral_code", None)
-                    ref_id_int = 1  # triggers 30-day trial below
+                    ref_id_int = 1  # triggers referral trial below
+                else:
+                    # Not a consultant's code. It may still be the printed
+                    # event code (2026-08) — that grants the longer trial but
+                    # has no referrer, so no referrals row and no Stripe credit.
+                    _info = resolve_referral(session_ref_code)
+                    if _info and _info["kind"] == "event":
+                        event_trial_days = int(_info["trial_days"])
+                        request.session.pop("referral_code", None)
+                        try:
+                            cur.execute(
+                                f"UPDATE consultants SET signup_event_code={PH} WHERE id={PH}",
+                                (_info["code"], cid_int),
+                            )
+                            conn.commit()
+                        except Exception:
+                            # Attribution is nice-to-have; never block checkout
+                            # if the column hasn't been migrated yet.
+                            conn.rollback()
 
         if not email:
             return HTMLResponse("Missing email for account.", status_code=400)
@@ -434,8 +453,14 @@ def billing_start(request: Request):
         has_subscribed_before = bool(stripe_subscription_id)
         if has_subscribed_before:
             trial_days = None
+        elif ref_id_int > 0:
+            from app import CONSULTANT_REFERRAL_TRIAL_DAYS
+            trial_days = CONSULTANT_REFERRAL_TRIAL_DAYS
+        elif event_trial_days:
+            trial_days = event_trial_days
         else:
-            trial_days = 30 if ref_id_int > 0 else 7
+            from app import DEFAULT_TRIAL_DAYS
+            trial_days = DEFAULT_TRIAL_DAYS
 
         # ---- Create Stripe customer if we don't have one yet (locks email)
         if not stripe_customer_id:

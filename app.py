@@ -416,6 +416,105 @@ def get_or_create_referral_code(cid: int) -> str:
             pass
         conn.close()
 
+# ---------------------------------------------------------------------------
+# Referral / event-code copy and trial lengths.
+#
+# ONE source of truth: the signup banner AND the Stripe checkout below both
+# read these through resolve_referral(). Before 2026-08 they each looked the
+# code up separately, so the page could promise a trial checkout never gave —
+# and did: ANY unrecognized string (a typo, /r/8RHEM8D555555555) rendered
+# "extended to 30 days" while checkout quietly handed out 7.
+#
+# EVENT_REFERRAL_CODE is printed on business cards. It never changes — the QR
+# is on paper we can't recall, so /r/EVENT has to keep working for as long as
+# cards are in circulation. Only the copy changes: edit EVENT_REFERRAL_BODY
+# before each event (Leadership Conference, etc.) and deploy. Cards handed out
+# at earlier events keep working; they just read the newer wording, so keep it
+# a welcome rather than a "thanks for attending X".
+#
+# Event signups deliberately have NO referrer: nothing is written to the
+# referrals table, so the Stripe referral credit in billing_routes.py cannot
+# fire for them. Consultants' personal codes are untouched and still pay out.
+# ---------------------------------------------------------------------------
+DEFAULT_TRIAL_DAYS = 7
+CONSULTANT_REFERRAL_TRIAL_DAYS = 30
+
+EVENT_REFERRAL_CODE = "EVENT"
+EVENT_REFERRAL_TRIAL_DAYS = 30
+# The headline names the current event and is the line to swap (Seminar ->
+# Leadership Conference in January). The body is deliberately event-neutral so
+# it stays true for cards handed out at earlier events. {days} and
+# {default_days} are filled from the constants above — never hardcode the
+# numbers here, that drift is what caused the 30-vs-7 bug.
+EVENT_REFERRAL_HEADLINE = "Special Seminar event bonus applied — {days} days free 💗"
+# A newline here becomes a line break on the page — write the copy as plain
+# text, no HTML.
+EVENT_REFERRAL_BODY = (
+    "Thank you for checking out MyPinkAssistant!\n"
+    "Your {default_days}-day free trial has been upgraded to {days} days."
+)
+
+
+def resolve_referral(ref_code: str) -> dict | None:
+    """
+    Decide what a /r/<code> link is actually worth. The ONLY place that answers
+    that question — the signup banner and the checkout trial length both call
+    it, so they cannot disagree.
+
+    Returns None when the code means nothing. Callers MUST then show no banner
+    and grant no bonus; an unknown code is a typo, not a promotion.
+
+    kind == "event"      -> printed-card code. No referrer, nobody earns credit.
+    kind == "consultant" -> someone's personal code. Referrer earns credit as
+                            it always has (handled by apply_referral).
+    """
+    code = (ref_code or "").strip().upper()
+    if not code:
+        return None
+
+    if code == EVENT_REFERRAL_CODE.upper():
+        days = int(EVENT_REFERRAL_TRIAL_DAYS)
+        return {
+            "kind": "event",
+            "code": EVENT_REFERRAL_CODE.upper(),
+            "trial_days": days,
+            "headline": EVENT_REFERRAL_HEADLINE.format(days=days),
+            "body": EVENT_REFERRAL_BODY.format(days=days, default_days=DEFAULT_TRIAL_DAYS),
+            "referrer_name": "",
+        }
+
+    # Match on the row, not the name — a consultant with a blank first_name
+    # still owns a valid code, and apply_referral() would honour it.
+    referrer_name = ""
+    try:
+        with tx() as (_conn, _cur):
+            _cur.execute(
+                f"SELECT id, first_name FROM consultants WHERE referral_code={PH} LIMIT 1",
+                (code,),
+            )
+            _row = _cur.fetchone()
+            if not _row:
+                return None
+            referrer_name = (str(_row[1] or "")).strip()
+    except Exception:
+        return None
+
+    days = int(CONSULTANT_REFERRAL_TRIAL_DAYS)
+    who = referrer_name or "A friend"
+    return {
+        "kind": "consultant",
+        "code": code,
+        "trial_days": days,
+        "headline": "",
+        "body": (
+            f"Referral from {who} applied! Your {DEFAULT_TRIAL_DAYS}-day "
+            f"trial has been extended to {days} days and {who} will "
+            f"also earn credit!"
+        ),
+        "referrer_name": referrer_name,
+    }
+
+
 def apply_referral(referee_cid: int, ref_code: str) -> tuple[bool, str]:
     """
     Links referee -> referrer (one-time).
@@ -785,27 +884,24 @@ def onboard_get(
     cid = request.session.get("consultant_id")
     c = get_consultant_full(int(cid)) if cid else None
 
-    if ref:
-        referrer_name = ""
-        try:
-            with tx() as (_conn, _cur):
-                _cur.execute(
-                    f"SELECT first_name FROM consultants WHERE referral_code={PH} LIMIT 1",
-                    (ref.upper(),),
-                )
-                _row = _cur.fetchone()
-                if _row:
-                    referrer_name = (str(_row[0] or "")).strip()
-        except Exception:
-            pass
-        if referrer_name:
+    # Only ever promise what checkout will actually deliver — resolve_referral()
+    # is the same call billing_routes.py makes for the trial length. An
+    # unrecognized code returns None and shows nothing at all: a silent normal
+    # signup beats an error the visitor can't act on at the moment they're
+    # deciding to sign up.
+    ref_info = resolve_referral(ref) if ref else None
+    if ref_info:
+        # Escape FIRST, then turn newlines in the copy into <br> — lets the
+        # constants below be edited as plain text with line breaks, without
+        # anyone hand-writing HTML into user-facing strings.
+        body_html = _esc(ref_info["body"]).replace("\n", "<br>")
+        if ref_info["headline"]:
             ref_block = (
-                f"<div class='welcome'>Referral from {_esc(referrer_name)} applied! "
-                f"Your 7-day trial has been extended to 30 days and "
-                f"{_esc(referrer_name)} will also earn credit!</div>"
+                f"<div class='welcome refbonus'><strong>{_esc(ref_info['headline'])}</strong><br>"
+                f"{body_html}</div>"
             )
         else:
-            ref_block = "<div class='welcome'>Referral applied! Your 7-day trial has been extended to 30 days!</div>"
+            ref_block = f"<div class='welcome refbonus'>{body_html}</div>"
     else:
         ref_block = ""
         

@@ -206,6 +206,12 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS intouch_account_ids TEXT DEFAULT 
 -- existing DBs; also in the consultants CREATE above for fresh ones.
 ALTER TABLE consultants ADD COLUMN IF NOT EXISTS pwa_installed_at TEXT;
 
+-- Which printed-card event code (if any) the consultant signed up through
+-- (2026-08). NULL for every normal signup. Lets us count what the business
+-- cards actually brought in, and survives changing the landing-page copy
+-- between events. Also in db_setup.py for local SQLite.
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS signup_event_code TEXT;
+
 CREATE TABLE IF NOT EXISTS guest_orders (
   id                    BIGSERIAL PRIMARY KEY,
   consultant_id         INTEGER   NOT NULL,

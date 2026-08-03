@@ -166,6 +166,9 @@ for _ddl in (
     "ALTER TABLE orders ADD COLUMN discount_value REAL",      # the number she said (20 for "20% off")
     "ALTER TABLE orders ADD COLUMN tax_percent REAL",         # rate applied at order time
     "ALTER TABLE consultants ADD COLUMN tax_rate REAL",       # settings/chat-set sales tax rate
+    # printed-card event code used at signup (2026-08); NULL for normal signups.
+    # MUST also exist in db_init_pg.py — see the pwa_installed_at note there.
+    "ALTER TABLE consultants ADD COLUMN signup_event_code TEXT",
 ):
     try:
         cur.execute(_ddl)
