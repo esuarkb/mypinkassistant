@@ -107,6 +107,15 @@ CASES = [
     ("show my vip customers",                   "leaderboard",       "kw"),
     ("who spent the most",                      "leaderboard",       "kw"),
     ("who are my best customers",               "leaderboard",       "llm"),
+    # NEGATIVE guards — VIP/PCP are customer TAGS too. A pasted customer entry
+    # carrying one must reach the customer parser, not the top-customers list
+    # (c28, 2026-08-05: lost the same new customer 5 times to this).
+    ("new customer Jay Nolan, jnolan@example.com, P.O. Box 28, Tuttle, OK, 73088, 5550101234, tag:VIP",
+                                                "new_customer",      "llm"),
+    ("Jay Nolan, jnolan@example.com, P.O. Box 28, Tuttle, OK, 73088, 5550101234, tag:VIP",
+                                                "new_customer",      "llm"),
+    ("add customer Beth Rowan, browan@example.com, 5550102345, 12 Oak St, Tuttle, OK 73089, tag: PCP",
+                                                "new_customer",      "llm"),
 
     # --- top_sellers (kw) ---
     ("what are my top selling products",        "top_sellers",       "kw"),

@@ -1398,12 +1398,25 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # the most" doesn't substring-match "order the most" (weed-garden 2026-07-12:
     # c116 "what product does X reorder the most" got the top-customers list
     # instead of that customer's product history).
+    # VIP and PCP are also customer TAGS consultants type while ADDING someone,
+    # so a pasted customer entry ("new customer Jay Knight, …, tag:VIP") must
+    # never be read as a top-customers question — c28 lost the same new customer
+    # 5 times on 2026-08-05 before this guard, and in 30 days of production
+    # "vip" appeared ONLY in those broken messages. Guarded at the mechanism
+    # level (the whole rule, not just the vip token) so the next tag that
+    # collides with a trigger word doesn't reopen this. Same guard shape as the
+    # "who bought X" rule below. "vip"/"pcp" are word-boundaried too, so a
+    # customer name or email containing those letters can't trigger it either.
     if (
-        "leaderboard" in lowered
-        or "vip" in lowered
-        or "pcp" in lowered
-        or re.search(r"\b(spent|spend|ordered|order|bought|buy)\s+the\s+most\b", lowered)
-        or ("top" in lowered and "customer" in lowered)
+        not _looks_like_full_customer_entry(msg)
+        and not re.match(r"^\s*(new|add|create)\s+customer\b", msg, re.IGNORECASE)
+        and (
+            "leaderboard" in lowered
+            or re.search(r"\bvip\b", lowered)
+            or re.search(r"\bpcp\b", lowered)
+            or re.search(r"\b(spent|spend|ordered|order|bought|buy)\s+the\s+most\b", lowered)
+            or ("top" in lowered and "customer" in lowered)
+        )
     ):
         return IntentResult(intent="leaderboard", confidence=0.95, raw_text=msg)
 
