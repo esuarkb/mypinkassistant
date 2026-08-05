@@ -453,7 +453,7 @@ def update_order_item_quantities(
             continue
 
         cur.execute(
-            f"SELECT id FROM orders WHERE consultant_id = {PH} AND intouch_order_id = {PH} LIMIT 1",
+            f"SELECT id, source FROM orders WHERE consultant_id = {PH} AND intouch_order_id = {PH} LIMIT 1",
             (consultant_id, intouch_order_id),
         )
         row = cur.fetchone()
@@ -461,7 +461,15 @@ def update_order_item_quantities(
             skipped_no_order += 1
             continue
 
-        order_id = int(row[0] if not isinstance(row, dict) else row["id"])
+        if isinstance(row, dict):
+            order_id, order_source = int(row["id"]), (row["source"] or "")
+        else:
+            order_id, order_source = int(row[0]), (row[1] or "")
+
+        # Both of these are CDS-fulfilled at MK's end — the source split above
+        # only records who placed the order (she vs. the customer online), not
+        # how it shipped. Samples ride along on both.
+        is_cds_order = order_source in ("cds", "myshop")
 
         cur.execute(f"DELETE FROM order_items WHERE order_id = {PH}", (order_id,))
 
@@ -488,18 +496,35 @@ def update_order_item_quantities(
 
             new_total += product_amount
 
-            catalog_row = _match_product(prod_name, catalog)
-            if catalog_row:
-                sku = catalog_row["sku"]
-                name = catalog_row["product_name"]
-                if unit_price == 0.0:
-                    try:
-                        unit_price = float(catalog_row.get("price") or 0)
-                    except Exception:
-                        pass
-            else:
+            # MK ships free samples with CDS orders, and a sample's name
+            # contains the real product's name ("TimeWise Repair Volu-Firm Set
+            # Sample"), so _match_product collapsed it onto the $230 retail
+            # row. That did two kinds of damage at once: the sample lost its
+            # own wording, and a $0 line picked up a retail price. One $28 CDS
+            # order was stored as $488 of line items; 57% of CDS orders and 41%
+            # of myshop orders had line items exceeding MK's own total.
+            #
+            # Samples can only be added to CDS orders, and MK reports them at
+            # $0, so on a CDS order a $0 line is ALWAYS a sample and never a
+            # missing price (Brian, 2026-08-04). Believe the $0 and keep MK's
+            # name and SKU verbatim. Everywhere else $0 still means "we don't
+            # know the price" and is still filled from the catalog.
+            if is_cds_order and unit_price == 0.0:
                 sku = (item.get("productSKU") or "").strip()
                 name = prod_name
+            else:
+                catalog_row = _match_product(prod_name, catalog)
+                if catalog_row:
+                    sku = catalog_row["sku"]
+                    name = catalog_row["product_name"]
+                    if unit_price == 0.0:
+                        try:
+                            unit_price = float(catalog_row.get("price") or 0)
+                        except Exception:
+                            pass
+                else:
+                    sku = (item.get("productSKU") or "").strip()
+                    name = prod_name
 
             _insert_item_with_qty(cur, order_id, sku, name, unit_price, qty)
 
