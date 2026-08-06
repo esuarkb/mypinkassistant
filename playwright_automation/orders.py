@@ -250,6 +250,30 @@ def _read_intouch_error(page: Page) -> str:
         return "Unknown InTouch error"
 
 
+def _read_cds_dialog_error(page: Page) -> str:
+    """Best-effort read of the validation message shown INSIDE the CDS address
+    dialog. Salesforce renders these in several places depending on whether the
+    complaint is per-field or dialog-wide, so try the dialog-scoped spots in
+    order and fall back to the page-level error toast. Returns "" when nothing
+    readable is there."""
+    dialog = page.get_by_role("dialog")
+    for _loc in (
+        dialog.locator('[role="alert"]'),
+        dialog.locator('.slds-form-element__help'),
+        dialog.locator('.slds-notify.slds-theme_error'),
+        dialog.locator('.slds-text-color_error'),
+    ):
+        try:
+            for _i in range(min(_loc.count(), 4)):
+                _t = " ".join(_loc.nth(_i).inner_text().split())
+                if _t:
+                    return _t
+        except Exception:
+            continue
+    _t = _read_intouch_error(page)
+    return "" if _t == "Unknown InTouch error" else _t
+
+
 def _click_set_primary_for(page: Page, street: str) -> bool:
     """Click 'Set As Primary' on the saved-address card showing `street`.
 
@@ -345,7 +369,19 @@ def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code
     try:
         first_name_field.wait_for(state="hidden", timeout=10000)
     except PlaywrightTimeoutError:
-        pass
+        # Dialog still open = InTouch REJECTED the address. Read its validation
+        # text and fail here with it. This timeout used to be swallowed, and
+        # step 6 then spent 30s clicking 'Set As Primary' through the modal
+        # backdrop that was still covering the page — so the job died with a
+        # meaningless locator timeout and we never learned why the address was
+        # refused (Wendy/Martha Troyer, job 11819, 2026-08-06).
+        _why = _read_cds_dialog_error(page)
+        print(f"[Orders] CDS address dialog stayed open — InTouch says: {_why or '(no message found)'}")
+        raise RuntimeError(
+            f"InTouch would not accept the shipping address "
+            f"({street}, {city} {postal_code})"
+            + (f": {_why}" if _why else " — the address dialog stayed open with no readable message.")
+        )
     page.wait_for_timeout(1000)
     print(f"[Orders] CDS address filled: {street}, {city}, {state} {postal_code}")
 

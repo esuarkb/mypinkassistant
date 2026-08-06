@@ -985,6 +985,7 @@ def main():
                                                 # user message so the wording can be honest, 2026-07-19)
                                                 _prod_name = _failing_sku
                                                 _in_catalog = False
+                                                _last_seen = ""
                                                 try:
                                                     import csv as _csv
                                                     _cat_path = Path(__file__).resolve().parent / "catalog" / "en.csv"
@@ -993,15 +994,26 @@ def main():
                                                             if _crow and _crow[0].strip() == _failing_sku:
                                                                 _prod_name = _crow[1].strip() if len(_crow) > 1 else _failing_sku
                                                                 _in_catalog = True
+                                                                # last_seen (col 5), falling back to date_added
+                                                                # (col 4) — the same pair update_catalog.py uses
+                                                                _last_seen = (
+                                                                    (_crow[5].strip() if len(_crow) > 5 and _crow[5].strip() else "")
+                                                                    or (_crow[4].strip() if len(_crow) > 4 else "")
+                                                                )
                                                                 break
                                                 except Exception:
                                                     pass
-                                                # SKU in our catalog = current product (catalog mirrors the
-                                                # OPOS scrape; discontinued SKUs fall out of it) → the search
-                                                # miss was transient InTouch flakiness or MyCustomers index
-                                                # lag, NOT discontinuation. Only claim "discontinued" when
-                                                # the SKU is truly absent from the catalog.
-                                                if _in_catalog:
+                                                # A row still sitting in the catalog does NOT mean the product
+                                                # is current: update_catalog.py stops refreshing last_seen when
+                                                # a SKU leaves MK's OPOS scrape but never deletes the row, so a
+                                                # discontinued SKU lingers forever. Judge on FRESHNESS instead,
+                                                # using the same 60-day window update_catalog.py uses to call a
+                                                # SKU dropped. (Fixed 2026-08-06: job 11801, Mandarin & Rose
+                                                # hand cream — gone from the scrape since March, but the stale
+                                                # row made us tell Sue to "try again in a few minutes" forever.)
+                                                from datetime import timedelta as _timedelta
+                                                _fresh_cutoff = (datetime.now().date() - _timedelta(days=60)).isoformat()
+                                                if _in_catalog and _last_seen >= _fresh_cutoff:
                                                     _bad_user_msg = (
                                                         f"SKU {_failing_sku} couldn't be added right now — "
                                                         f"please try again in a few minutes."
@@ -1202,8 +1214,15 @@ def main():
                                     )
                                     for jid in job_ids:
                                         requeue_job(jid, "Queued")
-                                    # Skip the failure alert + mark_job_failed below
-                                    raise _RequeueSilently()
+                                    # Skip the failure alert + mark_job_failed below.
+                                    # `continue`, not raise: _RequeueSilently was raised
+                                    # from inside this except block, so its handler (a
+                                    # sibling except on the same try) could never catch
+                                    # it — it escaped main() and exited the process 1,
+                                    # which Render reported as a server failure email on
+                                    # every silent requeue (job 11789, 2026-08-06).
+                                    # Same shape as the FULL_SYNC transient retry below.
+                                    continue
 
                             err_text = raw_err
 
