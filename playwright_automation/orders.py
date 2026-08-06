@@ -258,6 +258,10 @@ def _read_cds_dialog_error(page: Page) -> str:
     readable is there."""
     dialog = page.get_by_role("dialog")
     for _loc in (
+        # MK's own class, not an SLDS one — this is where the per-field
+        # complaint actually lands ("Please enter a valid first name"), so it
+        # goes first. The SLDS selectors below found nothing on job 11819.
+        dialog.locator('.error-message'),
         dialog.locator('[role="alert"]'),
         dialog.locator('.slds-form-element__help'),
         dialog.locator('.slds-notify.slds-theme_error'),
@@ -325,9 +329,40 @@ def _click_set_primary_for(page: Page, street: str) -> bool:
     return True
 
 
+def _clean_address_name(name: str) -> str:
+    """Strip characters MK's CDS address form refuses in the name fields.
+
+    Their validator rejects the whole field on anything outside plain name
+    characters and shows 'Please enter a valid first name', which blocks the
+    dialog from closing — so a nickname stored with typographic quotes, e.g.
+    Martha “Marty”, permanently killed her CDS orders (job 11819, 2026-08-06).
+    The stored name is left alone (it must still match InTouch's customer list
+    for the search in open_customer_and_start_order); only what gets typed into
+    the address dialog is cleaned. Curly quotes/apostrophes/dashes fold to
+    their straight forms first so O’Brien and Smith-Jones survive intact.
+    """
+    import re
+    import unicodedata
+    folded = (name or "")
+    for _bad, _good in (("‘", "'"), ("’", "'"), ("‚", "'"), ("‛", "'"),
+                        ("“", ""), ("”", ""), ("„", ""), ("«", ""), ("»", ""),
+                        ("–", "-"), ("—", "-"), ("−", "-")):
+        folded = folded.replace(_bad, _good)
+    kept = "".join(
+        ch for ch in folded
+        if unicodedata.category(ch).startswith("L") or ch in " '-."
+    )
+    return re.sub(r"\s+", " ", kept).strip()
+
+
 def fill_cds_address(page: Page, street: str, city: str, state: str, postal_code: str, first_name: str = "", last_name: str = "") -> None:
     from mk_chat_core import normalize_state
     state = normalize_state(state)
+    _raw_first, _raw_last = first_name, last_name
+    first_name, last_name = _clean_address_name(first_name), _clean_address_name(last_name)
+    if (first_name, last_name) != (_raw_first, _raw_last):
+        print(f"[Orders] CDS address name cleaned for MK's form: "
+              f"'{_raw_first} {_raw_last}' -> '{first_name} {last_name}'")
     page.wait_for_timeout(1500)
     step("orders.cds_address", 1, 6, "open_address_dialog", "clicking 'Add New Address' (up to 4 attempts)")
     add_address_btn = page.get_by_role("button", name="Add New Address").first
