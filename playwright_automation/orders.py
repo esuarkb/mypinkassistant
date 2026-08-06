@@ -46,20 +46,33 @@ def open_customer_and_start_order(page: Page, first: str, last: str, fulfillment
     open_customer_list(page)
     page.wait_for_timeout(3000)
 
-    # Search customer, small wait for search results to populate
+    # Search customer. Same LWC drop-the-first-fill hazard as the SKU box in
+    # add_sku_to_bag (job 9657): the value lands but the query never runs, so
+    # the full unfiltered list stays up and the customer looks missing. Got
+    # worse 2026-08-06 when MK added the A-Z filter row and the list got slower
+    # to mount (jobs 11586, 11789 — both succeeded on a plain retry). Clear and
+    # re-type once before believing she isn't there.
     step("orders", 2, 17, "search_customer", f"searching for '{full_name}'")
-    page.get_by_role("searchbox", name="Note Title").fill(full_name)
-    page.wait_for_timeout(500)
+    _search_box = page.get_by_role("searchbox", name="Note Title")
 
     # Existence check (duplicate-safe)
     step("orders", 3, 17, "verify_customer_exists", f"waiting for '{full_name}' in results")
-    try:
-        page.get_by_text(full_name).first.wait_for(timeout=3000)
-    except PlaywrightTimeoutError:
-        raise RuntimeError(
-            f"Customer not found: '{full_name}'. "
-            "Make sure they have been added to MyCustomers and please try again."
-        )
+    for _attempt in (1, 2):
+        _search_box.fill("")
+        page.wait_for_timeout(300)
+        _search_box.fill(full_name)
+        page.wait_for_timeout(500)
+        try:
+            page.get_by_text(full_name).first.wait_for(
+                timeout=4000 if _attempt == 1 else 10000)
+            break
+        except PlaywrightTimeoutError:
+            if _attempt == 2:
+                raise RuntimeError(
+                    f"Customer not found: '{full_name}'. "
+                    "Make sure they have been added to MyCustomers and please try again."
+                )
+            print(f"[orders] '{full_name}' not in results after attempt {_attempt} — re-typing search")
 
     # Select customer from search results (first match if duplicates), loads customer page
     step("orders", 4, 17, "select_customer", f"clicking '{full_name}'")

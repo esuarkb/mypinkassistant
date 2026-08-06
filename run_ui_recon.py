@@ -136,8 +136,17 @@ def main() -> int:
 
         # ---- Surface 3: customer detail page + address dialog (explore, no save) ----
         print("\n=== SURFACE 3: customer detail + address dialog (no save) ===")
+        # Wait for the list to be interactive before typing. Coming back from
+        # the new-customer form, .fill() lands the text in the box but the
+        # filter never fires while the component is still mounting — the list
+        # stays on all 300+ customers and the click below times out. Broke
+        # 2026-08-06, when MK's new A-Z filter row slowed the render enough to
+        # lose the race. 'Export' is a list-only button, so it appearing is the
+        # cheap "the list is really up" signal.
+        page.get_by_role("button", name="Export").wait_for(state="visible", timeout=15000)
+        page.wait_for_timeout(1000)
         page.get_by_role("searchbox", name="Note Title").fill(TEST_CUSTOMER)
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(1500)
         page.get_by_text(TEST_CUSTOMER).first.click()
         page.wait_for_timeout(1500)
         detail = {
