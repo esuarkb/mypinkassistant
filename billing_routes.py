@@ -266,8 +266,14 @@ def _referral_already_rewarded(referee_cid: int) -> bool:
         row = cur.fetchone()
         if not row:
             return False
-        rewarded_at = (row[0] or "").strip() if row[0] is not None else ""
-        status = (row[1] or "").strip().lower() if row[1] is not None else ""
+        # referrals.rewarded_at is a real timestamp on Postgres, so psycopg
+        # hands back a datetime — .strip() on that raised AttributeError and
+        # blew the whole invoice.paid webhook up to a 500 (2026-08-07). It was
+        # dormant only because the broken UPDATE meant the column was always
+        # NULL; the moment real dates existed, every referred consultant's
+        # renewal started failing. str() first, then strip.
+        rewarded_at = "" if row[0] is None else str(row[0]).strip()
+        status = "" if row[1] is None else str(row[1]).strip().lower()
         return bool(rewarded_at) or status == "rewarded"
     finally:
         try:
@@ -291,7 +297,14 @@ def _mark_referral_rewarded(referrer_cid: int, referee_cid: int) -> bool:
             SET status='rewarded',
                 rewarded_at={_now_sql()}
             WHERE referee_consultant_id={PH}
-              AND (rewarded_at IS NULL OR rewarded_at = '')
+              -- rewarded_at is a real timestamp here (the '' idiom belongs to
+              -- the TEXT columns on consultants). Comparing it to '' raised
+              -- InvalidDatetimeFormat on Postgres, so this UPDATE never landed
+              -- and every renewal invoice re-credited the referrer: 19 duplicate
+              -- credits Apr-Aug 2026 before it was caught (2026-08-07). SQLite
+              -- is loosely typed and evaluated it fine, which is why local
+              -- testing never saw it.
+              AND rewarded_at IS NULL
               AND (status IS NULL OR lower(status) != 'rewarded')
             """,
             (int(referee_cid),),
@@ -1004,7 +1017,23 @@ async def stripe_webhook(request: Request):
                                     )
 
                                     # ✅ Then mark rewarded (atomic/one-time)
-                                    did_mark = _mark_referral_rewarded(referrer_cid_int, referee_cid)
+                                    # Own try/except: the credit above has already
+                                    # moved real money, so a failure HERE must never
+                                    # be reported as "failed to credit". It was for
+                                    # months — the misleading message is why the
+                                    # duplicate-credit bug above went unnoticed.
+                                    # Marking is also what stops the next renewal
+                                    # invoice re-crediting, so its failure is louder
+                                    # than the credit's.
+                                    try:
+                                        did_mark = _mark_referral_rewarded(referrer_cid_int, referee_cid)
+                                    except Exception as mark_err:
+                                        print(
+                                            f"[Referral] ALERT: credited referrer={referrer_cid_int} for "
+                                            f"referee={referee_cid} but could NOT mark rewarded — the next "
+                                            f"invoice will credit again: {repr(mark_err)}"
+                                        )
+                                        did_mark = False
                                     if did_mark:
                                         print(f"[Referral] Credited referrer={referrer_cid_int} for referee={referee_cid} amount={amount} {currency}")
                                     else:
