@@ -47,11 +47,28 @@ Agrega varios artículos y cantidades en un solo mensaje — confirmaré todo an
 Ejemplo:
 Nuevo pedido para Jane Doe; quiere un labial rojo, 2 máscaras de carbón y un limpiador 4-en-1 para piel normal/seca.
 
+BUSCAR UN PRODUCTO
+Pregunta por cualquier producto por su nombre y te mostraré el precio, el número de pieza, los tonos, los ingredientes y las hojas de datos — sin buscar en el catálogo.
+
+Ejemplo:
+Cuéntame sobre la base TimeWise 3D
+¿Cuáles son los ingredientes de la máscara de carbón?
+
+HAZ PREGUNTAS SOBRE TU NEGOCIO
+Pregunta sobre tus clientas y sus pedidos en lenguaje natural — yo busco la respuesta.
+
+Ejemplo:
+¿Quién no ha pedido en 6 meses?
+¿Quién compró la máscara de carbón?
+
 INVENTARIO PERSONAL
 Cuando hagas un pedido de inventario a través de MaryKayInTouch.com, tu stock se actualiza automáticamente — sin necesidad de entrada manual. También puedes consultar el stock, actualizar cantidades, configurar alertas de stock bajo e imprimir un PDF en cualquier momento con solo pedirlo.
 
 Ejemplo:
 ¿Cuántos sets TimeWise tengo? Establece mi par para máscaras de carbón en 3.
+
+DIRECTORAS
+Si tienes una unidad, tu equipo también está aquí — miembros de la unidad, Great Start, Star Consultant y el programa de auto. Solo pregunta.
 
 PROGRAMA DE REFERIDOS
 ¡Da un mes, gana un mes! Tu enlace de referido personal está en Configuración en https://mypinkassistant.com
@@ -61,7 +78,8 @@ Facebook: https://www.facebook.com/mypinkassistant1
 Instagram: https://www.instagram.com/mypinkassistant
 TikTok: https://www.tiktok.com/@mypinkassistant
 
-¿Tienes preguntas? Consulta nuestras Preguntas Frecuentes: https://mypinkassistant.com/faq
+¿Tienes preguntas? La página de Ayuda tiene una guía rápida de todo lo que puedes decir en el chat: https://mypinkassistant.com/help
+Nuestras Preguntas Frecuentes cubren el resto: https://mypinkassistant.com/faq
 
 Creamos MyPinkAssistant para ahorrarte tiempo y simplificar tu negocio — y es un honor tenerte aquí.
 
@@ -130,6 +148,26 @@ support@mypinkassistant.com
         Confirmaré cada artículo antes de enviarlo, y siempre puedes agregar o quitar artículos antes de la aprobación final.
       </p>
 
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">🔍 Buscar un Producto</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Pregunta por cualquier producto por su nombre y te mostraré el precio, el número de pieza, los tonos, los ingredientes y las hojas de datos — sin buscar en el catálogo.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Ejemplo:</strong><br>
+        Cuéntame sobre la base TimeWise 3D<br>
+        ¿Cuáles son los ingredientes de la máscara de carbón?
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">💬 Haz Preguntas Sobre Tu Negocio</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Pregunta sobre tus clientas y sus pedidos en lenguaje natural — yo busco la respuesta.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Ejemplo:</strong><br>
+        ¿Quién no ha pedido en 6 meses?<br>
+        ¿Quién compró la máscara de carbón?
+      </p>
+
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📦 Inventario Personal</h3>
       <p style="margin:0 0 10px 0;color:#111;">
         Cuando hagas un pedido de inventario a través de MaryKayInTouch.com, tu stock se actualiza automáticamente — sin necesidad de entrada manual. También puedes consultar el stock, actualizar cantidades, configurar alertas de stock bajo e imprimir un PDF en cualquier momento con solo pedirlo.
@@ -137,6 +175,11 @@ support@mypinkassistant.com
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Ejemplo:</strong><br>
         ¿Cuántos sets TimeWise tengo? Establece mi par para máscaras de carbón en 3.
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">👑 Directoras</h3>
+      <p style="margin:0 0 16px 0;color:#111;">
+        Si tienes una unidad, tu equipo también está aquí — miembros de la unidad, Great Start, Star Consultant y el programa de auto. Solo pregunta.
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🎁 Programa de Referidos</h3>
@@ -159,7 +202,7 @@ support@mypinkassistant.com
       <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:18px;"></div>
 
       <p style="margin:10px 0 0 0;font-size:14px;color:#5a5a5a;">
-        ¿Tienes preguntas? Consulta nuestras <a href="https://mypinkassistant.com/faq" style="color:#e91e63;text-decoration:none;font-weight:bold;">Preguntas Frecuentes</a> o escríbenos a
+        ¿Tienes preguntas? La página de <a href="https://mypinkassistant.com/help" style="color:#e91e63;text-decoration:none;font-weight:bold;">Ayuda</a> tiene una guía rápida de todo lo que puedes decir en el chat, y nuestras <a href="https://mypinkassistant.com/faq" style="color:#e91e63;text-decoration:none;font-weight:bold;">Preguntas Frecuentes</a> cubren el resto. O escríbenos a
         <a href="mailto:support@mypinkassistant.com" style="color:#e91e63;text-decoration:none;">support@mypinkassistant.com</a>.
       </p>
 
@@ -197,6 +240,7 @@ Just type a name — I’ll find the closest match even if you misspell it. Your
 
 Example:
 Jane Doe
+What foundation does Jane use?
 What were Jane’s last 3 orders?
 
 ADD A CUSTOMER ORDER
@@ -205,11 +249,22 @@ Add multiple items and quantities in one message — I’ll confirm everything b
 Example:
 New order for Jane Doe; she wants a red lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
 
+LOOK UP A PRODUCT
+Ask about any product by name and I'll pull up the price, part number, shades, ingredients, and fact sheets — no catalog to dig through.
+
+Example:
+TimeWise 3D foundation
+Charcoal Mask
+
 PERSONAL INVENTORY
 When you place an inventory order through MaryKayInTouch.com, your stock updates automatically — no manual entry needed. You can also check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
 
 Example:
-How many TimeWise sets do I have? Set my par for charcoal masks to 3.
+How many TimeWise sets do I have?
+Set my par for charcoal masks to 3.
+
+DIRECTORS
+If you have a unit, your team is in here too — unit members, Great Start, Star Consultant, and the car program. Just ask.
 
 REFERRAL PROGRAM
 Give a month, get a month! Your referral link is in Settings at https://mypinkassistant.com
@@ -219,7 +274,8 @@ Facebook: https://www.facebook.com/mypinkassistant1
 Instagram: https://www.instagram.com/mypinkassistant
 TikTok: https://www.tiktok.com/@mypinkassistant
 
-Have questions? Check out our FAQ: https://mypinkassistant.com/faq
+Have questions? The Help page is a cheat sheet of everything you can say in chat: https://mypinkassistant.com/help
+Our FAQ covers the rest: https://mypinkassistant.com/faq
 
 We built MyPinkAssistant to save you time and simplify your business - and we’re honored you’re here.
 
@@ -269,6 +325,7 @@ support@mypinkassistant.com
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
         Jane Doe<br>
+        What foundation does Jane use?<br>
         What were Jane’s last 3 orders?
       </p>
 
@@ -281,13 +338,29 @@ support@mypinkassistant.com
         New order for Jane Doe; she wants a red lipstick, 2 charcoal masks, and a 4-in-1 cleanser for normal/dry.
       </p>
 
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">🔍 Look up a Product</h3>
+      <p style="margin:0 0 10px 0;color:#111;">
+        Ask about any product by name and I’ll pull up the price, part number, shades, ingredients, and fact sheets — no catalog to dig through.
+      </p>
+      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
+        <strong>Example:</strong><br>
+        TimeWise 3D foundation<br>
+        Charcoal Mask
+      </p>
+
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📦 Personal Inventory</h3>
       <p style="margin:0 0 10px 0;color:#111;">
         When you place an inventory order through marykayintouch.com, your stock updates automatically — no manual entry needed. You can also check stock, update quantities, set low-stock alerts, and print a PDF anytime just by asking.
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Example:</strong><br>
-        How many TimeWise sets do I have? Set my par for charcoal masks to 3.
+        How many TimeWise sets do I have?<br>
+        Set my par for charcoal masks to 3.
+      </p>
+
+      <h3 style="margin:16px 0 8px 0;font-size:16px;">👑 Directors</h3>
+      <p style="margin:0 0 16px 0;color:#111;">
+        If you have a unit, your team is in here too — unit members, Great Start, Star Consultant, and the car program. Just ask.
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🎁 Referral Program</h3>
@@ -310,7 +383,7 @@ support@mypinkassistant.com
       <div style="border-top:1px solid #e6e6e6;padding-top:14px;margin-top:18px;"></div>
 
       <p style="margin:10px 0 0 0;font-size:14px;color:#5a5a5a;">
-        Have questions? Check out our <a href="https://mypinkassistant.com/faq" style="color:#e91e63;text-decoration:none;font-weight:bold;">FAQ</a> or email us at
+        Have questions? The <a href="https://mypinkassistant.com/help" style="color:#e91e63;text-decoration:none;font-weight:bold;">Help</a> page is a cheat sheet of everything you can say in chat, and our <a href="https://mypinkassistant.com/faq" style="color:#e91e63;text-decoration:none;font-weight:bold;">FAQ</a> covers the rest. Or email us at
         <a href="mailto:support@mypinkassistant.com" style="color:#e91e63;text-decoration:none;">support@mypinkassistant.com</a>.
       </p>
 
