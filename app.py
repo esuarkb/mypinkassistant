@@ -1746,6 +1746,57 @@ def settings_invoice_details(
     return RedirectResponse("/settings?notice=invoice_saved", status_code=302)
 
 
+# Browser-only chrome for /invoice/{id}. The viewport meta is here and not in
+# invoice.py because xhtml2pdf ignores it and the email clients strip it — but
+# without it a phone lays the page out at ~980px and shrinks the invoice to
+# unreadable. Every width in _PDF_CSS is a percentage, so device-width just
+# works.
+_INVOICE_PAGE_HEAD = """
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { padding: 64px 18px 40px; max-width: 760px; margin: 0 auto; }
+  .mpa-bar { position: fixed; top: 0; left: 0; right: 0; height: 52px;
+             display: flex; align-items: center; padding: 0 14px;
+             background: #fff; border-bottom: 1px solid #e5e7eb; z-index: 10; }
+  .mpa-bar a { display: inline-flex; align-items: center; min-height: 44px;
+               padding: 0 6px; color: #e91e63; font-family: Arial, sans-serif;
+               font-size: 15px; font-weight: 700; text-decoration: none; }
+  @media print { .mpa-bar { display: none; } body { padding: 0; } }
+</style>
+"""
+
+_INVOICE_PAGE_BAR = (
+    '<div class="mpa-bar"><a href="/app">&#8592;&nbsp;Back to chat</a></div>'
+)
+
+
+def _invoice_page(document_html: str) -> str:
+    """Wrap the invoice document in browser-only chrome (2026-08-06).
+
+    "View invoice" opens in a new tab, and in the installed PWA that view has
+    no browser back button and no tab strip — a consultant who tapped it was
+    stuck looking at the invoice with no way back to chat. So the page carries
+    its own way back.
+
+    Injected HERE rather than in render_invoice_html() because that function is
+    shared by the PDF and the email body: a "Back to chat" bar belongs on
+    neither, and her customer could not follow it anywhere. Same reason the
+    screen styling lives here instead of in _PDF_CSS, whose @page margin is
+    what governs the printed copy.
+
+    A plain href, not window.close() — CSP blocks inline scripts, and browsers
+    refuse close() on a view the page did not open itself.
+    """
+    if "</head>" in document_html and "<body>" in document_html:
+        return (document_html
+                .replace("</head>", _INVOICE_PAGE_HEAD + "</head>", 1)
+                .replace("<body>", "<body>" + _INVOICE_PAGE_BAR, 1))
+    # Bare fragment (the not-found message) — give it a document of its own so
+    # the bar is still there on the one screen she most needs to leave.
+    return (f'<html><head><meta charset="utf-8">{_INVOICE_PAGE_HEAD}</head>'
+            f'<body>{_INVOICE_PAGE_BAR}{document_html}</body></html>')
+
+
 @app.get("/invoice/{order_id}", response_class=HTMLResponse)
 def invoice_preview(request: Request, order_id: int):
     """The invoice document itself, opened in a new tab from the chat preview.
@@ -1775,11 +1826,10 @@ def invoice_preview(request: Request, order_id: int):
         inv = _invoice.build_invoice(cur, cid, int(order_id), language=lang)
 
     if not inv:
-        return HTMLResponse(
-            "<p style='font-family:Arial;padding:24px'>I couldn't find that order.</p>",
-            status_code=404,
-        )
-    return HTMLResponse(_invoice.render_invoice_html(inv))
+        return HTMLResponse(_invoice_page(
+            "<p style='font-family:Arial;padding:24px'>I couldn't find that order.</p>"),
+            status_code=404)
+    return HTMLResponse(_invoice_page(_invoice.render_invoice_html(inv)))
 
 
 @app.post("/settings/tax-rate")
