@@ -154,6 +154,12 @@ async def _watchdog_loop() -> None:
 async def lifespan(app: FastAPI):
     asyncio.create_task(_watchdog_loop())
     yield
+    # Shut the DB pool's worker threads down cleanly (db.py, 2026-08-07).
+    try:
+        from db import close_pool
+        close_pool()
+    except Exception:
+        pass
 
 
 limiter = Limiter(key_func=get_remote_address)
