@@ -457,6 +457,19 @@ class MKChatEngine:
                 return ChatReply(ui["sales_tax_show"].format(rate=f"{rate:g}"))
             return ChatReply(ui["sales_tax_unset"])
 
+        # A SET is a silent destructive write, so require the message to
+        # actually say "tax" before doing one. The deterministic rule
+        # (intent_router.py:1448) already demands "sales tax"/"tax rate", so
+        # every legitimate set has the word; only the LLM fallback can land
+        # here without it. It does: "Establece mi par para máscaras de carbón
+        # en 3" coin-flipped into set_sales_tax on 3 of 5 runs (conf 0.11-0.46)
+        # and would have written tax_rate = 3 with no confirmation (2026-08-07).
+        # Decline instead of writing — the message falls through to the normal
+        # pipeline. "impuesto" is here so a Spanish set still works if/when
+        # Spanish routing lands.
+        if not re.search(r"tax|impuesto", msg, re.I):
+            return None
+
         rate = float(m.group(1))
         if rate > 100:  # MK's field caps at 100; anything above is a typo
             return ChatReply(ui["sales_tax_invalid"])

@@ -35,7 +35,7 @@ Nueva cliente Jane Doe, 444 4th St, Anytown, Alabama 55555, jane@gmail.com, 5551
 Lo organizaré y lo enviaré a MyCustomers automáticamente.
 
 BUSCAR UN CLIENTE
-Solo escribe un nombre — encontraré la coincidencia más cercana aunque lo escribas mal.
+Solo escribe un nombre — encontraré la coincidencia más cercana aunque lo escribas mal. Tus clientas y su historial de pedidos de MyCustomers se importan automáticamente cuando te registras, así que puedes consultar pedidos anteriores de inmediato.
 
 Ejemplo:
 Jane Doe
@@ -45,27 +45,17 @@ AGREGAR UN PEDIDO DE CLIENTE
 Agrega varios artículos y cantidades en un solo mensaje — confirmaré todo antes de enviarlo.
 
 Ejemplo:
-Nuevo pedido para Jane Doe; quiere un labial rojo, 2 máscaras de carbón y un limpiador 4-en-1 para piel normal/seca.
+Nuevo pedido para Jane Doe; quiere un Gel Semi-Matte Lipstick, 2 Charcoal Mask y un limpiador 4-en-1 para piel normal/seca.
 
 BUSCAR UN PRODUCTO
 Pregunta por cualquier producto por su nombre y te mostraré el precio, el número de pieza, los tonos, los ingredientes y las hojas de datos — sin buscar en el catálogo.
 
 Ejemplo:
-Cuéntame sobre la base TimeWise 3D
-¿Cuáles son los ingredientes de la máscara de carbón?
-
-HAZ PREGUNTAS SOBRE TU NEGOCIO
-Pregunta sobre tus clientas y sus pedidos en lenguaje natural — yo busco la respuesta.
-
-Ejemplo:
-¿Quién no ha pedido en 6 meses?
-¿Quién compró la máscara de carbón?
+TimeWise 3D Foundation
+Charcoal Mask
 
 INVENTARIO PERSONAL
-Cuando hagas un pedido de inventario a través de MaryKayInTouch.com, tu stock se actualiza automáticamente — sin necesidad de entrada manual. También puedes consultar el stock, actualizar cantidades, configurar alertas de stock bajo e imprimir un PDF en cualquier momento con solo pedirlo.
-
-Ejemplo:
-¿Cuántos sets TimeWise tengo? Establece mi par para máscaras de carbón en 3.
+Cuando hagas un pedido de inventario a través de MaryKayInTouch.com, tu stock se actualiza automáticamente — sin necesidad de entrada manual. Puedes verlo, actualizar cantidades e imprimir un PDF cuando quieras desde "Manage Inventory" en el menú.
 
 DIRECTORAS
 Si tienes una unidad, tu equipo también está aquí — miembros de la unidad, Great Start, Star Consultant y el programa de auto. Solo pregunta.
@@ -133,7 +123,7 @@ support@mypinkassistant.com
         ¿Cuáles fueron los últimos 3 pedidos de Jane?
       </p>
       <p style="margin:0 0 16px 0;color:#111;">
-        Encontraré la coincidencia más cercana aunque no recuerdes la ortografía exacta.
+        Encontraré la coincidencia más cercana aunque no recuerdes la ortografía exacta. Tus clientas y su historial de pedidos de MyCustomers se importan automáticamente cuando te registras, así que puedes consultar pedidos anteriores de inmediato.
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">🛍 Agregar un Pedido de Cliente</h3>
@@ -142,7 +132,7 @@ support@mypinkassistant.com
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Ejemplo:</strong><br>
-        Nuevo pedido para Jane Doe; quiere un labial rojo, 2 máscaras de carbón y un limpiador 4-en-1 para piel normal/seca.
+        Nuevo pedido para Jane Doe; quiere un Gel Semi-Matte Lipstick, 2 Charcoal Mask y un limpiador 4-en-1 para piel normal/seca.
       </p>
       <p style="margin:0 0 16px 0;color:#111;">
         Confirmaré cada artículo antes de enviarlo, y siempre puedes agregar o quitar artículos antes de la aprobación final.
@@ -154,27 +144,13 @@ support@mypinkassistant.com
       </p>
       <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
         <strong>Ejemplo:</strong><br>
-        Cuéntame sobre la base TimeWise 3D<br>
-        ¿Cuáles son los ingredientes de la máscara de carbón?
-      </p>
-
-      <h3 style="margin:16px 0 8px 0;font-size:16px;">💬 Haz Preguntas Sobre Tu Negocio</h3>
-      <p style="margin:0 0 10px 0;color:#111;">
-        Pregunta sobre tus clientas y sus pedidos en lenguaje natural — yo busco la respuesta.
-      </p>
-      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
-        <strong>Ejemplo:</strong><br>
-        ¿Quién no ha pedido en 6 meses?<br>
-        ¿Quién compró la máscara de carbón?
+        TimeWise 3D Foundation<br>
+        Charcoal Mask
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">📦 Inventario Personal</h3>
-      <p style="margin:0 0 10px 0;color:#111;">
-        Cuando hagas un pedido de inventario a través de MaryKayInTouch.com, tu stock se actualiza automáticamente — sin necesidad de entrada manual. También puedes consultar el stock, actualizar cantidades, configurar alertas de stock bajo e imprimir un PDF en cualquier momento con solo pedirlo.
-      </p>
-      <p style="margin:0 0 14px 0;padding:12px;background:#f7f7f8;border:1px solid #e6e6e6;border-radius:10px;">
-        <strong>Ejemplo:</strong><br>
-        ¿Cuántos sets TimeWise tengo? Establece mi par para máscaras de carbón en 3.
+      <p style="margin:0 0 16px 0;color:#111;">
+        Cuando hagas un pedido de inventario a través de MaryKayInTouch.com, tu stock se actualiza automáticamente — sin necesidad de entrada manual. Puedes verlo, actualizar cantidades e imprimir un PDF cuando quieras desde <strong>Manage Inventory</strong> en el menú.
       </p>
 
       <h3 style="margin:16px 0 8px 0;font-size:16px;">👑 Directoras</h3>
