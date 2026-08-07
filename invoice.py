@@ -439,10 +439,23 @@ def render_invoice_preview(inv: dict) -> str:
     # time and the number means nothing to her or her customer (Brian,
     # 2026-08-06). It is not on the invoice document either; the order date is
     # what identifies the transaction to both of them.
+    # Discount and tax get their own lines here, not just on the document
+    # (2026-08-06). Without them the bubble listed $60.00 of product and then a
+    # Total of $52.32 with nothing in between, which reads as an arithmetic bug
+    # in the moment she is deciding whether to send it. Same omit-when-zero
+    # rule as _totals_rows, so an ordinary order looks exactly as it did.
+    adjustments = ""
+    if inv["discount"]:
+        adjustments += (f'<div style="color:#888">{_html.escape(inv["discount_label"])} '
+                        f'−{_money(inv["discount"])}</div>')
+    if inv["tax"]:
+        adjustments += (f'<div style="color:#888">{_html.escape(inv["tax_label"])} '
+                        f'{_money(inv["tax"])}</div>')
+
     head = (
         f'<strong>Invoice for {_html.escape(inv["sold_to"]["name"])}</strong><br>'
         f'<span style="color:#888">{_html.escape(inv["date"])}</span>'
-        f'<div style="margin:8px 0">{lines}</div>'
+        f'<div style="margin:8px 0">{lines}{adjustments}</div>'
     )
 
     # The order list she just looked at prints the STORED total; this invoice
