@@ -1326,10 +1326,13 @@ class MKChatEngine:
             return ChatReply("I couldn't send that invoice just now. Give it a minute "
                              "and try again — if it keeps failing, email support@mypinkassistant.com.")
 
+        # Plain text, one line, no markup. addMessage() only switches a bubble
+        # to innerHTML when it spots "<a ", "<div" or "<strong" (web/app.js:110),
+        # so the "<br>" and "<span>" an earlier version used printed as literal
+        # tags. Nothing needs escaping now that it renders as textContent —
+        # escaping here would show "&amp;" in a name like "Ann & Co".
         return ChatReply(
-            f"✅ Invoice sent to {_html.escape(inv['sold_to']['name'])} "
-            f"at {_html.escape(to_email)}.<br>"
-            f"<span style=\"color:#888\">Replies go straight to your inbox.</span>")
+            f"✅ Invoice sent to {inv['sold_to']['name']} at {to_email}.")
 
     def _intent_pcp_list(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
