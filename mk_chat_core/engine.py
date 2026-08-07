@@ -163,6 +163,13 @@ _NAME_GUESS_BLOCKLIST = {
     "account", "calculate", "calculating",
 }
 
+# How many recent orders "invoice Jane Smith" offers to choose from. Both the
+# single-match and the picker path use it, so they can't drift apart. Three
+# because an invoice names one specific transaction and she is picking by date
+# and total alone — a longer list is more to scan, not more useful (Brian,
+# 2026-08-06). Customers with fewer orders simply show fewer.
+_INVOICE_ORDER_CHOICES = 3
+
 def _is_plausible_name_guess(guess: str) -> bool:
     """Reject a customer-name guess made up entirely of common English
     function words / verbs — those are stray leftovers, not a name."""
@@ -1132,6 +1139,198 @@ class MKChatEngine:
             return ChatReply(ui["bulk_text_educate"])
         return None
 
+    def _intent_send_invoice(self, ctx) -> Optional[ChatReply]:
+        """Show an invoice PREVIEW. Never sends (2026-08-04).
+
+        Three ways in, and only one of them can reach an email:
+          - "send invoice for order 4821"  → preview that order
+          - "invoice Jane Smith"           → her order list, each with a button
+          - "send an invoice"              → ask who
+
+        The name path deliberately answers with the ORDER LIST rather than
+        picking her newest order. An invoice names a specific transaction; if
+        we guessed wrong the consultant would not find out until her customer
+        did.
+        """
+        ui = ctx.ui
+        consultant_id = ctx.consultant_id
+        intent_result = ctx.intent_result
+        if intent_result.intent != "send_invoice":
+            return None
+
+        import invoice as _invoice
+        from db import tx
+        from crm_store import (find_customers_by_name, get_recent_orders_for_customer,
+                               format_recent_orders)
+
+        slots = intent_result.slots or {}
+        order_id = slots.get("order_id")
+
+        if order_id:
+            with tx() as (conn, cur):
+                inv = _invoice.build_invoice(cur, consultant_id, int(order_id),
+                                             language=(ctx.language or "en"))
+            if not inv:
+                return ChatReply("To send an invoice, pull up the customer's "
+                                 "orders and tap <strong>Send invoice</strong> on the one you want.")
+            if not inv["sold_to"]["email"]:
+                return ChatReply(
+                    f"I don't have an email address for {inv['sold_to']['name']}, so there's "
+                    f"nowhere to send the invoice. Add her email in MyCustomers and it'll "
+                    f"sync over.")
+            # Remember which order the preview is asking about, so a typed
+            # "email" means the same thing as the pink button. Only when the
+            # invoice is actually sendable — a blocked preview shows no button
+            # and must not make a bare "yes" mail anything. The pending is
+            # transparent (see the invoice_confirm branch in _handle_pending):
+            # anything that is not an answer replays as a normal message.
+            if not inv["block_reason"]:
+                ctx.state["pending"] = {"kind": "invoice_confirm",
+                                        "order_id": int(inv["order_id"])}
+                save_session_state(ctx.state, session_id=ctx.sid)
+            return ChatReply(_invoice.render_invoice_preview(inv))
+
+        # No order id — resolve the name to an order list.
+        guess = (slots.get("target") or "").strip()
+        if not guess:
+            return ChatReply("Who is the invoice for? Say something like "
+                             "<strong>invoice Jane Smith</strong> and I'll show you her orders.")
+
+        with tx() as (conn, cur):
+            matches = find_customers_by_name(cur, consultant_id=consultant_id,
+                                             name=guess, limit=10)
+            if not matches:
+                return ChatReply(ui["no_customer_found_yet"].format(name=guess))
+            if len(matches) > 1:
+                # Reuse the ordinary picker: its "orders" action already ends
+                # in format_recent_orders, which now renders the invoice
+                # buttons on its own. No invoice-specific pending state.
+                top = matches[:3]
+                ctx.state["pending"] = {
+                    "kind": "pick_customer", "candidates": top, "action": "orders",
+                    "orders_limit": _INVOICE_ORDER_CHOICES, "orders_start_date": None,
+                    "orders_end_date": None, "orders_period_label": None,
+                    "orders_product_filter": [],
+                }
+                save_session_state(ctx.state, session_id=ctx.sid)
+                return ChatReply(render_customer_picker(top, ui=ui))
+
+            c = matches[0]
+            name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
+            email = (c.get("email") or "").strip()
+            if not email:
+                return ChatReply(f"I don't have an email address for {name}, so there's "
+                                 f"nowhere to send an invoice. Add her email in MyCustomers "
+                                 f"and it'll sync over.")
+            orders = get_recent_orders_for_customer(
+                cur, customer_id=int(c["id"]), limit=_INVOICE_ORDER_CHOICES)
+
+        if not orders:
+            return ChatReply(f"I don't see any orders for {name} to invoice.")
+        return ChatReply("Which order?\n\n" + format_recent_orders(
+            name, orders, invoice_to=email))
+
+    def _intent_send_invoice_confirm(self, ctx) -> Optional[ChatReply]:
+        """Actually email the invoice (2026-08-04).
+
+        Only reachable from a tapped button on a preview — see the routing
+        comment in intent_router. Everything here is re-derived from the
+        database rather than carried over from the preview: the tenant check
+        in build_invoice is the thing standing between one consultant and
+        another's order, so it has to run on the message that SENDS, not just
+        the one that previewed.
+        """
+        intent_result = ctx.intent_result
+        if intent_result.intent != "send_invoice_confirm":
+            return None
+
+        order_id = int((intent_result.slots or {}).get("order_id") or 0)
+        if not order_id:
+            return None
+
+        # Retire the preview's pending before sending, not after: whatever this
+        # returns — sent, blocked, or a provider failure — the question it was
+        # holding open has been answered, and a later bare "yes" must not mail
+        # the same invoice a second time.
+        if (ctx.state.get("pending") or {}).get("kind") == "invoice_confirm":
+            ctx.state["pending"] = None
+            save_session_state(ctx.state, session_id=ctx.sid)
+
+        return self._send_invoice_now(ctx.consultant_id, order_id, ctx.language)
+
+    def _send_invoice_now(self, consultant_id: int, order_id: int,
+                          language: str | None) -> ChatReply:
+        """The actual send. TWO callers, deliberately sharing one body.
+
+        A tapped Email button routes here through send_invoice_confirm; typing
+        a bare "email" arrives through the invoice_confirm pending branch. They
+        must not drift — every check below (tenant, block_reason, missing
+        address) is the last thing standing before an irreversible email, so
+        neither entry point may own a private copy of them.
+        """
+        import invoice as _invoice
+        from db import tx, is_postgres
+        from emailer import send_invoice_email
+
+        with tx() as (conn, cur):
+            inv = _invoice.build_invoice(cur, consultant_id, order_id,
+                                         language=(language or "en"))
+            if not inv:
+                return ChatReply("I couldn't find that order.")
+            PH = "%s" if is_postgres() else "?"
+            cur.execute(f"SELECT first_name, last_name, email, invoice_email "
+                        f"FROM consultants WHERE id={PH}", (consultant_id,))
+            row = cur.fetchone() or ("", "", "", "")
+
+        to_email = inv["sold_to"]["email"]
+        if not to_email:
+            return ChatReply(f"I don't have an email address for {inv['sold_to']['name']}.")
+
+        # The preview already withholds the Email button when build_invoice sets
+        # a block_reason, so reaching here means the phrasing was typed by hand
+        # rather than tapped. Re-check anyway: the button is a convenience, not a
+        # gate, and this is the last point before something irreversible leaves
+        # the building. Same reason the tenant check above runs again instead of
+        # trusting the preview.
+        # No order number in either message, same as everywhere else she can
+        # see: the id is ours and means nothing to her. The order is identified
+        # by the customer's name and the preview she is looking at.
+        if inv["block_reason"] == "cds":
+            return ChatReply(
+                f"That one shipped from Mary Kay directly, so they already "
+                f"billed your customer for it — there's no invoice to send."
+            )
+        if inv["block_reason"] == "unpriced":
+            return ChatReply(
+                f"I can't send that one — I don't have a price on file for "
+                f"everything on it, so your customer would see an item as free. "
+                f"Nightly sync usually fills those in."
+            )
+
+        cons_name = " ".join(str(p) for p in (row[0], row[1]) if p).strip()
+        reply_to = (str(row[3] or "") or str(row[2] or "")).strip()
+
+        try:
+            send_invoice_email(
+                to_email=to_email,
+                customer_name=inv["sold_to"]["name"],
+                consultant_name=cons_name,
+                consultant_email=reply_to,
+                invoice_html=_invoice.render_invoice_html(inv),
+                pdf_bytes=_invoice.render_invoice_pdf(inv),
+                invoice_date=inv["date"],
+            )
+        except Exception as e:
+            # Never surface the raw provider error to a consultant.
+            print(f"[Invoice] send failed c={consultant_id} order={order_id}: {e}")
+            return ChatReply("I couldn't send that invoice just now. Give it a minute "
+                             "and try again — if it keeps failing, email support@mypinkassistant.com.")
+
+        return ChatReply(
+            f"✅ Invoice sent to {_html.escape(inv['sold_to']['name'])} "
+            f"at {_html.escape(to_email)}.<br>"
+            f"<span style=\"color:#888\">Replies go straight to your inbox.</span>")
+
     def _intent_pcp_list(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
         Returns None to decline — fall through to pending flow / normal parse."""
@@ -1821,7 +2020,12 @@ class MKChatEngine:
                             start_date=_start_date, end_date=_end_date,
                         )
 
-                    return ChatReply(format_recent_orders(customer_name, orders, period_label=_period_label))
+                    # invoice_to = her email, which is what turns each order in
+                    # this list into a "Send invoice" button (invoices 2026-08-04).
+                    # No email on file → plain text, exactly as before.
+                    return ChatReply(format_recent_orders(
+                        customer_name, orders, period_label=_period_label,
+                        invoice_to=(c.get("email") or "").strip() or None))
         return None
 
     def _intent_customer_spend(self, ctx) -> Optional[ChatReply]:
@@ -2336,7 +2540,9 @@ class MKChatEngine:
                     if _pf_terms:
                         return ChatReply(self._format_product_history(
                             customer_name, " and ".join(_pf_terms), _items, ui))
-                    return ChatReply(format_recent_orders(customer_name, orders, period_label=_pl))
+                    return ChatReply(format_recent_orders(
+                        customer_name, orders, period_label=_pl,
+                        invoice_to=(c.get("email") or "").strip() or None))
 
                 if action == "delete":
                     with tx() as (conn, cur):
@@ -2774,6 +2980,49 @@ class MKChatEngine:
                     return ChatReply(ui["canceled"])
 
                 return ChatReply(ui["delete_confirm_prompt"])
+
+            if kind == "invoice_confirm":
+                # Exists so she can TYPE "email" instead of tapping the pink
+                # button (Brian, 2026-08-06). The button itself does not need
+                # this state — it sends the full "email invoice for order N",
+                # which routes to send_invoice_confirm on its own — so this
+                # branch only has to catch the bare words.
+                #
+                # Deliberately TRANSPARENT, unlike delete_customer_confirm
+                # above. That one re-prompts, because deleting a customer is
+                # irreversible and a mistyped answer must not become some
+                # other action. Here the risk runs the other way: she is
+                # looking at a finished invoice, and her next sentence is at
+                # least as likely to be her next task as an answer to this
+                # question. So anything that is not an answer clears the
+                # pending and REPLAYS the message through handle_message with
+                # no pending set, exactly as if this bubble had never asked.
+                # Returning None instead would drop it into _normal_parse and
+                # hand a plain "orders for Jane" to the order parser. The
+                # replay costs one extra route() and one extra intent_logs row
+                # — the same trade the pick_customer branch already makes for
+                # "team member …" above.
+                answer = (msg or "").strip().lower().rstrip("!.? ")
+                order_id = int(pending.get("order_id") or 0)
+
+                if order_id and answer in ("email", "email it", "send", "send it",
+                                           "yes", "y", "ok", "okay", "sure"):
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return self._send_invoice_now(consultant_id, order_id, ctx.language)
+
+                # "cancel" normally never reaches here — the cancel intent
+                # interrupts pending flows and clears this itself. Kept so the
+                # branch stays correct on its own terms if that ever changes.
+                if answer in ("cancel", "no", "n", "nope", "stop",
+                              "nevermind", "never mind"):
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(ui["canceled"])
+
+                state["pending"] = None
+                save_session_state(state, session_id=sid)
+                return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
 
             if kind == "order_line_confirm_top":
                 order = pending["order"]
@@ -3671,6 +3920,8 @@ class MKChatEngine:
         "notes_educate": "_intent_notes_educate",
         "mycustomers_link": "_intent_mycustomers_link",
         "bulk_text_educate": "_intent_bulk_text_educate",
+        "send_invoice": "_intent_send_invoice",
+        "send_invoice_confirm": "_intent_send_invoice_confirm",
         "order_help": "_intent_order_help",
         "followup_help": "_intent_followup_help",
         "sync_help": "_intent_sync_help",

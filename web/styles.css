@@ -706,6 +706,14 @@ body.noticeActive .layout {
 
 @media (min-width: 601px) {
     .quick-replies { display: none; }
+
+    /* Opt back in. The blanket hide above exists because a yes/no confirm has
+       a typed equivalent sitting right there in the composer, so on a laptop
+       the buttons are redundant chrome. The invoice confirm is different: it
+       is the last step before an email leaves, and "which button did I mean"
+       should not depend on screen width. Adding qr-always keeps that decision
+       per-bubble instead of flipping every existing confirm to visible. */
+    .quick-replies.qr-always { display: flex; }
 }
 
 /* When quick-reply buttons appear inside a bot bubble, force the bubble

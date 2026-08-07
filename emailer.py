@@ -613,3 +613,88 @@ def send_admin_alert_email(subject: str, message: str) -> None:
             print(f"[AdminAlertEmail] Resend error {r.status_code}: {r.text[:200]}")
     except Exception as e:
         print(f"[AdminAlertEmail] send failed: {e}")
+
+
+def send_invoice_email(to_email: str, customer_name: str, consultant_name: str,
+                       consultant_email: str, invoice_html: str,
+                       pdf_bytes: bytes | None, invoice_date: str) -> None:
+    """Email an invoice to a CUSTOMER (2026-08-04).
+
+    Every other sender in this file writes to a consultant — someone who
+    signed up with us and expects our name in the inbox. This one writes to
+    her customer, who has never heard of MyPinkAssistant and did not opt into
+    anything from us. Two consequences, both deliberate:
+
+    FROM carries HER name over OUR domain: "Jane Smith <invoices@...>".
+    Sending as her actual address would fail SPF/DKIM and land in spam; a
+    bare MyPinkAssistant sender makes her customer think MK is invoicing
+    them. The display name is the part a phone shows, so the customer sees
+    "Jane Smith" and the domain quietly does the deliverability work. This is
+    the same shape Shopify and Square use for merchant mail.
+
+    REPLY-TO is her real address. A customer replying with "can I swap the
+    lipstick shade" must reach HER, not our support inbox. This is the only
+    reply_to in the codebase and the reason the feature is safe to ship: we
+    are the transport, never a party to the conversation.
+
+    The PDF is an attachment AND the invoice is inline in the body. Nobody
+    should have to open a file to read a five-line receipt, and pdf_bytes is
+    allowed to be None (see invoice.render_invoice_pdf) — a failed render
+    costs the attachment, not the email.
+    """
+    import base64
+    import re
+
+    api_key = (os.getenv("RESEND_API_KEY") or "").strip()
+    # Separate from MAIL_FROM on purpose: that one is the support identity.
+    mail_from = (os.getenv("INVOICE_MAIL_FROM") or os.getenv("MAIL_FROM") or "").strip()
+    if not api_key or not mail_from:
+        raise RuntimeError("Missing RESEND_API_KEY or INVOICE_MAIL_FROM/MAIL_FROM")
+
+    # If INVOICE_MAIL_FROM already carries a display name, strip it — hers wins.
+    addr = mail_from.split("<")[-1].strip(" <>")
+    # Quotes and newlines in a display name are header injection; her name
+    # comes from the consultants table, but that is still user-typed text.
+    display = (consultant_name or "").replace('"', "").replace("\n", " ").replace("\r", " ").strip()
+    sender = f'{display} <{addr}>' if display else mail_from
+
+    first = (customer_name or "").split()[0] if customer_name else "there"
+    subject = f"Your Mary Kay invoice from {display}" if display else "Your Mary Kay invoice"
+
+    intro = (f"<p>Hi {escape(first)}, thank you for your order! "
+             f"Your invoice is below and attached as a PDF.</p>")
+    body_html = invoice_html.replace("<body>", f"<body>{intro}", 1)
+
+    text = f"Hi {first}, thank you for your order!\n\nYour invoice is attached as a PDF."
+    if display:
+        text += f"\n\n— {display}"
+
+    payload = {
+        "from": sender,
+        "to": [to_email],
+        "subject": subject,
+        "text": text,
+        "html": body_html,
+    }
+    if consultant_email:
+        payload["reply_to"] = consultant_email
+    if pdf_bytes:
+        # Named for the order date, not the order id: the id is internal (a
+        # global autoincrement across every consultant) and the customer sees
+        # this filename in her downloads folder. Non-alphanumerics collapse to
+        # dashes so "June 7, 2026" becomes invoice-June-7-2026.pdf on every
+        # mail client and filesystem.
+        _stamp = re.sub(r"[^A-Za-z0-9]+", "-", (invoice_date or "")).strip("-")
+        payload["attachments"] = [{
+            "filename": f"invoice-{_stamp}.pdf" if _stamp else "invoice.pdf",
+            "content": base64.b64encode(pdf_bytes).decode("ascii"),
+        }]
+
+    r = requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=20,
+    )
+    if r.status_code >= 300:
+        raise RuntimeError(f"Resend error {r.status_code}: {r.text}")

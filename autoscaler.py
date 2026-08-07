@@ -49,7 +49,7 @@ FULLSYNC_CONSULTANTS_PER_WORKER = 50
 # THE canonical list — mk_chat_core/jobs.py imports it for the insert_job hook,
 # so a new realtime job type only ever needs to be added here.
 REALTIME_TYPES = ("NEW_ORDER_ROW", "NEW_CUSTOMER", "INITIAL_SYNC",
-                  "IMPORT_CUSTOMERS", "IMPORT_INVENTORY_ORDERS", "IMPORT_ORDER_HISTORY")
+                  "IMPORT_INVENTORY_ORDERS", "IMPORT_ORDER_HISTORY")
 
 
 def _headers() -> dict:

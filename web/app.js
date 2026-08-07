@@ -216,13 +216,22 @@ window.addEventListener("pagehide", () => {
     }
 });
 
-async function sendMessage() {
+async function sendMessage(displayAs) {
     const text = msg.value.trim();
     if (!text) return;
 
+    // A tapped link can send one thing and SHOW another. The invoice buttons
+    // need to send "send invoice for order 1953" — routing keys on that
+    // literal "order <digits>" token — but the consultant should just see
+    // "Send invoice"; the id is ours, internal, and means nothing to her.
+    // Typing still echoes verbatim, so this only ever shortens a link's text.
+    // Type-guarded because send.addEventListener("click", sendMessage) hands
+    // this function a MouseEvent as its first argument.
+    const shown = (typeof displayAs === "string" && displayAs) ? displayAs : text;
+
     enterChatModeIfNeeded();
 
-    addMessage(text, "user");
+    addMessage(shown, "user");
     msg.value = "";
     send.disabled = true;
 
@@ -284,7 +293,7 @@ chat.addEventListener("click", function(e) {
                 link.classList.add("selected");
             }
             msg.value = text;
-            sendMessage();
+            sendMessage(link.dataset.sendLabel);
         }
         return;
     }
@@ -398,7 +407,6 @@ function jobLabel(j) {
     if (!j) return "";
     if (j.type === "NEW_CUSTOMER") return "New customer";
     if (j.type === "NEW_ORDER_ROW") return "Order";
-    if (j.type === "IMPORT_CUSTOMERS") return "Customer import";
     if (j.type === "INITIAL_SYNC") return "Initial sync";
     return j.type;
 }

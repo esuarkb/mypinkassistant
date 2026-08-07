@@ -219,6 +219,37 @@
 
             <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
 
+            <form method="post" action="/settings/invoice-details" id="invoiceForm" autocomplete="off">
+                <label><strong>Invoice Details</strong></label>
+                <div class="hint" style="margin-top:6px">
+                    This is what your customers see at the top of an invoice you send them.
+                    Everything here is optional — anything you leave blank is simply left off.
+                </div>
+
+                <label style="margin-top:10px">Business email (for customer replies)</label>
+                <input class="inputShort" name="invoice_email" type="email" value="{{INVOICE_EMAIL}}" placeholder="{{EMAIL}}" />
+                <div class="hint">Leave blank to use your sign-in email.</div>
+
+                <label style="margin-top:10px">Phone</label>
+                <input class="inputShort" name="invoice_phone" value="{{INVOICE_PHONE}}" />
+
+                <label style="margin-top:10px">Street</label>
+                <input class="inputShort" name="invoice_street" value="{{INVOICE_STREET}}" />
+
+                <div class="row" style="margin-top:8px; align-items:stretch">
+                    <input class="inputShort" style="flex:2" name="invoice_city" value="{{INVOICE_CITY}}" placeholder="City" />
+                    <input class="inputShort" style="flex:1" name="invoice_state" value="{{INVOICE_STATE}}" placeholder="State" />
+                    <input class="inputShort" style="flex:1" name="invoice_zip" value="{{INVOICE_ZIP}}" placeholder="ZIP" />
+                </div>
+
+                <div class="actions">
+                    <button class="btn btnPrimary" type="submit">Save invoice details</button>
+                </div>
+                <div class="hint" id="invoiceMsg" style="margin-top:8px">{{INVOICE_NOTICE}}</div>
+            </form>
+
+            <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);" />
+
             <label><strong>Referral Program</strong></label>
 
             <div class="hint" style="margin-top:6px">

@@ -2682,3 +2682,400 @@ No changes vs baseline — all surfaces look normal.
 No changes vs baseline — all surfaces look normal.
 
 [UIRecon] clean — no alert
+
+[UIRecon] scheduled run 2026-08-03T06:45:05
+
+=== SURFACE 1: login / customer list ===
+[login] STEP 1/8 goto_login — navigating to https://apps.marykayintouch.com/customer-list
+[login] STEP 2/8 wait_consultant_number — waiting for 'Consultant Number' textbox
+[login] STEP 3/8 fill_credentials — filling consultant number + password
+[login] STEP 4/8 click_log_in — clicking 'Log In'
+[login] STEP 5/8 check_invalid_login — checking for 'Invalid login attempt.' banner
+[login] STEP 6/8 finish_logging_in — checking for Salesforce 'Finish Logging In' interstitial (optional)
+[login] STEP 7/8 nav_back_mycustomers — returning to customer list if redirected away
+[login] STEP 8/8 wait_mycustomers_ready — waiting for 'New Customer' button (MyCustomers ready)
+    probe OK   search box ('Note Title' searchbox)
+    buttons: ['Add Tags', 'Archive', 'Delete', 'Export', 'New Customer', 'New Order', 'Print', 'Send MKeCard®']
+
+=== SURFACE 2: new-customer form (no save) ===
+    probe OK   'Save New Customer' button
+    probe OK   'Email Address (Optional)' field
+    probe OK   'Birthday (Optional)' field
+    textboxes: ['Add Tags separated by a comma.', 'MM/DD/YYYY', 'emailAddress', 'firstName', 'lastName', 'phoneNumber', 'referredBy']
+
+=== SURFACE 3: customer detail + address dialog (no save) ===
+    probe OK   'Add Order' button
+    probe OK   subscriptions section
+    probe OK   'Add New Address' button
+    detail buttons: ['Add New Address', 'Add New Note', 'Add Order', 'Archive', 'Delete', 'Edit Tags', 'New Customer', 'New Order']
+    probe OK   AddressFirstName field
+    probe OK   Street field
+    probe OK   City field
+    probe OK   PostalCode field
+    probe OK   state 'Select an option' dropdown
+    probe OK   'Add Apartment/Suite/Etc' button
+    dialog buttons: ['', 'Add Apartment/Suite/Etc', 'Add New Address', 'Cancel', 'Close Cancel']
+
+=== SURFACE 4: order form (no save — closed via Cancel) ===
+    probe OK   'My Inventory' fulfillment option
+    probe OK   'Customer Delivery Service' fulfillment option
+    probe OK   'Save and Review' button
+    probe OK   product search box
+    !! SKU 10179024 produced no search result (attempt 1)
+    probe OK   'Add to Bag' button after SKU search
+
+==================================================
+No changes vs baseline — all surfaces look normal.
+
+[UIRecon] clean — no alert
+
+[UIRecon] scheduled run 2026-08-03T17:00:05
+
+=== SURFACE 1: login / customer list ===
+[login] STEP 1/8 goto_login — navigating to https://apps.marykayintouch.com/customer-list
+[login] STEP 2/8 wait_consultant_number — waiting for 'Consultant Number' textbox
+[login] STEP 3/8 fill_credentials — filling consultant number + password
+[login] STEP 4/8 click_log_in — clicking 'Log In'
+[login] STEP 5/8 check_invalid_login — checking for 'Invalid login attempt.' banner
+[login] STEP 6/8 finish_logging_in — checking for Salesforce 'Finish Logging In' interstitial (optional)
+[login] STEP 7/8 nav_back_mycustomers — returning to customer list if redirected away
+[login] STEP 8/8 wait_mycustomers_ready — waiting for 'New Customer' button (MyCustomers ready)
+    probe OK   search box ('Note Title' searchbox)
+    buttons: ['Add Tags', 'Archive', 'Delete', 'Export', 'New Customer', 'New Order', 'Print', 'Send MKeCard®']
+
+=== SURFACE 2: new-customer form (no save) ===
+    probe OK   'Save New Customer' button
+    probe OK   'Email Address (Optional)' field
+    probe OK   'Birthday (Optional)' field
+    textboxes: ['Add Tags separated by a comma.', 'MM/DD/YYYY', 'emailAddress', 'firstName', 'lastName', 'phoneNumber', 'referredBy']
+
+=== SURFACE 3: customer detail + address dialog (no save) ===
+    probe OK   'Add Order' button
+    probe OK   subscriptions section
+    probe OK   'Add New Address' button
+    detail buttons: ['Add New Address', 'Add New Note', 'Add Order', 'Archive', 'Delete', 'Edit Tags', 'New Customer', 'New Order']
+    probe OK   AddressFirstName field
+    probe OK   Street field
+    probe OK   City field
+    probe OK   PostalCode field
+    probe OK   state 'Select an option' dropdown
+    probe OK   'Add Apartment/Suite/Etc' button
+    dialog buttons: ['', 'Add Apartment/Suite/Etc', 'Add New Address', 'Cancel', 'Close Cancel']
+
+=== SURFACE 4: order form (no save — closed via Cancel) ===
+    probe OK   'My Inventory' fulfillment option
+    probe OK   'Customer Delivery Service' fulfillment option
+    probe OK   'Save and Review' button
+    probe OK   product search box
+    probe OK   'Add to Bag' button after SKU search
+
+==================================================
+No changes vs baseline — all surfaces look normal.
+
+[UIRecon] clean — no alert
+
+[UIRecon] scheduled run 2026-08-04T06:45:05
+
+=== SURFACE 1: login / customer list ===
+[login] STEP 1/8 goto_login — navigating to https://apps.marykayintouch.com/customer-list
+[login] STEP 2/8 wait_consultant_number — waiting for 'Consultant Number' textbox
+[login] STEP 3/8 fill_credentials — filling consultant number + password
+[login] STEP 4/8 click_log_in — clicking 'Log In'
+[login] STEP 5/8 check_invalid_login — checking for 'Invalid login attempt.' banner
+[login] STEP 6/8 finish_logging_in — checking for Salesforce 'Finish Logging In' interstitial (optional)
+[login] STEP 7/8 nav_back_mycustomers — returning to customer list if redirected away
+[login] STEP 8/8 wait_mycustomers_ready — waiting for 'New Customer' button (MyCustomers ready)
+    probe OK   search box ('Note Title' searchbox)
+    buttons: ['Add Tags', 'Archive', 'Delete', 'Export', 'New Customer', 'New Order', 'Print', 'Send MKeCard®']
+
+=== SURFACE 2: new-customer form (no save) ===
+    probe OK   'Save New Customer' button
+    probe OK   'Email Address (Optional)' field
+    probe OK   'Birthday (Optional)' field
+    textboxes: ['Add Tags separated by a comma.', 'MM/DD/YYYY', 'emailAddress', 'firstName', 'lastName', 'phoneNumber', 'referredBy']
+
+=== SURFACE 3: customer detail + address dialog (no save) ===
+    probe OK   'Add Order' button
+    probe OK   subscriptions section
+    probe OK   'Add New Address' button
+    detail buttons: ['Add New Address', 'Add New Note', 'Add Order', 'Archive', 'Delete', 'Edit Tags', 'New Customer', 'New Order']
+    probe OK   AddressFirstName field
+    probe OK   Street field
+    probe OK   City field
+    probe OK   PostalCode field
+    probe OK   state 'Select an option' dropdown
+    probe OK   'Add Apartment/Suite/Etc' button
+    dialog buttons: ['', 'Add Apartment/Suite/Etc', 'Add New Address', 'Cancel', 'Close Cancel']
+
+=== SURFACE 4: order form (no save — closed via Cancel) ===
+    probe OK   'My Inventory' fulfillment option
+    probe OK   'Customer Delivery Service' fulfillment option
+    probe OK   'Save and Review' button
+    probe OK   product search box
+    probe OK   'Add to Bag' button after SKU search
+
+==================================================
+No changes vs baseline — all surfaces look normal.
+
+[UIRecon] clean — no alert
+
+[UIRecon] scheduled run 2026-08-04T17:00:00
+
+=== SURFACE 1: login / customer list ===
+[login] STEP 1/8 goto_login — navigating to https://apps.marykayintouch.com/customer-list
+[login] STEP 2/8 wait_consultant_number — waiting for 'Consultant Number' textbox
+[login] STEP 3/8 fill_credentials — filling consultant number + password
+[login] STEP 4/8 click_log_in — clicking 'Log In'
+[login] STEP 5/8 check_invalid_login — checking for 'Invalid login attempt.' banner
+[login] STEP 6/8 finish_logging_in — checking for Salesforce 'Finish Logging In' interstitial (optional)
+[login] STEP 7/8 nav_back_mycustomers — returning to customer list if redirected away
+[login] STEP 8/8 wait_mycustomers_ready — waiting for 'New Customer' button (MyCustomers ready)
+    probe OK   search box ('Note Title' searchbox)
+    buttons: ['Add Tags', 'Archive', 'Delete', 'Export', 'New Customer', 'New Order', 'Print', 'Send MKeCard®']
+
+=== SURFACE 2: new-customer form (no save) ===
+    probe OK   'Save New Customer' button
+    probe OK   'Email Address (Optional)' field
+    probe OK   'Birthday (Optional)' field
+    textboxes: ['Add Tags separated by a comma.', 'MM/DD/YYYY', 'emailAddress', 'firstName', 'lastName', 'phoneNumber', 'referredBy']
+
+=== SURFACE 3: customer detail + address dialog (no save) ===
+    probe OK   'Add Order' button
+    probe OK   subscriptions section
+    probe OK   'Add New Address' button
+    detail buttons: ['Add New Address', 'Add New Note', 'Add Order', 'Archive', 'Delete', 'Edit Tags', 'New Customer', 'New Order']
+    probe OK   AddressFirstName field
+    probe OK   Street field
+    probe OK   City field
+    probe OK   PostalCode field
+    probe OK   state 'Select an option' dropdown
+    probe OK   'Add Apartment/Suite/Etc' button
+    dialog buttons: ['', 'Add Apartment/Suite/Etc', 'Add New Address', 'Cancel', 'Close Cancel']
+
+=== SURFACE 4: order form (no save — closed via Cancel) ===
+    probe OK   'My Inventory' fulfillment option
+    probe OK   'Customer Delivery Service' fulfillment option
+    probe OK   'Save and Review' button
+    probe OK   product search box
+    probe OK   'Add to Bag' button after SKU search
+
+==================================================
+No changes vs baseline — all surfaces look normal.
+
+[UIRecon] clean — no alert
+
+[UIRecon] scheduled run 2026-08-05T06:45:00
+
+=== SURFACE 1: login / customer list ===
+[login] STEP 1/8 goto_login — navigating to https://apps.marykayintouch.com/customer-list
+[login] STEP 2/8 wait_consultant_number — waiting for 'Consultant Number' textbox
+[login] STEP 3/8 fill_credentials — filling consultant number + password
+[login] STEP 4/8 click_log_in — clicking 'Log In'
+[login] STEP 5/8 check_invalid_login — checking for 'Invalid login attempt.' banner
+[login] STEP 6/8 finish_logging_in — checking for Salesforce 'Finish Logging In' interstitial (optional)
+[login] STEP 7/8 nav_back_mycustomers — returning to customer list if redirected away
+[login] STEP 8/8 wait_mycustomers_ready — waiting for 'New Customer' button (MyCustomers ready)
+    probe OK   search box ('Note Title' searchbox)
+    buttons: ['Add Tags', 'Archive', 'Delete', 'Export', 'New Customer', 'New Order', 'Print', 'Send MKeCard®']
+
+=== SURFACE 2: new-customer form (no save) ===
+    probe OK   'Save New Customer' button
+    probe OK   'Email Address (Optional)' field
+    probe OK   'Birthday (Optional)' field
+    textboxes: ['Add Tags separated by a comma.', 'MM/DD/YYYY', 'emailAddress', 'firstName', 'lastName', 'phoneNumber', 'referredBy']
+
+=== SURFACE 3: customer detail + address dialog (no save) ===
+    probe OK   'Add Order' button
+    probe OK   subscriptions section
+    probe OK   'Add New Address' button
+    detail buttons: ['Add New Address', 'Add New Note', 'Add Order', 'Archive', 'Delete', 'Edit Tags', 'New Customer', 'New Order']
+    probe OK   AddressFirstName field
+    probe OK   Street field
+    probe OK   City field
+    probe OK   PostalCode field
+    probe OK   state 'Select an option' dropdown
+    probe OK   'Add Apartment/Suite/Etc' button
+    dialog buttons: ['', 'Add Apartment/Suite/Etc', 'Add New Address', 'Cancel', 'Close Cancel']
+
+=== SURFACE 4: order form (no save — closed via Cancel) ===
+    probe OK   'My Inventory' fulfillment option
+    probe OK   'Customer Delivery Service' fulfillment option
+    probe OK   'Save and Review' button
+    probe OK   product search box
+    probe OK   'Add to Bag' button after SKU search
+
+==================================================
+No changes vs baseline — all surfaces look normal.
+
+[UIRecon] clean — no alert
+
+[UIRecon] scheduled run 2026-08-05T17:00:04
+
+=== SURFACE 1: login / customer list ===
+[login] STEP 1/8 goto_login — navigating to https://apps.marykayintouch.com/customer-list
+[login] STEP 2/8 wait_consultant_number — waiting for 'Consultant Number' textbox
+[login] STEP 3/8 fill_credentials — filling consultant number + password
+[login] STEP 4/8 click_log_in — clicking 'Log In'
+[login] STEP 5/8 check_invalid_login — checking for 'Invalid login attempt.' banner
+[login] STEP 6/8 finish_logging_in — checking for Salesforce 'Finish Logging In' interstitial (optional)
+[login] STEP 7/8 nav_back_mycustomers — returning to customer list if redirected away
+[login] STEP 8/8 wait_mycustomers_ready — waiting for 'New Customer' button (MyCustomers ready)
+    probe OK   search box ('Note Title' searchbox)
+    buttons: ['Add Tags', 'Archive', 'Delete', 'Export', 'New Customer', 'New Order', 'Print', 'Send MKeCard®']
+
+=== SURFACE 2: new-customer form (no save) ===
+    probe OK   'Save New Customer' button
+    probe OK   'Email Address (Optional)' field
+    probe OK   'Birthday (Optional)' field
+    textboxes: ['Add Tags separated by a comma.', 'MM/DD/YYYY', 'emailAddress', 'firstName', 'lastName', 'phoneNumber', 'referredBy']
+
+=== SURFACE 3: customer detail + address dialog (no save) ===
+    probe OK   'Add Order' button
+    probe OK   subscriptions section
+    probe OK   'Add New Address' button
+    detail buttons: ['Add New Address', 'Add New Note', 'Add Order', 'Archive', 'Delete', 'Edit Tags', 'New Customer', 'New Order']
+    probe OK   AddressFirstName field
+    probe OK   Street field
+    probe OK   City field
+    probe OK   PostalCode field
+    probe OK   state 'Select an option' dropdown
+    probe OK   'Add Apartment/Suite/Etc' button
+    dialog buttons: ['', 'Add Apartment/Suite/Etc', 'Add New Address', 'Cancel', 'Close Cancel']
+
+=== SURFACE 4: order form (no save — closed via Cancel) ===
+    probe OK   'My Inventory' fulfillment option
+    probe OK   'Customer Delivery Service' fulfillment option
+    probe OK   'Save and Review' button
+    probe OK   product search box
+    probe OK   'Add to Bag' button after SKU search
+
+==================================================
+No changes vs baseline — all surfaces look normal.
+
+[UIRecon] clean — no alert
+
+[UIRecon] scheduled run 2026-08-06T06:45:03
+
+=== SURFACE 1: login / customer list ===
+[login] STEP 1/8 goto_login — navigating to https://apps.marykayintouch.com/customer-list
+[login] STEP 2/8 wait_consultant_number — waiting for 'Consultant Number' textbox
+[login] STEP 3/8 fill_credentials — filling consultant number + password
+[login] STEP 4/8 click_log_in — clicking 'Log In'
+[login] STEP 5/8 check_invalid_login — checking for 'Invalid login attempt.' banner
+[login] STEP 6/8 finish_logging_in — checking for Salesforce 'Finish Logging In' interstitial (optional)
+[login] STEP 7/8 nav_back_mycustomers — returning to customer list if redirected away
+[login] STEP 8/8 wait_mycustomers_ready — waiting for 'New Customer' button (MyCustomers ready)
+    probe OK   search box ('Note Title' searchbox)
+    buttons: ['A', 'Add Tags', 'All', 'Archive', 'B', 'C', 'D', 'Delete', 'E', 'Export', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'New Customer', 'New Order', 'O', 'P', 'Print', 'Q', 'R', 'S', 'Send MKeCard®', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+
+=== SURFACE 2: new-customer form (no save) ===
+    probe OK   'Save New Customer' button
+    probe OK   'Email Address (Optional)' field
+    probe OK   'Birthday (Optional)' field
+    textboxes: ['Add Tags separated by a comma.', 'MM/DD/YYYY', 'emailAddress', 'firstName', 'lastName', 'phoneNumber', 'referredBy']
+
+=== SURFACE 3: customer detail + address dialog (no save) ===
+Traceback (most recent call last):
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/run_ui_recon.py", line 306, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/run_ui_recon.py", line 141, in main
+    page.get_by_text(TEST_CUSTOMER).first.click()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/sync_api/_generated.py", line 15631, in click
+    self._sync(
+    ~~~~~~~~~~^
+        self._impl_obj.click(
+        ^^^^^^^^^^^^^^^^^^^^^
+    ...<10 lines>...
+        )
+        ^
+    )
+    ^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_locator.py", line 162, in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_frame.py", line 566, in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Jane Doe").first
+
+
+[UIRecon] email alert status: 200
+[UIRecon] push alert sent to 2 device(s)
+[UIRecon] PB alert status: 200
+
+[UIRecon] scheduled run 2026-08-06T17:00:05
+
+=== SURFACE 1: login / customer list ===
+[login] STEP 1/8 goto_login — navigating to https://apps.marykayintouch.com/customer-list
+[login] STEP 2/8 wait_consultant_number — waiting for 'Consultant Number' textbox
+[login] STEP 3/8 fill_credentials — filling consultant number + password
+[login] STEP 4/8 click_log_in — clicking 'Log In'
+[login] STEP 5/8 check_invalid_login — checking for 'Invalid login attempt.' banner
+[login] STEP 6/8 finish_logging_in — checking for Salesforce 'Finish Logging In' interstitial (optional)
+[login] STEP 7/8 nav_back_mycustomers — returning to customer list if redirected away
+[login] STEP 8/8 wait_mycustomers_ready — waiting for 'New Customer' button (MyCustomers ready)
+    probe OK   search box ('Note Title' searchbox)
+    buttons: ['A', 'Add Tags', 'All', 'Archive', 'B', 'C', 'D', 'Delete', 'E', 'Export', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'New Customer', 'New Order', 'O', 'P', 'Print', 'Q', 'R', 'S', 'Send MKeCard®', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+
+=== SURFACE 2: new-customer form (no save) ===
+    probe OK   'Save New Customer' button
+    probe OK   'Email Address (Optional)' field
+    probe OK   'Birthday (Optional)' field
+    textboxes: ['Add Tags separated by a comma.', 'MM/DD/YYYY', 'emailAddress', 'firstName', 'lastName', 'phoneNumber', 'referredBy']
+
+=== SURFACE 3: customer detail + address dialog (no save) ===
+Traceback (most recent call last):
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/run_ui_recon.py", line 315, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/run_ui_recon.py", line 150, in main
+    page.get_by_text(TEST_CUSTOMER).first.click()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/sync_api/_generated.py", line 15631, in click
+    self._sync(
+    ~~~~~~~~~~^
+        self._impl_obj.click(
+        ^^^^^^^^^^^^^^^^^^^^^
+    ...<10 lines>...
+        )
+        ^
+    )
+    ^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_locator.py", line 162, in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_frame.py", line 566, in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/venv/lib/python3.14/site-packages/playwright/_impl/_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for get_by_text("Jane Doe").first
+
+
+[UIRecon] email alert status: 200
+[UIRecon] push alert sent to 2 device(s)
+[UIRecon] PB alert status: 200

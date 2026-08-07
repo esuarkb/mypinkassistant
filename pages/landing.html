@@ -186,6 +186,38 @@
       background: var(--pink);
       flex-shrink: 0;
     }
+    /* Referral confirmation. Server-rendered by trial_copy() in app.py and
+       present ONLY when resolve_referral() recognises the code — an unknown
+       code renders nothing at all, same rule as the /onboard banner. Built
+       from this page's own cream/pink tokens rather than copying the onboard
+       banner's palette, so it belongs here while carrying the same message
+       the visitor sees again at signup. */
+    .refnote {
+      max-width: 470px;
+      padding: 13px 16px;
+      margin: 0 0 18px;
+      border-radius: 14px;
+      background: var(--blush);
+      border: 1px solid #F4B8CE;
+      color: var(--pinkDeep);
+      font-size: 14.5px;
+      line-height: 1.45;
+    }
+    .refnote strong {
+      display: block;
+      font-size: 15.5px;
+      font-weight: 800;
+      margin-bottom: 2px;
+    }
+    /* The old number stays visible and struck through — a bare "30-day" reads
+       as the standard offer, the crossed-out 7 is what makes it land as a
+       bonus. Decorative only; app.py marks it aria-hidden. */
+    .trial-was {
+      color: var(--ink2);
+      opacity: .6;
+      margin-right: 4px;
+    }
+    .trial-now { color: var(--pink); font-weight: 800; }
     h1.hero-h1 {
       font-family: var(--serif);
       font-size: 68px;
@@ -713,6 +745,7 @@
   <!-- HERO -->
   <section class="hero">
     <div class="reveal">
+      {{REF_BANNER}}
       <div class="eyebrow">
         <span class="eyebrow-dot"></span>
         Just for Mary Kay beauty consultants
@@ -726,7 +759,7 @@
         <a class="btn-hero-trial" href="/splash.html{{REF_QS}}">Start free trial</a>
         <a class="btn-hero-login" href="/login">I already have an account</a>
       </div>
-      <p class="hero-price"><strong>$5.99 / month.</strong> 7-day free trial. Cancel anytime.</p>
+      <p class="hero-price"><strong>$5.99 / month.</strong> {{TRIAL_HERO}} Cancel anytime.</p>
     </div>
 
     <!-- iPhone bezel (hidden on mobile) -->
@@ -988,7 +1021,7 @@
           <div class="cta-dot" style="left:92%;top:42%;width:10px;height:10px;"></div>
           <div class="cta-dot" style="left: 8%;top:38%;width:10px;height:10px;"></div>
         </div>
-        <h2>Try it free for 7 days.</h2>
+        <h2>Try it free for {{TRIAL_DAYS}} days.</h2>
         <p class="cta-sub">$5.99/month after trial &middot; cancel anytime</p>
         <a class="btn-cta-white" href="/splash.html{{REF_QS}}">Start free trial &nbsp;&rarr;</a>
       </div>

@@ -54,6 +54,41 @@ def visible_buttons(page) -> list[str]:
     return sorted(set(out))
 
 
+def open_test_customer(page) -> None:
+    """Search the customer list for TEST_CUSTOMER and click into her detail page.
+
+    The retry is the point. InTouch's LWC search box drops the first fill()
+    when its listener isn't attached yet: the text lands in the box but the
+    query never runs, so all 300+ customers stay listed and the click times
+    out 30s later. MK's A-Z filter row (2026-08-06) slowed the mount enough to
+    lose that race twice a day. A longer wait_for_timeout does NOT fix this —
+    the run on 2026-08-06 17:00 failed with exactly that — because the missed
+    keystroke is never re-sent. Only re-typing re-fires the filter, which is
+    what orders.py step 2 does in production (open_customer_and_start_order).
+
+    Waiting for 'Export' first is a cheap "the list is really mounted" signal:
+    it is a list-only button, so it cannot be visible on any other surface.
+    """
+    page.get_by_role("button", name="Export").wait_for(state="visible", timeout=15000)
+    page.wait_for_timeout(1000)
+    box = page.get_by_role("searchbox", name="Note Title")
+    for attempt in (1, 2, 3):
+        box.fill("")
+        page.wait_for_timeout(300)
+        box.fill(TEST_CUSTOMER)
+        page.wait_for_timeout(800)
+        try:
+            page.get_by_text(TEST_CUSTOMER).first.wait_for(
+                timeout=5000 if attempt == 1 else 10000)
+            page.get_by_text(TEST_CUSTOMER).first.click()
+            return
+        except PlaywrightTimeoutError:
+            if attempt == 3:
+                raise
+            print(f"    !! '{TEST_CUSTOMER}' not in results after attempt "
+                  f"{attempt} — re-typing search")
+
+
 def visible_textboxes(page) -> list[str]:
     out = []
     for t in page.get_by_role("textbox").all():
@@ -136,18 +171,7 @@ def main() -> int:
 
         # ---- Surface 3: customer detail page + address dialog (explore, no save) ----
         print("\n=== SURFACE 3: customer detail + address dialog (no save) ===")
-        # Wait for the list to be interactive before typing. Coming back from
-        # the new-customer form, .fill() lands the text in the box but the
-        # filter never fires while the component is still mounting — the list
-        # stays on all 300+ customers and the click below times out. Broke
-        # 2026-08-06, when MK's new A-Z filter row slowed the render enough to
-        # lose the race. 'Export' is a list-only button, so it appearing is the
-        # cheap "the list is really up" signal.
-        page.get_by_role("button", name="Export").wait_for(state="visible", timeout=15000)
-        page.wait_for_timeout(1000)
-        page.get_by_role("searchbox", name="Note Title").fill(TEST_CUSTOMER)
-        page.wait_for_timeout(1500)
-        page.get_by_text(TEST_CUSTOMER).first.click()
+        open_test_customer(page)
         page.wait_for_timeout(1500)
         detail = {
             "buttons": visible_buttons(page),
@@ -210,9 +234,7 @@ def main() -> int:
                     print("    !! address dialog did not close on Escape — navigating away instead")
                     page.goto(CUSTOMER_LIST_URL, wait_until="domcontentloaded")
                     page.wait_for_timeout(2000)
-                    page.get_by_role("searchbox", name="Note Title").fill(TEST_CUSTOMER)
-                    page.wait_for_timeout(800)
-                    page.get_by_text(TEST_CUSTOMER).first.click()
+                    open_test_customer(page)
                 page.wait_for_timeout(800)
             except PlaywrightTimeoutError:
                 print("    !! address dialog failed to open")

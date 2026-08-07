@@ -212,6 +212,19 @@ ALTER TABLE consultants ADD COLUMN IF NOT EXISTS pwa_installed_at TEXT;
 -- between events. Also in db_setup.py for local SQLite.
 ALTER TABLE consultants ADD COLUMN IF NOT EXISTS signup_event_code TEXT;
 
+-- Invoice "Sold By" block (2026-08-04). The consultant's business contact
+-- details as they should appear on a customer-facing invoice. Deliberately
+-- separate from the login email: consultants sign up with whatever address
+-- they read mail at, which is not always the one they want a customer to
+-- reply to. All optional — the invoice omits any line left blank rather than
+-- printing an empty label. Also in db_setup.py for local SQLite.
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS invoice_phone  TEXT;
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS invoice_street TEXT;
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS invoice_city   TEXT;
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS invoice_state  TEXT;
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS invoice_zip    TEXT;
+ALTER TABLE consultants ADD COLUMN IF NOT EXISTS invoice_email  TEXT;
+
 CREATE TABLE IF NOT EXISTS guest_orders (
   id                    BIGSERIAL PRIMARY KEY,
   consultant_id         INTEGER   NOT NULL,

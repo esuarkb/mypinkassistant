@@ -184,6 +184,20 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "notes_educate":         {"llm_allowed": False, "interrupts_pending": False, "description": "'add a note to X' — notes aren't supported yet, redirect to MyCustomers"},
     "mycustomers_link":      {"llm_allowed": False, "interrupts_pending": True,  "description": "'link to mycustomers' — the clickable MyCustomers link"},
     "bulk_text_educate":     {"llm_allowed": False, "interrupts_pending": False, "description": "'text/remind several customers' — not supported, point at follow-up/lapsed lists' tap-to-text buttons"},
+    # --- invoices (2026-08-04) ---
+    # Two intents, not one, because emailing a customer is irreversible and
+    # the preview is the whole safety story. send_invoice_confirm is reachable
+    # ONLY via the "order <id>" token, which she can only get by tapping the
+    # button on a preview she has already read. Both are llm_allowed=False so
+    # the classifier can never route straight to the sending one.
+    # interrupts_pending=True is narrower than it looks: the rules below claim
+    # these two ONLY when nothing is pending or when the pending is the invoice
+    # confirm they created themselves, and llm_allowed=False means the
+    # classifier can never produce them at all. So the flag is only ever
+    # exercised by a button tapped on the preview that set that pending — which
+    # must reach its handler rather than be eaten by it (2026-08-06).
+    "send_invoice":          {"llm_allowed": False, "interrupts_pending": True,  "description": "show an invoice preview for one order before emailing it"},
+    "send_invoice_confirm":  {"llm_allowed": False, "interrupts_pending": True,  "description": "confirmed: actually email the invoice for a specific order id"},
 }
 
 SUPPORTED_INTENTS = set(INTENT_REGISTRY)
@@ -2134,6 +2148,44 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         # possessive accepts straight AND iOS curly apostrophes ("judy pasko’s order")
         if re.search(r"\b(?:add|put|include)\b.*\b(?:to|on|onto|into|in)\s+(?:(?:her|his|their|the|that|my)\s+)?(?:[a-z][\w'’‘-]*(?:\s+[a-z][\w'’‘-]*)?['’‘]s\s+)?(?:last\s+|previous\s+|existing\s+|recent\s+|submitted\s+)?orders?\b", lowered):
             return _claim("submitted_order_edit", {"action": "add"})
+
+    # Invoices (not pending, 2026-08-04). Confirm rule goes FIRST so the
+    # sending phrasing can never be swallowed by the preview rule.
+    #
+    # Both require the word "invoice"; only the confirm form requires a literal
+    # "order <digits>". A consultant cannot know an internal order id, so that
+    # token is effectively proof the message came from a button she tapped on a
+    # preview she just read — the confirmation is carried by the message itself,
+    # which is why the buttons work no matter how stale the session is.
+    #
+    # The one pending kind allowed through is the invoice confirm a preview set
+    # for itself (2026-08-06, added so a typed "email" works too). Without this
+    # the preview's own buttons would be blocked by the state that preview just
+    # created. Every other pending flow still wins, same as before.
+    if (not pending or (pending or {}).get("kind") == "invoice_confirm") \
+            and "invoice" in lowered:
+        _inv_id = re.search(r"\border\s+(\d{1,9})\b", lowered)
+        if _inv_id and re.search(r"\b(?:email|send\s+it|yes\s*,?\s*send)\b", lowered) \
+           and not re.search(r"\bpreview\b", lowered):
+            return _claim("send_invoice_confirm", {"order_id": int(_inv_id.group(1))})
+        # Preview. Also catches the natural "can you invoice Jane Smith" with
+        # no id — the handler turns that into her order list rather than a
+        # dead end, which is the whole point of routing it here instead of
+        # letting it fall through to a fuzzy customer lookup.
+        if re.search(r"\b(?:send|email|make|create|generate|get|show|need|want|preview)\b", lowered) \
+           or re.match(r"^\s*invoices?\s+\S", lowered):
+            # Whatever is left after the command words is the customer name.
+            # Anything that isn't a real name simply finds nobody, and the
+            # handler asks who — a wrong guess here costs a question, not an email.
+            _inv_target = re.sub(r"\border\s+\d{1,9}\b", " ", lowered)
+            _inv_target = re.sub(
+                r"\b(?:can|could|would|you|please|send|email|make|create|generate|get|show|need|want"
+                r"|preview|to|for|out|an?|the|my|her|his|their|this|that|i|customer|client|invoices?)\b",
+                " ", _inv_target)
+            return _claim("send_invoice", {
+                "order_id": int(_inv_id.group(1)) if _inv_id else None,
+                "target": re.sub(r"\s+", " ", _inv_target).strip(" ,.?!'\""),
+            })
 
     # Delete customer (not pending)
     if not pending:

@@ -290,6 +290,19 @@ CASES = [
 # only that the new rule added on 2026-07-03 doesn't steal them.
 # (message, forbidden_intent, note)
 NEGATIVE_GUARD_CASES = [
+    # --- Invoices (2026-08-04): emailing a customer is irreversible ---
+    # Mid-flow is the dangerous case. send_invoice_confirm is
+    # interrupts_pending=False, so a consultant answering an order confirm
+    # must never trip the sender. If this fails, she can email a customer by
+    # typing into an open confirm.
+    ("email invoice for order 4821", "send_invoice_confirm",
+     "invoice send must never interrupt an open pending flow",
+     {"pending": {"kind": "order_confirm"}}),
+    # No "invoice" token at all — the invoice rules must not reach for it.
+    ("send jane smith a text", "send_invoice",
+     "an ordinary text/outreach message must not be claimed as an invoice"),
+    ("where do I see my invoices for my subscription", "send_invoice_confirm",
+     "billing questions mentioning invoices must never reach the sender"),
     ("Misty Cameron add a note,  wants pink prism shimmer eye stick, barrier restore 1-1-3, foundation primer, translucent powder",
      "notes_educate",
      "filler 'add a note' inside a real order entry must still be parsed as an order"),
@@ -699,6 +712,28 @@ ROUTE_CASES = [
     # =True by design — it clears the pending order)
     ("cancel",
      {"pending": {"kind": "cds_need_address"}}, "cancel"),
+
+    # --- Invoices (2026-08-04) ---
+    # The two button phrasings. These MUST stay distinct: the first only
+    # previews, the second actually emails a customer.
+    ("send invoice for order 4821",              None, "send_invoice"),
+    ("email invoice for order 4821",             None, "send_invoice_confirm"),
+    ("preview invoice for order 991",            None, "send_invoice"),
+    # Typed by hand, no order id — must reach the preview handler (which
+    # answers with her order list), never the sending one.
+    ("Send invoice",                             None, "send_invoice"),
+    ("can you send an invoice to Jane Smith",    None, "send_invoice"),
+    ("invoice Jane Smith",                       None, "send_invoice"),
+    ("I need to email an invoice to my customer", None, "send_invoice"),
+    # NEGATIVE GUARDS — the invoice rules must steal nothing.
+    # "invoice" also shows up in subscription-billing questions.
+    ("where do I see my invoices for my subscription", None,
+     ("billing_help", "<llm-skipped>", "unknown")),
+    # No "invoice" token at all — ordinary order history, unchanged.
+    ("what did jane order",                      None, "recent_orders"),
+    # (the two "must never be an invoice intent" assertions live in
+    #  NEGATIVE_GUARD_CASES — what they assert is an absence, and the intent
+    #  they DO land on is LLM-nondeterministic)
 ]
 
 
@@ -789,8 +824,12 @@ def main():
         print(f"{(msg + _pend)[:W]:<{W}} {'/'.join(accepted)[:17]:<18} {r.intent:<18} route {'PASS' if ok else 'FAIL'}")
 
     print("\n--- negative guards (must NEVER be claimed by the named intent) ---")
-    for msg, forbidden, note in NEGATIVE_GUARD_CASES:
-        r = intent_router.route(msg, {}, _catalog)
+    for _case in NEGATIVE_GUARD_CASES:
+        # 4th element = state, for guards that only matter mid-flow
+        # (invoices 2026-08-04). 3-tuples keep the original no-pending behavior.
+        msg, forbidden, note = _case[0], _case[1], _case[2]
+        _st = _case[3] if len(_case) > 3 else {}
+        r = intent_router.route(msg, _st, _catalog)
         ok = r.intent != forbidden
         if ok:
             passed += 1

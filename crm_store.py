@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import csv
+import html as _html
 from pathlib import Path
 from rapidfuzz import fuzz
 
@@ -801,12 +802,30 @@ def get_recent_orders_for_customer(cur, customer_id: int, limit: int = 3,
 
 from datetime import datetime
 
-def format_recent_orders(customer_name: str, orders: list, period_label: str | None = None) -> str:
+def format_recent_orders(customer_name: str, orders: list, period_label: str | None = None,
+                         invoice_to: str | None = None) -> str:
+    """Order history for one customer.
+
+    invoice_to = the customer's email address. Pass it and every order gains a
+    "Send invoice" link; leave it None (no email on file, nothing to send to)
+    and the output is byte-identical to what it has always been.
+
+    That switch is not cosmetic. addMessage() in app.js renders a bot message
+    as HTML only when it spots a tag, so adding one link flips the ENTIRE
+    bubble from textContent to innerHTML — at which point a product name
+    containing "&" or a customer named "Tom & Sue" stops being text and starts
+    being markup. So HTML mode escapes everything. Newlines still work because
+    .msg is white-space: pre-wrap (styles.css:334); no <br> conversion needed.
+    """
+    html_mode = bool(invoice_to)
+    esc = _html.escape if html_mode else (lambda s: s)
+
     if not orders:
         period_str = f" in {period_label}" if period_label else ""
-        return f"I don't see any orders for {customer_name}{period_str}."
+        return f"I don't see any orders for {esc(customer_name)}{period_str}."
 
-    header = f"{customer_name}'s orders in {period_label}:" if period_label else f"Recent orders for {customer_name}:"
+    header = (f"{esc(customer_name)}'s orders in {period_label}:" if period_label
+              else f"Recent orders for {esc(customer_name)}:")
     lines = [header]
 
     for o in orders:
@@ -839,8 +858,27 @@ def format_recent_orders(customer_name: str, orders: list, period_label: str | N
         items = o.get("items") or []
         for it in items:
             qty = it.get("quantity") or 1
-            name = it.get("product_name") or it.get("sku") or "Item"
+            # unescape before escaping: some synced names hold a literal
+            # "&reg;" as text, which would otherwise print as an entity.
+            name = esc(_html.unescape(it.get("product_name") or it.get("sku") or "Item"))
             lines.append(f"- {qty} × {name}" if qty > 1 else f"- {name}")
+
+        # One link per order, because "send the invoice" is meaningless until
+        # you say WHICH order. The literal "order <id>" token is what the
+        # send_invoice handler keys on — see intent_router.
+        #
+        # No link on MK-fulfilled orders (CDS and myshop): Mary Kay ships and
+        # bills those customers directly, so there is nothing for her to
+        # invoice. Offering a button that only ever refuses is worse than not
+        # offering one (2026-08-04). The source list is imported rather than
+        # written out here so this and invoice.build_invoice's block_reason
+        # cannot drift apart.
+        from invoice import MK_FULFILLED_SOURCES
+        if html_mode and items and o.get("id") \
+                and (o.get("source") or "") not in MK_FULFILLED_SOURCES:
+            cmd = _html.escape(f"send invoice for order {o['id']}", quote=True)
+            lines.append(f'<a href="#" data-send="{cmd}" '
+                         f'data-send-label="Send invoice">Send invoice</a>')
 
     return "\n".join(lines)
 

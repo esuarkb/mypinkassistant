@@ -15,9 +15,6 @@ from pathlib import Path
 from db import connect, is_postgres, get_system_setting
 
 from emailer import send_wrong_credentials_email, send_login_failure_alert_email, send_sku_not_found_email
-from playwright_automation.customer_export import download_customer_export
-from customer_import_parser import parse_customer_export_xlsx
-from customer_import_store import import_customers_from_rows
 
 PB_API_KEY = os.getenv("PB_API_KEY", "").strip()
 PB_CONTACT_ID = os.getenv("PB_CONTACT_ID", "").strip()
@@ -619,39 +616,6 @@ def main():
                                 done_msg += f" ⚠️ The {_ff} could not be applied — please add it to the order in MyCustomers."
                             for jid in job_ids:
                                 mark_job_done(jid, done_msg)
-
-                        # -------------------------
-                        # IMPORT_CUSTOMERS
-                        # -------------------------
-                        elif job_type == "IMPORT_CUSTOMERS":
-                            import_path = Path(f"/tmp/customer_import_{cid}.xlsx")
-
-                            # Step 1: download export from MyCustomers
-                            saved_path = download_customer_export(page, str(import_path))
-
-                            # No customers in MyCustomers yet — nothing to import
-                            if saved_path is None:
-                                mark_job_done(job_id, "No customers found in MyCustomers — import skipped.")
-                                continue
-
-                            # Step 2: parse file into structured rows
-                            rows = parse_customer_export_xlsx(saved_path)
-
-                            # Step 3: insert/update database
-                            conn = connect()
-                            try:
-                                cur = conn.cursor()
-                                summary = import_customers_from_rows(
-                                    cur,
-                                    consultant_id=cid,
-                                    rows=rows
-                                )
-                                conn.commit()
-                            finally:
-                                conn.close()
-
-                            # Step 4: mark success
-                            mark_job_done(job_id, "Customer import complete!")
 
                         # -------------------------
                         # IMPORT_INVENTORY_ORDERS

@@ -169,6 +169,17 @@ for _ddl in (
     # printed-card event code used at signup (2026-08); NULL for normal signups.
     # MUST also exist in db_init_pg.py — see the pwa_installed_at note there.
     "ALTER TABLE consultants ADD COLUMN signup_event_code TEXT",
+    # Invoice "Sold By" block (2026-08-04). Business contact details as they
+    # appear on a customer-facing invoice. invoice_email is separate from the
+    # login email on purpose — she signs up with whatever she reads mail at,
+    # which isn't always where she wants a customer to reply. All optional;
+    # blank lines are omitted from the invoice, never printed empty.
+    "ALTER TABLE consultants ADD COLUMN invoice_phone TEXT",
+    "ALTER TABLE consultants ADD COLUMN invoice_street TEXT",
+    "ALTER TABLE consultants ADD COLUMN invoice_city TEXT",
+    "ALTER TABLE consultants ADD COLUMN invoice_state TEXT",
+    "ALTER TABLE consultants ADD COLUMN invoice_zip TEXT",
+    "ALTER TABLE consultants ADD COLUMN invoice_email TEXT",
 ):
     try:
         cur.execute(_ddl)

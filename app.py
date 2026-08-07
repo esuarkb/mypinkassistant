@@ -23,6 +23,7 @@ from typing import Any, Iterable, Optional, Sequence, Dict
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -515,6 +516,56 @@ def resolve_referral(ref_code: str) -> dict | None:
     }
 
 
+def trial_copy(ref_info: dict | None) -> dict:
+    """Trial-length wording for the PUBLIC pages, in one place.
+
+    landing() and splash() both render through this, so they cannot disagree
+    with each other or with what checkout hands out — the numbers come from the
+    same constants resolve_referral() reads.
+
+    Why it exists (2026-08-04): both pages had "7-day free trial" typed into
+    the HTML, so someone scanning a /r/EVENT card off a business card was told
+    SEVEN twice — hero and bottom CTA on the landing page, then again on
+    splash — before /onboard finally told them thirty. The offer on the card
+    was right and every page before signup contradicted it.
+
+    ref_info is whatever resolve_referral() returned; None (no code, or a code
+    that means nothing) falls through to the ordinary trial everywhere.
+    """
+    default_days = int(DEFAULT_TRIAL_DAYS)
+
+    if not ref_info:
+        return {
+            "{{REF_BANNER}}": "",
+            "{{TRIAL_HERO}}": f"{default_days}-day free trial.",
+            "{{TRIAL_DAYS}}": str(default_days),
+        }
+
+    days = int(ref_info.get("trial_days") or default_days)
+
+    # Escape FIRST, then newlines to <br>. render_page() is a raw str.replace
+    # with no escaping of its own, and the consultant branch of
+    # resolve_referral() interpolates a first_name straight out of the DB — an
+    # apostrophe in a name would otherwise walk into the page markup.
+    body_html = _esc(ref_info.get("body") or "").replace("\n", "<br>")
+    headline = _esc(ref_info.get("headline") or "")
+    banner = "<div class='refnote'>"
+    if headline:
+        banner += f"<strong>{headline}</strong>"
+    banner += body_html + "</div>"
+
+    # The struck-through number is decoration: aria-hidden so a screen reader
+    # announces the real offer once instead of "7-day 30-day free trial".
+    hero = (f"<s class='trial-was' aria-hidden='true'>{default_days}-day</s>"
+            f"<span class='trial-now'>{days}-day</span> free trial.")
+
+    return {
+        "{{REF_BANNER}}": banner,
+        "{{TRIAL_HERO}}": hero,
+        "{{TRIAL_DAYS}}": str(days),
+    }
+
+
 def apply_referral(referee_cid: int, ref_code: str) -> tuple[bool, str]:
     """
     Links referee -> referrer (one-time).
@@ -828,9 +879,13 @@ def landing(request: Request):
     if ref:
         ref_qs = "?" + urlencode({"ref": ref})
 
-    return render_page("landing.html", replaces={
-        "{{REF_QS}}": ref_qs,
-    })
+    # Same resolve_referral() the banner on /onboard and the Stripe trial
+    # length use — an unrecognized code returns None and the page renders
+    # exactly as it does for everyone else. Never promise here what checkout
+    # won't deliver.
+    replaces = {"{{REF_QS}}": ref_qs}
+    replaces.update(trial_copy(resolve_referral(ref) if ref else None))
+    return render_page("landing.html", replaces=replaces)
 
 from urllib.parse import urlencode
 
@@ -860,7 +915,9 @@ def splash(request: Request):
     if ref:
         ref_qs = "?" + urlencode({"ref": ref})
 
-    return render_page("splash.html", replaces={"{{REF_QS}}": ref_qs})
+    replaces = {"{{REF_QS}}": ref_qs}
+    replaces.update(trial_copy(resolve_referral(ref) if ref else None))
+    return render_page("splash.html", replaces=replaces)
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
 
@@ -1602,6 +1659,24 @@ def settings_get(request: Request):
 
         "{{TAX_RATE}}": _esc(tax_rate_val),
     }
+    # Invoice "Sold By" block (2026-08-04). Fetched separately because
+    # get_consultant() selects only id/email/language/intouch_username — the
+    # same reason tax_rate_val above is always "".
+    _inv_fields = ("invoice_email", "invoice_phone", "invoice_street",
+                   "invoice_city", "invoice_state", "invoice_zip")
+    with tx() as (conn, cur):
+        cur.execute(f"SELECT {', '.join(_inv_fields)} FROM consultants WHERE id = {PH}", (cid,))
+        _inv_row = cur.fetchone() or (None,) * len(_inv_fields)
+    for _i, _f in enumerate(_inv_fields):
+        replaces["{{" + _f.upper() + "}}"] = _esc(_inv_row[_i] or "")
+
+    # Saving is self-evident (the fields come back filled in), but a rejected
+    # email would otherwise vanish without a word.
+    _notice = (request.query_params.get("notice") or "").strip()
+    replaces["{{INVOICE_NOTICE}}"] = {
+        "invoice_saved": "✅ Saved.",
+        "invoice_bad_email": "⚠️ That doesn't look like an email address — nothing was saved.",
+    }.get(_notice, "")
     return render_page("settings.html", replaces=replaces)
 
 
@@ -1631,6 +1706,81 @@ def settings_post(
             maybe_queue_initial_customer_import(cur, consultant_id=cid)
 
     return RedirectResponse("/settings", status_code=302)
+
+@app.post("/settings/invoice-details")
+def settings_invoice_details(
+    request: Request,
+    invoice_email: str = Form(""),
+    invoice_phone: str = Form(""),
+    invoice_street: str = Form(""),
+    invoice_city: str = Form(""),
+    invoice_state: str = Form(""),
+    invoice_zip: str = Form(""),
+):
+    """The consultant's "Sold By" block (2026-08-04).
+
+    Every field is optional and every field is stored as NULL when blank —
+    invoice.py omits a missing line rather than printing an empty label, so
+    "" and NULL must not mean different things here.
+    """
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    vals = {
+        "invoice_email": (invoice_email or "").strip().lower(),
+        "invoice_phone": (invoice_phone or "").strip(),
+        "invoice_street": (invoice_street or "").strip(),
+        "invoice_city": (invoice_city or "").strip(),
+        "invoice_state": (invoice_state or "").strip(),
+        "invoice_zip": (invoice_zip or "").strip(),
+    }
+    if vals["invoice_email"] and "@" not in vals["invoice_email"]:
+        return RedirectResponse("/settings?notice=invoice_bad_email", status_code=302)
+
+    cols = ", ".join(f"{k} = {PH}" for k in vals)
+    with tx() as (conn, cur):
+        cur.execute(f"UPDATE consultants SET {cols} WHERE id = {PH}",
+                    [v or None for v in vals.values()] + [cid])
+    return RedirectResponse("/settings?notice=invoice_saved", status_code=302)
+
+
+@app.get("/invoice/{order_id}", response_class=HTMLResponse)
+def invoice_preview(request: Request, order_id: int):
+    """The invoice document itself, opened in a new tab from the chat preview.
+
+    Deliberately the SAME render_invoice_html() the PDF and the email body use,
+    so what she proofreads here is byte-for-byte what her customer receives —
+    a second renderer would eventually drift and quietly make this page a lie.
+
+    build_invoice() takes the session's consultant_id and scopes its own
+    queries with it, so an order id belonging to another consultant comes back
+    None and lands on the same "couldn't find it" message as a typo. That is
+    the whole tenant check; do not add a lookup here that skips it.
+    """
+    try:
+        cid = require_login(request)
+    except PermissionError:
+        return RedirectResponse("/login", status_code=302)
+
+    import invoice as _invoice
+
+    c = get_consultant(cid) or {}
+    lang = (c.get("language") or "en").strip().lower()
+    if lang not in ("en", "es"):
+        lang = "en"
+
+    with tx() as (conn, cur):
+        inv = _invoice.build_invoice(cur, cid, int(order_id), language=lang)
+
+    if not inv:
+        return HTMLResponse(
+            "<p style='font-family:Arial;padding:24px'>I couldn't find that order.</p>",
+            status_code=404,
+        )
+    return HTMLResponse(_invoice.render_invoice_html(inv))
+
 
 @app.post("/settings/tax-rate")
 def settings_tax_rate(request: Request, tax_rate: str = Form("")):
@@ -1863,59 +2013,6 @@ async def inventory_bulk_save(request: Request):
     return JSONResponse({"ok": True})
 
 
-@app.post("/import-customers")
-def import_customers(request: Request):
-    try:
-        cid = require_login(request)
-    except PermissionError:
-        return RedirectResponse("/login", status_code=302)
-
-    c = get_consultant_full(cid) or {}
-    try:
-        require_active_subscription(c)
-    except PermissionError:
-        return RedirectResponse(billing_redirect_for_cid(cid), status_code=302)
-
-    # Cooldown: block if a queued/running job exists, or any import finished in the last 5 minutes
-    from db import tx as _tx
-    from db import is_postgres as _isp
-    _PH = "%s" if _isp() else "?"
-    with _tx() as (_conn, _cur):
-        if _isp():
-            _cur.execute(
-                f"""
-                SELECT 1 FROM jobs
-                WHERE consultant_id = {_PH}
-                  AND type = 'IMPORT_CUSTOMERS'
-                  AND (
-                    status IN ('queued', 'running')
-                    OR (status IN ('done', 'failed') AND finished_at >= NOW() - INTERVAL '5 minutes')
-                  )
-                LIMIT 1
-                """,
-                (cid,),
-            )
-        else:
-            _cur.execute(
-                f"""
-                SELECT 1 FROM jobs
-                WHERE consultant_id = {_PH}
-                  AND type = 'IMPORT_CUSTOMERS'
-                  AND (
-                    status IN ('queued', 'running')
-                    OR (status IN ('done', 'failed') AND finished_at >= datetime('now', '-5 minutes'))
-                  )
-                LIMIT 1
-                """,
-                (cid,),
-            )
-        if _cur.fetchone():
-            return RedirectResponse("/app?notice=import_cooldown", status_code=302)
-
-    insert_job("IMPORT_CUSTOMERS", {}, consultant_id=cid)
-    return RedirectResponse("/app", status_code=302)
-
-
 @app.post("/import-customers-api")
 def import_customers_api(request: Request):
     try:
@@ -2098,7 +2195,18 @@ async def chat(request: Request):
 
     try:
         ua = request.headers.get("user-agent")
-        reply_obj = engine.handle_message(message, consultant_id=cid, user_agent=ua)
+        # Threadpool, NOT a bare call: handle_message blocks for seconds (the
+        # OpenAI parse plus catalog matching and DB work). Called directly from
+        # this async route it froze the whole event loop — uvicorn is a single
+        # process, so nothing else could be served, including Render's /health
+        # probe. That is what restarted the web service on 2026-08-06: health
+        # gaps of 8-53s, each one ending the instant a POST /chat finished.
+        # The engine is safe to run concurrently — it keeps no per-consultant
+        # state (session state lives in the sessions table; the only instance
+        # attributes are the OpenAI client and a catalog cache).
+        reply_obj = await run_in_threadpool(
+            engine.handle_message, message, cid, None, ua
+        )
         try:
             with tx() as (_lc, _lcu):
                 _lcu.execute(
@@ -2309,7 +2417,7 @@ def admin_diagnostics(request: Request):
         FROM jobs
         WHERE status='done'
           AND NOT (
-            type IN ('IMPORT_CUSTOMERS', 'IMPORT_INVENTORY_ORDERS', 'FULL_SYNC')
+            type IN ('IMPORT_INVENTORY_ORDERS', 'FULL_SYNC')
             AND payload_json LIKE '%scheduler%'
           )
         ORDER BY id DESC
