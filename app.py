@@ -315,10 +315,20 @@ def _build_referral_list(cid: int) -> str:
     from datetime import date as _date
     with tx() as (_conn2, _cur):
         _cur.execute(
+            # Show a referral if it EARNED the referrer a free month (keep the
+            # receipt forever, whatever became of that account), or if it is
+            # still live and might yet earn one. A dead referral that never
+            # paid out just sits at "Pending" forever, so it drops off.
+            # NOTE: referral_rewarded_at is TEXT defaulting to '' on this table,
+            # so IS NOT NULL is always true — COALESCE(...) <> '' is the test.
             f"""SELECT first_name, last_name, billing_status, trial_end, referral_rewarded_at
                 FROM consultants
                 WHERE referred_by_consultant_id = {PH}
-                  AND billing_status NOT IN ('canceled', 'incomplete', 'incomplete_expired')
+                  AND (
+                        COALESCE(referral_rewarded_at, '') <> ''
+                     OR billing_status NOT IN ('canceled', 'incomplete',
+                                               'incomplete_expired', 'unpaid')
+                  )
                 ORDER BY id ASC""",
             (cid,),
         )
@@ -343,16 +353,22 @@ def _build_referral_list(cid: int) -> str:
 
         name = first + (f" {last[0]}." if last else "")
 
-        if status == "trialing" and trial_end:
-            try:
-                end_dt = trial_end if hasattr(trial_end, "strftime") else _date.fromisoformat(str(trial_end)[:10])
-                status_str = f"Trialing (ends {end_dt.strftime('%b %d')})"
-            except Exception:
-                status_str = "Trialing"
-        elif status == "active":
-            status_str = "Active"
+        # A referrer must never see the referee's billing state. past_due and
+        # unpaid are that person's private financial trouble and none of this
+        # page's business, so this column only ever says one of two things:
+        # the trial is still running (which explains a "Pending" reward), or
+        # they signed up. A lapsed account is deliberately indistinguishable
+        # from a paying one. Never render `status` itself.
+        if status == "trialing":
+            status_str = "In trial"
+            if trial_end:
+                try:
+                    end_dt = trial_end if hasattr(trial_end, "strftime") else _date.fromisoformat(str(trial_end)[:10])
+                    status_str = f"In trial (ends {end_dt.strftime('%b %d')})"
+                except Exception:
+                    pass
         else:
-            status_str = status.title()
+            status_str = "Signed up"
 
         if rewarded_at:
             try:
