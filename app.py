@@ -1763,10 +1763,14 @@ _INVOICE_PAGE_HEAD = """
                font-size: 15px; font-weight: 700; text-decoration: none; }
   @media print { .mpa-bar { display: none; } body { padding: 0; } }
 </style>
+<script src="/web/invoice.js?v=1" defer></script>
 """
 
+# href="/app" is only the no-JS fallback; invoice.js intercepts the click and
+# closes this window, leaving the chat she opened it from exactly as it was.
 _INVOICE_PAGE_BAR = (
-    '<div class="mpa-bar"><a href="/app">&#8592;&nbsp;Back to chat</a></div>'
+    '<div class="mpa-bar"><a href="/app" data-close-window>'
+    '&#10005;&nbsp;Close</a></div>'
 )
 
 

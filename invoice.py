@@ -477,10 +477,14 @@ def render_invoice_preview(inv: dict) -> str:
         )
 
     # "View invoice" stays a plain link, deliberately OUTSIDE .quick-replies:
-    # it carries no data-send, which is what keeps app.js's delegated handler
-    # from swallowing the click (it only calls preventDefault() when
-    # closest("[data-send]") matches), so the href navigates and opens the real
-    # document in a new tab.
+    # it carries no data-send, so app.js's delegated handler doesn't treat the
+    # click as a chat message.
+    #
+    # data-newwin makes app.js open it with window.open() instead of following
+    # the href. That matters because this bubble must survive the trip: in the
+    # installed PWA target="_blank" navigates in place, and returning to /app
+    # reloads chat empty — taking the Email button she came back for with it.
+    # href + target stay as the no-JS fallback.
     #
     # The two actions below are the same qr-btn buttons the order confirm uses
     # (mk_chat_core/render.py:_qr) — pink for the one that does the thing,
@@ -492,8 +496,8 @@ def render_invoice_preview(inv: dict) -> str:
         head
         + f'<div><strong>Total: {_money(inv["total"])}</strong></div>'
           f'<div style="margin-top:8px">'
-          f'<a href="/invoice/{inv["order_id"]}" target="_blank" rel="noopener">'
-          f'View invoice</a></div>'
+          f'<a href="/invoice/{inv["order_id"]}" data-newwin '
+          f'target="_blank" rel="noopener">View invoice</a></div>'
           f'<div style="margin-top:10px">Send invoice to {to_email}?</div>'
           f'<div class="quick-replies qr-always" style="margin-top:8px">'
           f'<button class="qr-btn qr-yes" data-send="{send_cmd}" '

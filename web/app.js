@@ -273,6 +273,18 @@ msg.addEventListener("keydown", (e) => {
 
 // Delegated handler for [data-send] links — clicking sends a chat message
 chat.addEventListener("click", function(e) {
+    // "View invoice" and anything else marked data-newwin: open a REAL second
+    // window (2026-08-06). A plain target="_blank" navigates the same webview
+    // in the installed PWA, which stranded consultants on the invoice — and
+    // coming back reloads /app, which starts an empty chat and takes the
+    // Email button with it. window.open() leaves this page untouched.
+    var pop = e.target.closest("a[data-newwin]");
+    if (pop) {
+        e.preventDefault();
+        window.open(pop.getAttribute("href"), "_blank", "noopener");
+        return;
+    }
+
     var link = e.target.closest("[data-send]");
     if (link) {
         e.preventDefault();
