@@ -2914,6 +2914,24 @@ class MKChatEngine:
                         _at = email_val.find("@")
                         _dot = email_val.rfind(".")
                         _tld_len = len(email_val) - _dot - 1
+                        # email_val is already stripped, so any whitespace still in it
+                        # is INTERNAL and always wrong. InTouch rejects it with a
+                        # field-level error, which new_customer.py's banner check can't
+                        # see (it only looks for a page-level toast) — so the save
+                        # silently no-ops, we still write the customer locally, and
+                        # every later order for them dies at verify_customer_exists
+                        # with "Customer not found". Cost a consultant a 4-item order
+                        # on 2026-08-07 ("KARIBAVTISTA 0207@gmail.com"). Blocking here
+                        # is what matters: this guard sits above the local upsert, so
+                        # a rejected email leaves NO record in either system.
+                        # Called out separately because a space is nearly invisible in
+                        # a chat bubble — a generic "doesn't look valid" just gets the
+                        # same address typed back.
+                        if any(ch.isspace() for ch in email_val):
+                            return ChatReply(
+                                f"The email I have ({email_val}) has a space in it — "
+                                "please type it again without the space, or say cancel."
+                            )
                         if _at <= 0 or _dot <= _at or _tld_len < 2:
                             return ChatReply(
                                 f"The email I have ({email_val}) doesn't look valid — please type the correct email or say cancel."
@@ -4063,7 +4081,11 @@ class MKChatEngine:
             _at = email_val.find("@")
             _dot = email_val.rfind(".")
             _tld_len = len(email_val) - _dot - 1
-            if _at <= 0 or _dot <= _at or _tld_len < 2:
+            # Mirrors the hard block in the confirm handler above — keep the two
+            # in sync, or the card promises a save that the submit then refuses.
+            if any(ch.isspace() for ch in email_val):
+                warning = f"⚠️ Email has a space in it: {email_val} — please correct it before confirming.\n\n"
+            elif _at <= 0 or _dot <= _at or _tld_len < 2:
                 warning = f"⚠️ Email looks incomplete: {email_val} — please correct it before confirming.\n\n"
 
         return (
