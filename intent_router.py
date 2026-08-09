@@ -729,6 +729,13 @@ def _feature_help_intent(text: str) -> Optional[str]:
         return None
     if re.search(r"\bwhat\s+(?:is|are)\s+my\b", t):       # "what are MY orders" = her data
         return None
+    # "what is Jeanne's last order" / "what is her last order" — a question about
+    # ONE person's data, not how ordering works. Same reasoning as the "my" guard
+    # above: a possessive names whose data it is. Only the "what is/are" opener
+    # was affected — "what WAS Jeanne's last order" and "show me…" never reach
+    # here. (Reported 2026-08-08.)
+    if re.search(r"\bwhat\s+(?:is|are)\s+(?:her|his|their|\w+['’]s)\b", t):
+        return None
     _q = (
         re.search(
             r"^(?:hey |hi |ok(?:ay)? )?(?:how\s+do(?:es)?\s+(?:i|it|you|the|this|my)?|how\s+can\s+i|how\s+to\b|what\s+(?:can|does|is|are)|when\s+do(?:es)?\b|tell\s+me\s+about|explain)\b",

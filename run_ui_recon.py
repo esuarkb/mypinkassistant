@@ -173,8 +173,17 @@ def main() -> int:
         print("\n=== SURFACE 3: customer detail + address dialog (no save) ===")
         open_test_customer(page)
         page.wait_for_timeout(1500)
+        # 'Send MKeCard®' flaps on the detail page: it appeared 2026-08-07 17:00
+        # (alerted NEW, baseline re-blessed) and was gone again 2026-08-08 06:45
+        # (alerted MISSING) — MK is mid-rollout, and the button's own handoff to
+        # their eCards app doesn't complete yet. Benign for us either way: every
+        # detail-page lookup in orders.py / new_customer.py is name-scoped, so a
+        # sibling that comes and goes can't shift anything. Excluded from the
+        # diff so it stops paging twice a day. If MK ever RENAMES it, that lands
+        # as a NEW button under the new name and still alerts.
+        _ECARD_LABELS = {"Send MKeCard®"}
         detail = {
-            "buttons": visible_buttons(page),
+            "buttons": [b for b in visible_buttons(page) if b not in _ECARD_LABELS],
             "probes": {
                 "'Add Order' button": probe(
                     page, "'Add Order' button", page.get_by_role("button", name="Add Order")),
