@@ -2676,7 +2676,7 @@ def admin_diagnostics(request: Request):
 
     <form method="post" action="/admin/set-worker-max" style="display:flex;align-items:center;gap:8px">
         <label style="font-size:13px;font-weight:600">Max Workers:</label>
-        <input type="number" name="worker_max" value="{worker_max}" min="1" max="10"
+        <input type="number" name="worker_max" value="{worker_max}" min="1" max="100"
                style="width:60px;padding:6px 8px;border-radius:8px;border:1px solid #ddd;font-size:14px" />
         <button type="submit" class="adminBtn">Set</button>
     </form>
@@ -2949,7 +2949,12 @@ async def admin_set_worker_max(request: Request):
 
     form = await request.form()
     try:
-        val = max(1, min(10, int(form.get("worker_max", 3))))
+        # Ceiling raised 10 -> 100 (2026-08-12). This is only a BRAKE, never a
+        # target: both autoscaler paths are demand-based — realtime scales to
+        # running+waiting+1, the nightly sweep to ceil(queued_consultants/50) —
+        # so worker_max=100 does not mean 100 instances. It bound at 74 subs
+        # (the setting was already sitting at the old max of 10).
+        val = max(1, min(100, int(form.get("worker_max", 3))))
     except (ValueError, TypeError):
         val = 3
     set_system_setting("worker_max", str(val))
