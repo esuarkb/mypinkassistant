@@ -106,3 +106,68 @@ def fetch_order_details(
         f"{errors} errors, {len(results)} orders have product details"
     )
     return results
+
+
+def fetch_order_records(
+    page: Page,
+    order_ids_with_dates: list[tuple[str, str]],
+    csrf_token: str,
+) -> dict[str, dict]:
+    """
+    Makes direct HTTP calls to getOrderRecordById for each order.
+    This is the ONLY read surface that carries order-level money:
+    TotalTaxAmount, TotalDiscount_rs__c (negative), GrandTotalAmount.
+    The order LIST payload and getOrderSummaryRecordByIds have neither
+    tax nor a usable discount (per-item productDiscountAmount is always '0').
+    - order_ids_with_dates: list of (intouch_order_id, order_date "YYYY-MM-DD")
+    - csrf_token: captured from the order list Apex request headers
+    - Returns: {intouch_order_id: record dict}
+    Caller pre-filters the list (see select_orders_for_detail_sync).
+    """
+    if not order_ids_with_dates:
+        print("[OrderMoneySync] no orders to fetch")
+        return {}
+
+    if not csrf_token:
+        print("[OrderMoneySync] WARNING: no csrf_token — money sync skipped")
+        return {}
+
+    headers = {
+        "Content-Type": "application/json",
+        "csrf-token": csrf_token,
+    }
+
+    results: dict[str, dict] = {}
+    errors = 0
+
+    for i, (order_id, _order_date) in enumerate(order_ids_with_dates):
+        payload = {
+            "namespace": "",
+            "classname": _APEX_CLASSNAME,
+            "method": "getOrderRecordById",
+            "isContinuation": False,
+            "params": {"orderSummaryId": order_id},
+            "cacheable": False,
+        }
+        try:
+            resp = page.context.request.post(
+                _APEX_URL,
+                headers=headers,
+                data=json.dumps(payload),
+            )
+            rv = resp.json().get("returnValue")
+            if isinstance(rv, dict) and rv.get("GrandTotalAmount") is not None:
+                results[order_id] = rv
+        except Exception as e:
+            errors += 1
+            if errors <= 3:
+                print(f"[OrderMoneySync] error on order {order_id}: {e}")
+
+        if (i + 1) % 50 == 0:
+            print(f"[OrderMoneySync] {i + 1}/{len(order_ids_with_dates)} fetched, {errors} errors")
+
+    print(
+        f"[OrderMoneySync] done: {len(results)}/{len(order_ids_with_dates)} records fetched, "
+        f"{errors} errors"
+    )
+    return results

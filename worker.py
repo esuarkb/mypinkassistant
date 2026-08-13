@@ -142,8 +142,13 @@ from playwright_automation.orders import process_order_batch, SkuNotCdsEligible
 from playwright_automation.inventory_import import import_inventory_orders
 from inventory_import_store import ensure_import_table
 from playwright_automation.order_history_import import fetch_order_history
-from playwright_automation.order_detail_sync import fetch_order_details
-from order_history_import_store import import_order_history, update_order_item_quantities
+from playwright_automation.order_detail_sync import fetch_order_details, fetch_order_records
+from order_history_import_store import (
+    import_order_history,
+    update_order_item_quantities,
+    update_order_money,
+    select_orders_for_detail_sync,
+)
 from playwright_automation.customer_api_import import fetch_customer_list
 from customer_api_import_store import import_customers_from_api
 for _startup_attempt in range(5):
@@ -742,21 +747,33 @@ def main():
                                 conn.commit()
                             finally:
                                 conn.close()
-                            # Order detail sync — 7-day window to catch recent quantity changes
-                            _non_archived = [
-                                (o["Id"], (o.get("OrderedDate_f__c") or o.get("OrderedDate") or "")[:10])
-                                for o in raw_orders if o.get("Id") and not o.get("IsArchived_cb__c")
-                            ]
-                            if _non_archived and _csrf_token:
-                                _detail_map = fetch_order_details(page, _non_archived, _csrf_token, days=7)
-                                if _detail_map:
-                                    conn = connect()
-                                    try:
-                                        cur = conn.cursor()
-                                        update_order_item_quantities(cur, consultant_id=cid, order_details_map=_detail_map)
-                                        conn.commit()
-                                    finally:
-                                        conn.close()
+                            # Order detail + money sync — 7-day window for new orders,
+                            # plus total-mismatch detection for edits of any age
+                            if _csrf_token:
+                                conn = connect()
+                                try:
+                                    cur = conn.cursor()
+                                    _selected = select_orders_for_detail_sync(
+                                        cur, consultant_id=cid, raw_orders=raw_orders, days=7
+                                    )
+                                finally:
+                                    conn.close()
+                                if _selected:
+                                    _detail_map = fetch_order_details(page, _selected, _csrf_token)
+                                    _money_map = fetch_order_records(page, _selected, _csrf_token)
+                                    if _detail_map or _money_map:
+                                        conn = connect()
+                                        try:
+                                            cur = conn.cursor()
+                                            if _detail_map:
+                                                update_order_item_quantities(cur, consultant_id=cid, order_details_map=_detail_map)
+                                            # money runs last so its total (MK's GrandTotalAmount)
+                                            # wins over the pre-discount line sum above
+                                            if _money_map:
+                                                update_order_money(cur, consultant_id=cid, order_records_map=_money_map)
+                                            conn.commit()
+                                        finally:
+                                            conn.close()
                             # Reports (team data, challenge tracking, registrations)
                             # Runs before inventory — inventory visits applications.marykayintouch.com
                             # via a different auth path which would contaminate the FOReports session
@@ -823,24 +840,35 @@ def main():
                         # REPORT_SYNC (order detail backfill + team/unit member data sync)
                         # -------------------------
                         elif job_type == "REPORT_SYNC":
-                            # Order detail sync — full backfill of all non-archived orders
+                            # Order detail + money sync — full backfill of all non-archived orders.
+                            # days=None is safe here ONLY because update_order_money never writes
+                            # zero tax/discount (historical orders read 0.0 from MK).
                             try:
                                 _od_orders, _od_csrf = fetch_order_history(page)
-                                _non_archived = [
-                                    (o["Id"], (o.get("OrderedDate_f__c") or o.get("OrderedDate") or "")[:10])
-                                    for o in _od_orders if o.get("Id") and not o.get("IsArchived_cb__c")
-                                ]
-                                if _non_archived and _od_csrf:
-                                    print(f"[ReportSync] starting order detail sync for {len(_non_archived)} orders")
-                                    _detail_map = fetch_order_details(page, _non_archived, _od_csrf)
-                                    if _detail_map:
-                                        conn = connect()
-                                        try:
-                                            cur = conn.cursor()
-                                            update_order_item_quantities(cur, consultant_id=cid, order_details_map=_detail_map)
-                                            conn.commit()
-                                        finally:
-                                            conn.close()
+                                if _od_csrf:
+                                    conn = connect()
+                                    try:
+                                        cur = conn.cursor()
+                                        _selected = select_orders_for_detail_sync(
+                                            cur, consultant_id=cid, raw_orders=_od_orders, days=None
+                                        )
+                                    finally:
+                                        conn.close()
+                                    if _selected:
+                                        print(f"[ReportSync] starting order detail sync for {len(_selected)} orders")
+                                        _detail_map = fetch_order_details(page, _selected, _od_csrf)
+                                        _money_map = fetch_order_records(page, _selected, _od_csrf)
+                                        if _detail_map or _money_map:
+                                            conn = connect()
+                                            try:
+                                                cur = conn.cursor()
+                                                if _detail_map:
+                                                    update_order_item_quantities(cur, consultant_id=cid, order_details_map=_detail_map)
+                                                if _money_map:
+                                                    update_order_money(cur, consultant_id=cid, order_records_map=_money_map)
+                                                conn.commit()
+                                            finally:
+                                                conn.close()
                             except Exception as _od_err:
                                 print(f"[ReportSync] Order detail sync failed (non-fatal): {_od_err}")
                             # Team/unit member data sync

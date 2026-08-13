@@ -6,6 +6,12 @@
 #   python send_pink_post.py --dry-run              # list recipients, send nothing
 #   python send_pink_post.py --send                 # real send (types SEND to confirm)
 #   python send_pink_post.py --send --issue emails/pink_post/2026-08-04.html
+#   python send_pink_post.py --send --only 128,129  # catch-up send to specific ids
+#
+# --only exists because consultants sign up mid-week and miss the Tuesday send.
+# It NARROWS the normal recipient query rather than replacing it, so a listed id
+# that has since cancelled or opted out is still skipped -- the flag can only
+# ever send to someone who would have received the issue anyway.
 #
 # Issues live in emails/pink_post/YYYY-MM-DD.html and are self-contained: the
 # subject line is the first "<!-- subject: ... -->" comment in the file, so a new
@@ -45,6 +51,15 @@ from db import connect, is_postgres  # noqa: E402
 TEST_MODE = "--test" in sys.argv
 DRY_RUN = "--dry-run" in sys.argv
 SEND = "--send" in sys.argv
+
+ONLY_IDS: list[int] = []
+if "--only" in sys.argv:
+    try:
+        ONLY_IDS = [int(x) for x in sys.argv[sys.argv.index("--only") + 1].split(",") if x.strip()]
+    except (IndexError, ValueError):
+        sys.exit("--only takes a comma-separated list of consultant ids, e.g. --only 128,129")
+    if not ONLY_IDS:
+        sys.exit("--only was given no ids")
 
 PH = "%s" if is_postgres() else "?"
 RESEND_API_KEY = (os.getenv("RESEND_API_KEY") or "").strip()
@@ -115,6 +130,10 @@ def render(first_name: str, email: str) -> str:
 def recipients() -> list:
     """Paying/trialing consultants who haven't opted out. Andrea (cid 2) is
     included on purpose -- she reads these. The demo account is excluded."""
+    only_sql, only_args = "", []
+    if ONLY_IDS:
+        only_sql = f" AND id IN ({','.join([PH] * len(ONLY_IDS))})"
+        only_args = ONLY_IDS
     conn = connect()
     cur = conn.cursor()
     cur.execute(f"""
@@ -123,9 +142,9 @@ def recipients() -> list:
         WHERE billing_status IN ('active', 'trialing')
           AND (email_opted_out IS NULL OR email_opted_out = 0)
           AND id <> {PH}
-          AND email IS NOT NULL AND TRIM(email) <> ''
+          AND email IS NOT NULL AND TRIM(email) <> ''{only_sql}
         ORDER BY id
-    """, (DEMO_CONSULTANT_ID,))
+    """, (DEMO_CONSULTANT_ID, *only_args))
     rows = cur.fetchall()
     conn.close()
     out = []
@@ -163,6 +182,10 @@ if TEST_MODE:
     sys.exit(0)
 
 people = recipients()
+if ONLY_IDS and (missing := [i for i in ONLY_IDS if i not in {c for c, _, _ in people}]):
+    # Named but filtered out by the guards above -- cancelled, opted out, or no
+    # email. Say so rather than silently sending to fewer people than asked.
+    print(f"NOT eligible, skipping: {missing}\n")
 print(f"{len(people)} recipient(s)"
       f"{' — DRY RUN, nothing will be sent' if DRY_RUN else ''}:\n")
 for cid, email, fname in people:

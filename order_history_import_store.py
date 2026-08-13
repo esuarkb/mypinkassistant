@@ -538,3 +538,139 @@ def update_order_item_quantities(
 
     print(f"[OrderDetailSync] quantity update: updated={updated} skipped_no_order={skipped_no_order}")
     return {"updated": updated, "skipped_no_order": skipped_no_order}
+
+
+def select_orders_for_detail_sync(cur, consultant_id: int, raw_orders: list[dict],
+                                  days: int | None = 7) -> list[tuple[str, str]]:
+    """
+    Picks which orders need the per-order detail (quantities) + money
+    (tax/discount) fetches. Returns [(intouch_order_id, order_date), ...].
+
+    days=None → every non-archived order (onboarding backfill mode).
+
+    With a window, an order is selected when EITHER:
+      - its CreatedDate or ordered date falls inside the window (new orders,
+        including ones entered with a backdated order date), OR
+      - it exists in our orders table and its stored total disagrees with MK's
+        GrandTotalAmount by a cent or more. MK exposes no modified date on any
+        read surface, but every practical edit (quantity, item, discount, tax)
+        moves the grand total — so a mismatch is how an edit to an order of
+        ANY age gets caught on the next nightly, and how a failed fetch gets
+        retried the following night. Orders whose totals already match are
+        skipped entirely, which most nights is nearly all of them.
+    """
+    from datetime import date as _date, timedelta as _timedelta
+
+    non_archived = [o for o in raw_orders if o.get("Id") and not o.get("IsArchived_cb__c")]
+
+    def _odate(o: dict) -> str:
+        return (o.get("OrderedDate_f__c") or o.get("OrderedDate") or "")[:10]
+
+    if days is None:
+        return [(o["Id"], _odate(o)) for o in non_archived]
+
+    cutoff = _date.today() - _timedelta(days=days)
+
+    def _recent(o: dict) -> bool:
+        for key in ("CreatedDate", "OrderedDate_f__c", "OrderedDate"):
+            v = (o.get(key) or "")[:10]
+            if v:
+                try:
+                    if _date.fromisoformat(v) >= cutoff:
+                        return True
+                except ValueError:
+                    pass
+        return False
+
+    PH = "?" if _is_sqlite(cur) else "%s"
+    cur.execute(
+        f"SELECT intouch_order_id, total FROM orders "
+        f"WHERE consultant_id = {PH} AND intouch_order_id IS NOT NULL AND intouch_order_id != ''",
+        (consultant_id,),
+    )
+    stored_totals: dict[str, float] = {}
+    for row in cur.fetchall():
+        oid, total = (row["intouch_order_id"], row["total"]) if isinstance(row, dict) else (row[0], row[1])
+        try:
+            stored_totals[oid] = float(total or 0)
+        except (TypeError, ValueError):
+            stored_totals[oid] = 0.0
+
+    selected: list[tuple[str, str]] = []
+    mismatches = 0
+    for o in non_archived:
+        oid = o["Id"]
+        if _recent(o):
+            selected.append((oid, _odate(o)))
+            continue
+        stored = stored_totals.get(oid)
+        if stored is None:
+            continue  # guest/unmatched order — nothing stored to reconcile
+        try:
+            mk_total = float(o.get("GrandTotalAmount") or 0)
+        except (TypeError, ValueError):
+            continue
+        if abs(stored - mk_total) >= 0.01:
+            selected.append((oid, _odate(o)))
+            mismatches += 1
+
+    print(f"[OrderDetailSync] selected {len(selected)}/{len(non_archived)} orders "
+          f"({len(selected) - mismatches} in {days}-day window, {mismatches} total-mismatch)")
+    return selected
+
+
+def update_order_money(cur, consultant_id: int, order_records_map: dict[str, dict]) -> dict:
+    """
+    Writes order-level money from getOrderRecordById records:
+      - orders.total = GrandTotalAmount (MK's own post-discount,
+        tax-included number — same meaning as chat-placed orders)
+      - orders.tax_amount / discount_amount, ONLY when at least one is
+        nonzero. MK returns 0.0 for orders where the consultant never
+        entered tax/discount in MyCustomers, and writing those zeros would
+        erase manually backfilled tax — so zeros are never written.
+    Run AFTER update_order_item_quantities so this total wins over its
+    pre-discount line sum.
+    """
+    PH = "?" if _is_sqlite(cur) else "%s"
+    updated = money_written = skipped_no_order = 0
+
+    for intouch_order_id, rec in order_records_map.items():
+        if not isinstance(rec, dict):
+            continue
+
+        def _f(key: str) -> float:
+            try:
+                return float(rec.get(key) or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        grand_total = _f("GrandTotalAmount")
+        tax = _f("TotalTaxAmount")
+        discount = abs(_f("TotalDiscount_rs__c"))  # MK stores it negative
+
+        cur.execute(
+            f"SELECT id FROM orders WHERE consultant_id = {PH} AND intouch_order_id = {PH} LIMIT 1",
+            (consultant_id, intouch_order_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            skipped_no_order += 1
+            continue
+        order_id = int(row["id"] if isinstance(row, dict) else row[0])
+
+        if grand_total > 0:
+            cur.execute(
+                f"UPDATE orders SET total = {PH} WHERE id = {PH}",
+                (grand_total, order_id),
+            )
+        if tax > 0 or discount > 0:
+            cur.execute(
+                f"UPDATE orders SET tax_amount = {PH}, discount_amount = {PH} WHERE id = {PH}",
+                (tax, discount, order_id),
+            )
+            money_written += 1
+        updated += 1
+
+    print(f"[OrderMoneySync] money update: updated={updated} "
+          f"with_tax_or_discount={money_written} skipped_no_order={skipped_no_order}")
+    return {"updated": updated, "money_written": money_written, "skipped_no_order": skipped_no_order}
