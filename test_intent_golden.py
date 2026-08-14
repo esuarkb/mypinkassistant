@@ -55,6 +55,12 @@ CASES = [
     ("app",                                     "app_help",          "kw"),
     ("how do i add the app to my home screen",  "app_help",          "kw"),
     ("install the app on my ipad",              "app_help",          "kw"),
+    # availability phrasings dead-ended for 3 consultants 7/28-8/12
+    # (weed-garden 2026-08-13 F4): device/store/availability tokens + "app",
+    # or a short mostly-"app" message, now hit app_help deterministically
+    ("app for android",                         "app_help",          "kw"),
+    ("Is there an app for my pink assistant",   "app_help",          "kw"),
+    ("App in MPA",                              "app_help",          "kw"),
 
     # --- mid-flow reply tokens must NOT call the LLM ---
     # With NO pending open, "yes"/"no" now return unknown deterministically
@@ -89,6 +95,11 @@ CASES = [
     ("which consultants have ordered this month", "unit_query",      "kw"),
     ("new consultants this month",              "unit_query",        "kw"),
     ("phone numbers of my team members",        "unit_query",        "kw"),
+    # letter-only status forms (c126's day-one retention check, 2026-08-07:
+    # both dead-ended in customer name lookup)
+    ("who is in T status",                      "unit_query",        "kw"),
+    ("active status",                           "unit_query",        "kw"),
+    ("inactive status",                         "unit_query",        "kw"),
     # plural "birthdays" misses the keyword rules → LLM decides; both routes
     # have working handlers (customer_info birthday lookup / data_query SQL)
     ("any consultant birthdays this month",     ("unit_query", "customer_info", "data_query"), "llm"),
@@ -142,6 +153,11 @@ CASES = [
     # (Kim via Brian, 2026-07-28)
     ("who ordered last month I should follow up with", "data_query", "kw"),
     ("who ordered last week that I need to follow up with", "data_query", "kw"),
+    # "How many … ordered" is a COUNT, not one customer's history — used to
+    # hit recent_orders where the name heuristic guessed "How many"
+    # (weed-garden 2026-08-13 F2 routing half)
+    ("How many have ordered in the last year?", "data_query",        "kw"),
+    ("how many have ordered in the last 6 months", "data_query",     "kw"),
     # …but bare followup phrasings still get the main followup list
     ("followups",                               "followup",          "kw"),
     ("do i have any followups",                 "followup",          "kw"),
@@ -168,6 +184,9 @@ CASES = [
     # --- data_query (llm) ---
     ("which customers order beige foundation",  "data_query",        "llm"),
     ("how much have i sold this month",         "data_query",        "llm"),
+    # was stolen by inventory_count until sell-words joined _NOT_INVENTORY
+    # (c126 2026-08-07: a Go Set was proposed for a sales question)
+    ("how many sales have I had for the year",  "data_query",        "llm"),
     ("which of my customers use the clearproof set", "data_query",   "llm"),
 
     # --- customers by NAME (kw) — added 2026-07-04, live incident: LLM sent
@@ -221,6 +240,13 @@ CASES = [
     ("amber cole recent order",                 "recent_orders",     "kw"),
     ("show me her last order",                  "recent_orders",     "kw"),
     ("order history for jane",                  "recent_orders",     "kw"),
+    # junk-rider phrasings stay recent_orders; the HANDLER span-match now
+    # finds the name inside them (weed-garden 2026-08-13 F2, 5 consultants:
+    # "Gibson most" / "When kendals" / "process jaimies" / "Jo Cerasani")
+    ("show me Jane Smiths most recent order",   "recent_orders",     "kw"),
+    ("When was janes last order",               "recent_orders",     "kw"),
+    ("did i process janes order",               "recent_orders",     "llm"),
+    ("last order for Mary Jo Baker",            "recent_orders",     "kw"),
     ("last 5 orders for beckie moss",           "recent_orders",     "kw"),
     # NOTE: "X ordered 2 sets" is order ENTRY; parse_intent returns recent_orders
     # by design and mk_chat_core overrides to new_order via _looks_like_new_order_entry.
@@ -290,6 +316,26 @@ CASES = [
 # only that the new rule added on 2026-07-03 doesn't steal them.
 # (message, forbidden_intent, note)
 NEGATIVE_GUARD_CASES = [
+    # --- sell-words in _NOT_INVENTORY (2026-08-13, c126): sales questions
+    # must not be claimed as inventory counts (a Go Set was proposed for
+    # "how many sales have I had for the year") ---
+    ("how many sales have I had for the year", "inventory_count",
+     "sales questions are data_query material, not inventory counts"),
+    ("how many did i sell this month", "inventory_count",
+     "'sell' must keep the message out of the inventory-count claim"),
+    # --- letter-status rule (2026-08-13, c126) must steal nothing: the
+    # article 'a status' and order-status questions stay off unit_query ---
+    ("can I get a status on my order", "unit_query",
+     "'a status' article collision must not trigger the status-code rule"),
+    ("what's the status of janes order", "unit_query",
+     "order-status questions must not become team status lists"),
+    # --- app_help broadening (2026-08-13 F4) must steal nothing ---
+    # "apple" must not satisfy the \bapp\b word check, and product/customer
+    # messages containing stray "app"-adjacent words stay off app_help.
+    ("apple berry hand cream", "app_help",
+     "product lookup with 'apple' must not become an app question"),
+    ("happy birthday list for july", "app_help",
+     "'happy' must not satisfy the app word check"),
     # --- Invoices (2026-08-04): emailing a customer is irreversible ---
     # Mid-flow is the dangerous case. send_invoice_confirm is
     # interrupts_pending=False, so a consultant answering an order confirm

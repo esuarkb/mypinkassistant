@@ -51,6 +51,7 @@ UI_EN = {
     "cust_reject": "No problem — Send the corrected customer info and I'll try again.",
     "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
     "order_reject": "Okay — paste the corrected order and I'll rebuild the summary.",
+    "order_empty": "Every item in this order was skipped, so nothing was sent to MyCustomers. When you're ready, start a new order for {first} {last} and I'll help match the products.",
 
     # CDS address gate (PO Box / missing address) — order_confirm 'yes' branch
     "cds_ask_address_pobox": "One more thing — the address I have for {name} is a PO Box, and Mary Kay can't ship CDS orders to a PO Box. What's the full street address? (like: <strong>444 4th St, Anytown, AL 35976</strong>), or type <strong>cancel</strong> if you don't have the address yet.",
@@ -303,6 +304,7 @@ UI_ES = {
     "cust_reject": "No hay problema — envíame la info corregida del cliente y lo intento de nuevo.",
     "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",
     "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
+    "order_empty": "Todos los artículos de este pedido fueron omitidos, así que no se envió nada a MyCustomers. Cuando estés lista, empieza un nuevo pedido para {first} {last} y te ayudo a encontrar los productos.",
 
     # CDS address gate (PO Box / missing address) — order_confirm 'yes' branch
     "cds_ask_address_pobox": "Una cosa más — la dirección que tengo para {name} es un apartado postal (PO Box), y Mary Kay no puede enviar pedidos CDS a un PO Box. ¿Cuál es la dirección física completa? (como: <strong>444 4th St, Anytown, AL 35976</strong>), o escribe <strong>cancelar</strong> si aún no tienes la dirección.",

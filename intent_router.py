@@ -300,11 +300,31 @@ _COMPOUND_WORD_FIXES = [
     # digit form "4 in 1" already wins at 93, so normalize to it. weed-garden
     # 2026-07-20 (c60, voice order). Same Clear Proof family as men('s) cleanser.
     (re.compile(r"\bfour\s+in\s+one\b"), "4 in 1"),
+    # v2t and typed queries render the brand "Volu-Firm" as "volufirm" or
+    # "volu firm"; the hyphenless forms drop the whole line to ~90 and Clear
+    # Proof's greedy "cleanser" alias wins instead. The hyphenated form
+    # already scores 93. weed-garden 2026-08-13 catch-up.
+    (re.compile(r"\bvolu[\s]*firm\b"), "volu-firm"),
+    # v2t writes shade numbers as words ("deep eight"), which never match the
+    # catalog's digit form and rank junk (~57). Convert word→digit ONLY when
+    # glued to a shade family word, so counts ("four customers this month")
+    # and the "four in one" rule above stay untouched. weed-garden 2026-08-13
+    # catch-up (same shade-digit family as the zero-width fix in catalog.py).
+    (re.compile(
+        r"\b(light|medium|deep|beige|bronze|ivory)\s+"
+        r"(one|two|three|four|five|six|seven|eight|nine|ten)\b"),
+     lambda m: f"{m.group(1)} " + {
+         "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+         "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+     }[m.group(2)]),
 ]
 
 def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int = 30,
                  prefilter_fallback: bool = True) -> List[dict]:
     q = (query or "").lower().strip()
+    # zero-width chars ride along when consultants paste product names from
+    # MK pages (same chars we strip at catalog load — keep both sides clean)
+    q = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", q)
     q = re.sub(r"\+", " ", q)  # treat + as a space so "ha+ceramide" splits correctly before pre-filter
     for pat, repl in _COMPOUND_WORD_FIXES:
         q = pat.sub(repl, q)
@@ -444,7 +464,12 @@ def best_matches(catalog: List[dict], query: str, limit: int = 5, min_score: int
             if all(re.search(rf"\b{re.escape(w)}\b", _name_l) for w in _q_sig):
                 best_by_owner[_oi] = max(best_by_owner[_oi], 93)
 
-    q_words = {w for w in re.split(r"\s+", q) if len(w) >= 3}
+    # Digit tokens count as words here: shade numbers ("deep 8") are 1 char so
+    # the >=3 filter dropped them, leaving every shade of a line tied on _hits
+    # and the winner decided by insertion order. The digit is the whole point
+    # of a shade query — count it so the asked-for shade outranks its
+    # siblings deterministically. weed-garden 2026-08-13 catch-up.
+    q_words = {w for w in re.split(r"\s+", q) if len(w) >= 3 or w.isdigit()}
 
     matches: List[dict] = []
     for idx, score in best_by_owner.items():
@@ -856,7 +881,11 @@ def _parse_product_price_query_text(msg: str) -> str:
 
 def _looks_like_inventory_count(msg: str) -> bool:
     s = (msg or "").strip().lower()
-    _NOT_INVENTORY = ("order", "customer", "followup", "client", "people", "consultant", "team", "member")
+    # "sale"/"sell"/"sold": "how many sales have I had for the year" was
+    # claimed here and proposed a Go Set (c126, her first day, 2026-08-07).
+    # Sales questions belong to data_query; inventory questions name products.
+    _NOT_INVENTORY = ("order", "customer", "followup", "client", "people", "consultant", "team", "member",
+                      "sale", "sell", "sold")
     if "how many" in s and " do i have" in s and not any(w in s for w in _NOT_INVENTORY):
         return True
     if s.endswith(" in inventory"):
@@ -1307,7 +1336,19 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # lookups and new-customer entries far more often than app questions.
     _app_word = bool(re.search(r'\bapp\b', lowered))
     _app_context = any(t in lowered for t in ("home screen", "home scrn", "add to home", "install"))
-    if lowered in ("app", "install", "the app", "app help", "help app") or _app_context or (_app_word and any(t in lowered for t in ("add", "save", "put", "get", "help", "screen", "phone", "ipad", "tablet", "device", "install", "download"))):
+    # Availability questions ("app for android", "Is there an app for my pink
+    # assistant", "App in MPA") kept falling to the LLM and dead-ending —
+    # 3 consultants in the 7/28-8/12 window, one of them a brand-new signup
+    # whose only message ever was the android question (2026-08-13 report F4).
+    # Any message with the word "app" plus a device/store/availability token,
+    # or a short message that is mostly the word "app", is an app question.
+    # No catalog product contains "app" as a standalone word (verified), so
+    # the theft surface is empty.
+    _app_availability = _app_word and any(t in lowered for t in (
+        "android", "iphone", "apple", "store", "mpa", "pink assistant", "is there",
+    ))
+    _app_short = _app_word and len(lowered.split()) <= 4
+    if lowered in ("app", "install", "the app", "app help", "help app") or _app_context or _app_availability or _app_short or (_app_word and any(t in lowered for t in ("add", "save", "put", "get", "help", "screen", "phone", "ipad", "tablet", "device", "install", "download"))):
         return IntentResult(intent="app_help", confidence=1.0, raw_text=msg)
 
     # inventory
@@ -1324,7 +1365,11 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
 
     # unit_query — activity status code pattern (i3, t6, "who is i3", "show t6", etc.)
     # Must run early — bare codes like "i3" are only 2 chars and skip the OpenAI fallback
-    if re.search(r'\b[aAiItTnN]\s?[1-7]\b', msg):
+    # Letter-only form ("who is in T status") dead-ended in customer lookup —
+    # c126's director retention check, 2026-08-07. T/I only: "a status" is an
+    # everyday article collision ("can I get a status"), and A-people say
+    # "active status", covered in _unit_triggers below.
+    if re.search(r'\b[aAiItTnN]\s?[1-7]\b', msg) or re.search(r'\b[ti]\s+status\b', lowered):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
 
     # unit_query — questions about the consultant's team/unit members
@@ -1342,6 +1387,9 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
         "who needs", "who still needs",
         "who hasn't set up", "who haven't set up",
         "activity status", "career level", "consultant number", "consultant id",
+        # bare "<adjective> status" forms ("active status" typed alone
+        # dead-ended for c126 2026-08-07; only "activity status" was listed)
+        "active status", "inactive status", "terminated status", "termination status",
         "new consultant", "new consultants",
         "who is terminating", "terminating consultant",
         "power of pink", "diq", "red jacket",
@@ -1530,6 +1578,15 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if _m_shade:
         return IntentResult(intent="recent_orders", confidence=0.9,
                             slots={"product_filter": _m_shade.group(1)}, raw_text=msg)
+
+    # "How many … ordered …" is a COUNT question (aggregate), not one
+    # customer's history — it must not fall into the broad recent_orders rule
+    # below, where the name heuristic guessed "How many" as a customer
+    # (weed-garden 2026-08-13 F2 routing half, c124 "How many have ordered in
+    # the last year?"). Inventory counts ("how many X do I have") were already
+    # claimed earlier and never reach this point.
+    if re.search(r"\bhow many\b", lowered) and re.search(r"\border(?:s|ed)?\b", lowered):
+        return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
 
     # recent orders
     if (

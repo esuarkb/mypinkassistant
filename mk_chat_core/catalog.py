@@ -208,10 +208,17 @@ def load_catalog(path: Path) -> List[dict]:
         for row in reader:
             sku = (row.get("sku") or "").strip()
             name = (row.get("product_name") or "").strip().replace("®", "")
+            # MK's catalog embeds zero-width spaces glued to shade digits
+            # ("Deep 8​"), so digit tokens never exact-match and every
+            # shade of a line ties — the first shade wins regardless of what
+            # was asked. Strip all zero-width chars. weed-garden 2026-08-13
+            # catch-up (4 consultants, 2 lost orders).
+            name = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", name)
             price = row.get("price")
 
             # ✅ NEW
             search_terms = (row.get("search_terms") or "").strip()
+            search_terms = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", search_terms)
 
             if not sku or not name:
                 continue

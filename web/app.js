@@ -217,6 +217,11 @@ window.addEventListener("pagehide", () => {
 });
 
 async function sendMessage(displayAs) {
+    // In-flight guard: send.disabled is set for the duration of the request
+    // below, but was never CHECKED — a double-tap fired the same message
+    // twice (duplicate rows 1-2s apart in prod, first reply lost to the
+    // concurrent-request race).
+    if (send.disabled) return;
     const text = msg.value.trim();
     if (!text) return;
 
@@ -304,6 +309,10 @@ chat.addEventListener("click", function(e) {
                 qr.classList.add("done");
                 link.classList.add("selected");
             }
+            // Bare links (team-member/customer names) have no list to lock —
+            // don't refill the input while a send is in flight, or the second
+            // tap of a double-tap leaves stale text in the box.
+            if (send.disabled) return;
             msg.value = text;
             sendMessage(link.dataset.sendLabel);
         }

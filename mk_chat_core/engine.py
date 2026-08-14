@@ -181,6 +181,46 @@ def _is_plausible_name_guess(guess: str) -> bool:
         return False
     return not all(w in _NAME_GUESS_BLOCKLIST for w in words)
 
+
+def _best_name_span(cur, consultant_id: int, tokens: list, fallback_guess: str):
+    """Find the customer name inside leftover message tokens.
+
+    The old heuristic was a blind ``" ".join(tokens[-2:])`` — any stray word
+    that survived the stop list rode along into the "name" ("Gibson most",
+    "When kendals", "process jaimies") and the lookup found nobody, so the
+    consultant was told a real customer had no orders (weed-garden 2026-08-13
+    F2, five consultants in one window). Instead, try every contiguous token
+    span against the customer search and keep the one that actually matches:
+    sizes 2 (the canonical First Last shape) then 3 (three-part names) then 1,
+    rightmost span first within a size — names trail commands ("show me X",
+    "last order for X"). A span that matches exactly one customer wins
+    immediately; otherwise the most-specific ambiguous span wins; if nothing
+    matches anywhere, fall back to the old guess so the "couldn't find" reply
+    is unchanged.
+
+    Returns (guess, matches) — guess is the span the matches came from.
+    """
+    from crm_store import find_customers_by_name
+
+    toks = tokens[-6:]  # long junk-heavy tails add spans, not information
+    best = None  # (match_count, guess, matches)
+    for size in (2, 3, 1):
+        if len(toks) < size:
+            continue
+        for i in range(len(toks) - size, -1, -1):
+            span = " ".join(toks[i:i + size])
+            if not _is_plausible_name_guess(span):
+                continue
+            matches = find_customers_by_name(cur, consultant_id=consultant_id, name=span, limit=10)
+            if len(matches) == 1:
+                return span, matches
+            if matches and (best is None or len(matches) < best[0]):
+                best = (len(matches), span, matches)
+    if best:
+        return best[1], best[2]
+    return fallback_guess, find_customers_by_name(
+        cur, consultant_id=consultant_id, name=fallback_guess, limit=10)
+
 # -------------------------
 # Chat Engine
 # -------------------------
@@ -1964,6 +2004,11 @@ class MKChatEngine:
                         "have", "has", "had", "this", "the", "a",
                         "use", "uses", "wear", "wears",  # "what cleanser does jane use"
                         "using", "wearing", "buying", "ordering",  # "what foundation is Jeanne using"
+                        # riders that polluted the name guess ("Gibson most",
+                        # "When kendals", "process jaimies", "How many" —
+                        # weed-garden 2026-08-13 F2, 5 consultants):
+                        "most", "when", "whens", "when's", "how", "many",
+                        "process", "i", "my", "past", "previous",
                     }
 
                     tokens = []
@@ -1985,6 +2030,7 @@ class MKChatEngine:
                     guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else "")
                     if not _is_plausible_name_guess(guess):
                         guess = ""
+                    _token_guess = guess
                     guess = _resolve_pronoun_guess(guess, state) or (state.get("last_ref_customer_name") or "").strip()
                     if not guess:
                         # No plausible name left after filtering stopwords/verbs
@@ -1994,7 +2040,15 @@ class MKChatEngine:
                         return ChatReply(ui["who_is_customer"])
 
                     with tx() as (conn, cur):
-                        matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+                        if guess == _token_guess and tokens:
+                            # span search over the leftover tokens — the
+                            # last-2 grab alone mangles junk-suffixed and
+                            # three-part names (2026-08-13 F2)
+                            guess, matches = _best_name_span(cur, consultant_id, tokens, guess)
+                        else:
+                            # pronoun / last-referenced-customer path: the
+                            # guess didn't come from these tokens
+                            matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                         if len(matches) == 0:
                             return ChatReply(ui["no_customer_found_yet"].format(name=guess))
@@ -2073,7 +2127,11 @@ class MKChatEngine:
                 stop_words = {
                     "how", "much", "did", "has", "have", "spent", "spend", "total", "in", "for", "on",
                     "this", "year", "month", "last", "days", "customer", "orders", "order", "history",
-                    "what", "is", "whats", "what's", "me", "please"
+                    "what", "is", "whats", "what's", "me", "please",
+                    # riders that polluted the name guess ("was jaimies" —
+                    # weed-garden 2026-08-13 F2, same family as recent_orders):
+                    "was", "when", "whens", "when's", "most", "many",
+                    "process", "i", "my", "past", "previous",
                 }
 
                 tokens = []
@@ -2099,6 +2157,7 @@ class MKChatEngine:
                 guess = " ".join(tokens[-2:]) if len(tokens) >= 2 else (tokens[0] if tokens else msg)
                 if not _is_plausible_name_guess(guess):
                     guess = ""
+                _token_guess = guess
                 guess = _resolve_pronoun_guess(guess, state) or (state.get("last_ref_customer_name") or "").strip()
                 if not guess:
                     # No plausible name left after filtering stopwords/verbs
@@ -2110,7 +2169,11 @@ class MKChatEngine:
                 start_date, end_date = parse_time_filter_from_text(msg)
 
                 with tx() as (conn, cur):
-                    matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+                    if guess == _token_guess and tokens:
+                        # span search — same F2 fix as recent_orders
+                        guess, matches = _best_name_span(cur, consultant_id, tokens, guess)
+                    else:
+                        matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
 
                     if len(matches) == 0:
                         return ChatReply(ui["no_customer_found_yet"].format(name=guess))
@@ -3196,6 +3259,17 @@ class MKChatEngine:
                         f"You can type what you would like to add to the order or say cancel to start over."
                     )
 
+                # "none"/"nothing" answers the items question with "no items" —
+                # bail out like cancel instead of fuzzy-matching the word as a
+                # product (2026-08-10: "none" matched Cosmetic Sponges at 67.5).
+                if msg.strip().lower().rstrip(".!") in {
+                    "none", "nothing", "no items", "never mind", "nevermind",
+                    "nada", "ninguno", "ninguna",
+                }:
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(ui["canceled"])
+
                 _parsed = {}
                 try:
                     _parsed = parse_with_openai(self.client, f"order for {cust_first} {cust_last}: {msg.strip()}", last_customer)
@@ -3489,6 +3563,16 @@ class MKChatEngine:
         from db import tx
         cust_first = order["customer"]["First Name"]
         cust_last = order["customer"]["Last Name"]
+
+        # If every line was skipped (empty SKU), there is nothing to save or
+        # queue — say so instead of confirming. Without this, the job-queue
+        # loop below queues zero jobs but the reply still claims the order is
+        # on its way (2026-08-10 incident: "3 hand soaps" never matched, the
+        # only item was skipped, consultant was told the order was sent).
+        if not any((line["chosen"].get("sku") or "").strip() for line in order["lines"]):
+            state["pending"] = None
+            save_session_state(state, session_id=sid)
+            return ChatReply(ui["order_empty"].format(first=cust_first, last=cust_last))
 
         # Compute discount + tax before saving — _order_money is the
         # single source of truth (same math the confirm displayed).

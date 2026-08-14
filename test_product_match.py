@@ -65,6 +65,30 @@ CASES = [
     # must beat Clear Proof's "cleanser" alias, same as the digit form ---
     ("four in one cleanser normal to dry",  "TimeWise 4-in-1 Cleanser"),
     ("four in one cleanser combination to oily", "TimeWise 4-in-1 Cleanser"),
+
+    # --- zero-width shade digits (weed-garden 2026-08-13 catch-up: 4
+    # consultants, 2 lost orders): MK's catalog glues U+200B to shade digits
+    # ("Deep 8​"), so the digit never matched and the FIRST shade of a
+    # line always won the tie. Fixed by stripping zero-width chars at catalog
+    # load + query side, and counting digit tokens in the _hits tie-break ---
+    ("deep 8 matte foundation",       "Matte 3D Foundation - Deep 8"),
+    ("light 6 luminous foundation",   "Luminous 3D Foundation - Light 6"),
+    ("medium 8 foundation",           "Medium 8"),
+    ("bronze w 130 matte foundation", "Matte 3D Foundation - Bronze W 130"),
+
+    # --- volu-firm hyphen forms (same catch-up): v2t/typed "volufirm" /
+    # "volu firm" lost to Clear Proof's greedy "cleanser" alias; the
+    # _COMPOUND_WORD_FIXES rule normalizes to the hyphenated catalog form ---
+    ("volufirm cleanser",             "Volu-Firm Foaming Cleanser"),
+    ("volu firm cleanser",            "Volu-Firm Foaming Cleanser"),
+
+    # --- v2t word-number shades (same catch-up: c31 "deep eight" ×4, c114
+    # "medium eight"): word→digit ONLY when glued to a shade family word, so
+    # quantities ("two acne treatment gels") and "four in one" stay owned by
+    # the order parser / the rule above ---
+    ("deep eight matte foundation",   "Matte 3D Foundation - Deep 8"),
+    ("medium eight foundation",       "Medium 8"),
+    ("light six luminous foundation", "Luminous 3D Foundation - Light 6"),
 ]
 
 
