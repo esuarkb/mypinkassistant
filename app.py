@@ -1480,8 +1480,18 @@ def onboard_post(
     # <-- PUT IT HERE (right after success)
     ref_code = (ref or "").strip() or (request.session.get("referral_code") or "").strip()
     if ref_code:
-        apply_referral(int(new_cid), ref_code)
-        request.session.pop("referral_code", None)
+        applied, _ = apply_referral(int(new_cid), ref_code)
+        if applied:
+            request.session.pop("referral_code", None)
+        else:
+            # NOT a consultant's code — leave it in the session (it may have
+            # arrived via the form field and never been in the session at all)
+            # so /billing/start can still resolve it as the printed EVENT card
+            # code and grant the extended trial. The unconditional pop here ate
+            # the code one second before billing_start looked for it, so every
+            # QR-card signup was promised 30 days and given 7 (2026-08-15,
+            # found via Jamie Roth's signup).
+            request.session["referral_code"] = ref_code
 
     # Fill profile + InTouch
     update_profile_and_intouch(
