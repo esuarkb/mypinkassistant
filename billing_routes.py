@@ -395,7 +395,8 @@ def billing_start(request: Request):
                    stripe_customer_id,
                    stripe_subscription_id,
                    billing_status,
-                   referred_by_consultant_id
+                   referred_by_consultant_id,
+                   signup_event_code
             FROM consultants
             WHERE id={PH}
             """,
@@ -413,7 +414,8 @@ def billing_start(request: Request):
         billing_status = (row[5] or "").strip().lower()
 
         referred_by_consultant_id = row[6]
-        
+        signup_event_code = (row[7] or "").strip()
+
         full_name = f"{first_name} {last_name}".strip()
         
         try:
@@ -454,6 +456,21 @@ def billing_start(request: Request):
                             # Attribution is nice-to-have; never block checkout
                             # if the column hasn't been migrated yet.
                             conn.rollback()
+
+        # The session code above is popped on the FIRST pass through this
+        # route, but checkout may not complete on that pass (Stripe's back
+        # arrow -> /billing/cancel -> eventually back here). Without reading
+        # the persisted signup_event_code back, a second pass silently
+        # downgrades an event signup to the 7-day default trial and re-enables
+        # the promo-code box (found 2026-08-15).
+        if (event_trial_days == 0 and ref_id_int == 0
+                and not stripe_subscription_id
+                and billing_status not in ("active", "trialing")
+                and signup_event_code):
+            from app import resolve_referral
+            _stored = resolve_referral(signup_event_code)
+            if _stored and _stored["kind"] == "event":
+                event_trial_days = int(_stored["trial_days"])
 
         if not email:
             return HTMLResponse("Missing email for account.", status_code=400)
@@ -521,7 +538,9 @@ def billing_start(request: Request):
             "trial_days": str(trial_days or ""),
             "referred_by": str(ref_id_int) if ref_id_int > 0 else "",
         },
-        "allow_promotion_codes": ref_id_int == 0,
+        # The event card's 30-day trial IS the promotion — no stacking a promo
+        # code (e.g. WELCOME) on top, same as consultant referrals.
+        "allow_promotion_codes": ref_id_int == 0 and not event_trial_days,
     }
 
     if trial_days:
