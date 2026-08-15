@@ -65,6 +65,9 @@ CASES = [
     # must beat Clear Proof's "cleanser" alias, same as the digit form ---
     ("four in one cleanser normal to dry",  "TimeWise 4-in-1 Cleanser"),
     ("four in one cleanser combination to oily", "TimeWise 4-in-1 Cleanser"),
+    # v2t also garbles it as "four AND one" (weed-garden 2026-08-15: c97
+    # ~7-message fight 8/13 + c114 8/02); the rule requires strict adjacency
+    ("four and one cleanser normal to dry", "TimeWise 4-in-1 Cleanser"),
 
     # --- zero-width shade digits (weed-garden 2026-08-13 catch-up: 4
     # consultants, 2 lost orders): MK's catalog glues U+200B to shade digits

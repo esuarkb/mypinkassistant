@@ -50,7 +50,14 @@ UI_EN = {
     "cust_confirmed": "✅ {first} {last} confirmed. Adding to MyCustomers now.",
     "cust_reject": "No problem — Send the corrected customer info and I'll try again.",
     "order_confirmed": "✅ Order for {first} {last} confirmed. Sending to MyCustomers now.",
-    "order_reject": "Okay — paste the corrected order and I'll rebuild the summary.",
+    # The order parser can split one spoken product into fragments that both
+    # resolve to the same SKU; the x2 must never be silent (weed-garden
+    # 2026-08-15 F1 — a qty-2 order landed in InTouch for a 1-unit intent).
+    "order_merge_note": "&nbsp;&nbsp;⚠️ That x{qty} combines {fragments} — if you meant just one item, reply <strong>remove one {name}</strong>.",
+    # "no" clears pending entirely (engine.py order_confirm branch) — the copy
+    # must NOT invite a paste; a post-"no" paste is a cold parse and gets stolen
+    # by other intents (weed-garden 2026-08-15, 4 consultants).
+    "order_reject": "Okay — I've cleared that order. Send a fresh one like <strong>Order for Jane, product 1, product 2</strong>. (Tip: to fix just one thing, reply <strong>remove [item]</strong> or <strong>add [item]</strong> instead of no.)",
     "order_empty": "Every item in this order was skipped, so nothing was sent to MyCustomers. When you're ready, start a new order for {first} {last} and I'll help match the products.",
 
     # CDS address gate (PO Box / missing address) — order_confirm 'yes' branch
@@ -303,7 +310,8 @@ UI_ES = {
     "cust_confirmed": "✅ {first} {last} confirmado. Agregando a MyCustomers ahora.",
     "cust_reject": "No hay problema — envíame la info corregida del cliente y lo intento de nuevo.",
     "order_confirmed": "✅ Pedido para {first} {last} confirmado. Enviándolo a MyCustomers ahora.",
-    "order_reject": "Listo — pega el pedido corregido y lo vuelvo a armar.",
+    "order_merge_note": "&nbsp;&nbsp;⚠️ Ese x{qty} combina {fragments} — si era un solo producto, responde <strong>remove one {name}</strong>.",
+    "order_reject": "Listo — borré ese pedido. Envía uno nuevo como <strong>Order for Jane, producto 1, producto 2</strong>. (Consejo: para corregir solo una cosa, responde <strong>remove [producto]</strong> o <strong>add [producto]</strong> en vez de no.)",
     "order_empty": "Todos los artículos de este pedido fueron omitidos, así que no se envió nada a MyCustomers. Cuando estés lista, empieza un nuevo pedido para {first} {last} y te ayudo a encontrar los productos.",
 
     # CDS address gate (PO Box / missing address) — order_confirm 'yes' branch

@@ -4408,15 +4408,28 @@ class MKChatEngine:
             key = sku or name.lower()
 
             if key not in groups:
-                groups[key] = {"name": name, "price": price, "qty": 0}
+                groups[key] = {"name": name, "price": price, "qty": 0, "_texts": []}
 
             groups[key]["qty"] += qty
+            raw = (line.get("text") or "").strip()
+            if raw and raw.lower() not in [x.lower() for x in groups[key]["_texts"]]:
+                groups[key]["_texts"].append(raw)
 
             # If price was missing before and we see it now, keep it
             if groups[key].get("price") is None and isinstance(price, (int, float)):
                 groups[key]["price"] = price
 
-        return list(groups.values())
+        # Two DIFFERENTLY-typed lines collapsing into one SKU usually means the
+        # parser split one spoken product into fragments ("silky, setting powder
+        # light to medium" → 2 lines, same SKU). Surface that so the x2 is never
+        # silent; a single "x2" line or true repeats stay unflagged.
+        out = []
+        for g in groups.values():
+            texts = g.pop("_texts", [])
+            if g["qty"] >= 2 and len(texts) >= 2:
+                g["merged_from"] = texts
+            out.append(g)
+        return out
 
     def _get_order_readiness_warning(self, customer_row: dict | None) -> str:
         if not customer_row:
@@ -4541,6 +4554,10 @@ class MKChatEngine:
             disc = per_item_discounts.get(pl["name"], 0)
             disc_str = f"  (-${disc:.2f} off)" if disc > 0 else ""
             out.append(f"• {pl['name']} {fmt_price(price)} x{qty}{disc_str}")
+            if pl.get("merged_from"):
+                frags = " + ".join(f"“{t}”" for t in pl["merged_from"])
+                out.append(ui["order_merge_note"].format(
+                    qty=qty, fragments=frags, name=pl["name"]))
 
         # Money breakdown (2026-07-18): _order_money is the single source of
         # truth — same math the yes-path saves and queues. Legacy per-item
@@ -4612,11 +4629,22 @@ class MKChatEngine:
         ("precision, brow, liner, dark, brunette") — and the all-words
         fallback tolerates light word-form drift ("cleanser" ≈ "cleansing")
         via a shared ≥5-char stem (weed-garden 2026-07-08, c92+c114).
+        "+" normalizes like "&" ("Define + Lift"), stop-words are not
+        required words ("the luminous foundation", spoken "define AND lift"),
+        and a target word may match the name with spaces removed
+        ("eyeshadow" ≈ "Eye Shadow") — a False here on a real product name
+        cascades into the "one item at a time" refusal at the conjunction
+        guard and can lose the whole order (weed-garden 2026-08-15, c100).
         """
-        t = target.lower().replace(' & ', ' and ').replace('&', 'and')
+        def _norm(s: str) -> str:
+            s = s.lower().replace(' & ', ' and ').replace('&', 'and')
+            s = s.replace('+', ' and ')
+            return re.sub(r"\s+", " ", s).strip()
+
+        t = _norm(target)
         t = re.sub(r"[,.;:!]+", " ", t)
         t = re.sub(r"\s+", " ", t).strip()
-        n = (name or "").lower().replace(' & ', ' and ').replace('&', 'and')
+        n = _norm(name or "")
         if t in n:
             return True
 
@@ -4628,15 +4656,19 @@ class MKChatEngine:
             return w
 
         name_words = re.sub(r"[^a-z0-9 ]+", " ", n).split()
+        n_glued = n.replace(" ", "")
 
         def _word_ok(w: str) -> bool:
-            if w in n:
+            if w in n or w in n_glued:
                 return True
             ws = _stem(w)
             return len(ws) >= 5 and any(_stem(nw) == ws for nw in name_words)
 
-        # All-words fallback: every word in the target appears in the name
-        words = [w for w in t.split() if len(w) > 2]
+        # All-words fallback: every word in the target appears in the name.
+        # Stop-words are dropped from the required set — a spoken "and" or a
+        # leading "the" must not veto an otherwise-complete match.
+        _stop = {"and", "the", "for", "with"}
+        words = [w for w in t.split() if len(w) > 2 and w not in _stop]
         return bool(words) and all(_word_ok(w) for w in words)
 
     def _remove_line_peek(self, order: dict, target: str) -> bool:

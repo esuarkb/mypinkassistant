@@ -299,7 +299,10 @@ _COMPOUND_WORD_FIXES = [
     # (90 vs 53) for the product literally named TimeWise 4-in-1 Cleanser; the
     # digit form "4 in 1" already wins at 93, so normalize to it. weed-garden
     # 2026-07-20 (c60, voice order). Same Clear Proof family as men('s) cleanser.
-    (re.compile(r"\bfour\s+in\s+one\b"), "4 in 1"),
+    # v2t also garbles it as "four and one" (weed-garden 2026-08-15, c97 —
+    # ~7-message fight); the alternation requires strict adjacency, so
+    # "four ... and ... one" across a sentence never transforms.
+    (re.compile(r"\bfour\s+(?:in|and)\s+one\b"), "4 in 1"),
     # v2t and typed queries render the brand "Volu-Firm" as "volufirm" or
     # "volu firm"; the hyphenless forms drop the whole line to ~90 and Clear
     # Proof's greedy "cleanser" alias wins instead. The hyphenated form
