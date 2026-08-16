@@ -557,6 +557,10 @@ _ORDER_ENTRY_SHAPE_RE = re.compile(
 _ORDER_LOOKUP_RE = re.compile(
     r"\b(recent\s+orders?|order\s+history|last\s+orders?|past\s+orders?|"
     r"previous\s+orders?|pending\s+orders?|how\s+many\s+orders?|orders?\s+for\b|"
+    # relative-clause subject = a lookup, never an entry: "customers who have
+    # ordered since June 16" matched the entry shape's <name> <order-verb>
+    # pattern and flipped to an order proposal (weed-garden 2026-08-16, c9)
+    r"customers?\s+(?:who|that)\b|"
     r"what\s+did\s+.*\border\b)\b",
     re.IGNORECASE,
 )
@@ -1219,6 +1223,16 @@ _DATA_QUERY_TRIGGERS = (
     "who ordered the",
     "who ordered a ",
     "who has ordered",
+    # relative-clause / "since" forms (weed-garden 2026-08-16, c9): she asked
+    # 3 ways for "customers who have ordered since June 16" and every phrasing
+    # dead-ended — "Customers who have ordered…" read as <name> <order-verb>
+    # to the entry-shape flip and proposed an ORDER. Claiming data_query here
+    # disarms that flip (it only fires on messages classified recent_orders).
+    # Product tails are safe: route()'s customers_by_product rule still claims
+    # "who ordered the <product>" shapes before data_query answers.
+    "who have ordered",
+    "that have ordered",
+    "ordered since",
     # moved from _unit_triggers 2026-07-11: "who ordered <time>" defaults
     # to customers (see comment there); bare forms land here so they get
     # a customer answer instead of recent_orders' "Who is the customer?"
@@ -2534,6 +2548,13 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 # Quantity/frequency words (not product names)
                 "more", "than", "once", "twice", "times", "over", "under",
                 "least", "most", "many", "much", "few", "several",
+                # "since <date>" + spelled counts (weed-garden 2026-08-16, c9):
+                # "in the last three months" survived the digit-only trailing
+                # strip above and word-salad'd as a product search ("No
+                # customers found who have ordered in the last three months?.")
+                "since",
+                "one", "two", "three", "four", "five", "six",
+                "seven", "eight", "nine", "ten", "eleven", "twelve",
                 # Order source/channel words (not product names)
                 "online", "myshop", "cds", "store", "person",
             }

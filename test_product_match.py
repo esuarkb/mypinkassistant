@@ -48,6 +48,15 @@ CASES = [
     ("lotion for feet",             "Mint Bliss Energizing Lotion for Feet & Legs"),
     ("moisturizer for acne prone skin", "Clear Proof Oil-Free Moisturizer"),
 
+    # --- "vitamin c" alias (weed-garden 2026-08-16 F3, 2 consultants:
+    # c38 7/26 "vitamin C+E" → Hand Cream, c9 8/15 "vitamin c" → scrub cards) ---
+    ("vitamin c",                   "TimeWise Replenishing Serum C+E"),
+    ("vitamin c serum",             "TimeWise Replenishing Serum C+E"),
+    ("vitamin C+E",                 "TimeWise Replenishing Serum C+E"),
+    # guards: the serum family's other queries must not shift
+    ("lifting serum",               "TimeWise Repair Volu-Firm Advanced Lifting Serum"),
+    ("advanced serum",              "TimeWise Repair Volu-Firm Advanced Lifting Serum"),
+
     # --- Go Set query-awareness + fewest-tokens tie-break (2026-07-18) ---
     ("repair set",                  "TimeWise Repair Volu-Firm Set"),          # plain set beats Ultimate + Go Set
     ("repair go set",               "TimeWise Repair Volu-Firm The Go Set"),   # she SAID go

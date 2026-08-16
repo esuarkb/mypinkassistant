@@ -69,6 +69,10 @@ UI_EN = {
     "no_catalog_match": "I couldn't find that product in the catalog. Try rewording it (brand, line, or shade helps), or say <strong>cancel</strong> to start over.",
     "no_customer_found": "I couldn't find {name} in your saved customers. You can type <strong>help</strong> to see things you can do in chat.",
     "no_customer_found_yet": "I couldn't find {name} in your saved customers yet. You can type <strong>help</strong> to see things you can do in chat.",
+    # wording deliberately says "matches a customer" rather than asserting
+    # identity — an archived record can be the same woman re-added under a
+    # new surname (weed-garden 2026-08-16, c124)
+    "customer_archived_lookup": "<strong>{name}</strong> matches a customer who's archived in your MyCustomers, so she doesn't show up in searches here. If you'd like her back, unarchive her in MyCustomers and she'll come into MyPinkAssistant on the next sync — order history and all.",
     "no_customer_id": "I couldn't find a customer with ID {cid}.",
     "customer_spent": "{name} has spent ${total} ({period}).",
     "who_is_customer": "Who is the customer? Try: \u201cshow Jane\u2019s info\u201d.",
@@ -323,6 +327,7 @@ UI_ES = {
     "no_catalog_match": "No pude encontrar ese producto en el catálogo. Intenta describirlo de otra forma (marca, línea o tono ayuda), o di `cancelar` para empezar de nuevo.",
     "no_customer_found": "No encontré a {name} en tus clientes guardados. Puedes escribir <strong>ayuda</strong> para ver lo que puedes hacer en el chat.",
     "no_customer_found_yet": "Aún no encontré a {name} en tus clientes guardados. Puedes escribir <strong>ayuda</strong> para ver lo que puedes hacer en el chat.",
+    "customer_archived_lookup": "<strong>{name}</strong> coincide con una clienta archivada en tu MyCustomers, por eso no aparece en las búsquedas aquí. Si quieres recuperarla, desarchívala en MyCustomers y volverá a MyPinkAssistant en la próxima sincronización — con todo su historial de pedidos.",
     "no_customer_id": "No encontré un cliente con ID {cid}.",
     "customer_spent": "{name} ha gastado ${total} ({period}).",
     "who_is_customer": "¿Quién es el cliente? Prueba: \u201cinfo de Jane\u201d.",

@@ -198,9 +198,16 @@ def _best_name_span(cur, consultant_id: int, tokens: list, fallback_guess: str):
     matches anywhere, fall back to the old guess so the "couldn't find" reply
     is unchanged.
 
-    Returns (guess, matches) — guess is the span the matches came from.
+    Returns (guess, matches, archived) — guess is the span the matches came
+    from. archived is normally None; it's the archived-customer row when a
+    full-name span matched NOBODY active but exactly names someone archived
+    in MyCustomers — callers show the "unarchive her to sync her back"
+    notice instead of proceeding. Without it, "Yamarie pigg bought which cc
+    cream?" fell through to the size-1 span and the fuzzy fallback silently
+    answered for a different customer ("pigg" → a *rigg surname, WRatio 77)
+    — weed-garden 2026-08-16, c124.
     """
-    from crm_store import find_customers_by_name
+    from crm_store import find_customers_by_name, find_removed_exact_by_name
 
     toks = tokens[-6:]  # long junk-heavy tails add spans, not information
     best = None  # (match_count, guess, matches)
@@ -213,13 +220,22 @@ def _best_name_span(cur, consultant_id: int, tokens: list, fallback_guess: str):
                 continue
             matches = find_customers_by_name(cur, consultant_id=consultant_id, name=span, limit=10)
             if len(matches) == 1:
-                return span, matches
+                return span, matches, None
             if matches and (best is None or len(matches) < best[0]):
                 best = (len(matches), span, matches)
+            if not matches and size >= 2:
+                # This full-name span names nobody active. Before a smaller
+                # span's fuzzy fallback can substitute a different person,
+                # check whether it EXACTLY names an archived customer —
+                # exact only, so the notice never fires speculatively
+                # (single tokens aren't full names; they skip this check).
+                _rem = find_removed_exact_by_name(cur, consultant_id, span)
+                if _rem:
+                    return span, [], _rem[0]
     if best:
-        return best[1], best[2]
+        return best[1], best[2], None
     return fallback_guess, find_customers_by_name(
-        cur, consultant_id=consultant_id, name=fallback_guess, limit=10)
+        cur, consultant_id=consultant_id, name=fallback_guess, limit=10), None
 
 # -------------------------
 # Chat Engine
@@ -2040,15 +2056,23 @@ class MKChatEngine:
                         return ChatReply(ui["who_is_customer"])
 
                     with tx() as (conn, cur):
+                        _archived = None
                         if guess == _token_guess and tokens:
                             # span search over the leftover tokens — the
                             # last-2 grab alone mangles junk-suffixed and
                             # three-part names (2026-08-13 F2)
-                            guess, matches = _best_name_span(cur, consultant_id, tokens, guess)
+                            guess, matches, _archived = _best_name_span(cur, consultant_id, tokens, guess)
                         else:
                             # pronoun / last-referenced-customer path: the
                             # guess didn't come from these tokens
                             matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+
+                        if _archived:
+                            # she named someone archived in MyCustomers —
+                            # educate instead of "not found" or a fuzzy
+                            # substitute (weed-garden 2026-08-16, c124)
+                            _an = f"{_archived.get('first_name','')} {_archived.get('last_name','')}".strip()
+                            return ChatReply(ui["customer_archived_lookup"].format(name=_an))
 
                         if len(matches) == 0:
                             return ChatReply(ui["no_customer_found_yet"].format(name=guess))
@@ -2169,11 +2193,18 @@ class MKChatEngine:
                 start_date, end_date = parse_time_filter_from_text(msg)
 
                 with tx() as (conn, cur):
+                    _archived = None
                     if guess == _token_guess and tokens:
                         # span search — same F2 fix as recent_orders
-                        guess, matches = _best_name_span(cur, consultant_id, tokens, guess)
+                        guess, matches, _archived = _best_name_span(cur, consultant_id, tokens, guess)
                     else:
                         matches = find_customers_by_name(cur, consultant_id=consultant_id, name=guess, limit=10)
+
+                    if _archived:
+                        # archived-customer notice — same guard as
+                        # recent_orders (weed-garden 2026-08-16, c124)
+                        _an = f"{_archived.get('first_name','')} {_archived.get('last_name','')}".strip()
+                        return ChatReply(ui["customer_archived_lookup"].format(name=_an))
 
                     if len(matches) == 0:
                         return ChatReply(ui["no_customer_found_yet"].format(name=guess))
@@ -2402,6 +2433,17 @@ class MKChatEngine:
                                 return ChatReply(_fmt_cons(_unit_matches[0]))
                             cards = "\n\n".join(_fmt_cons(m) for m in _unit_matches[:3])
                             return ChatReply(cards)
+                        # nobody active, nobody on the team — does the typed
+                        # name EXACTLY match an archived customer? Educate
+                        # instead of the generic not-found (weed-garden
+                        # 2026-08-16, c124; lookups only — order entry
+                        # deliberately untouched)
+                        from crm_store import find_removed_exact_by_name
+                        with tx() as (_ac, _acur):
+                            _rem = find_removed_exact_by_name(_acur, consultant_id, guess)
+                        if _rem:
+                            _an = f"{_rem[0].get('first_name','')} {_rem[0].get('last_name','')}".strip()
+                            return ChatReply(ui["customer_archived_lookup"].format(name=_an))
                         return ChatReply(ui["no_customer_found_yet"].format(name=guess))
 
                     # Check if name also matches a unit_member — show disambiguation if so

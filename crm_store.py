@@ -278,6 +278,49 @@ def find_customers_by_name(
     return [r for score, r in scored if score >= 75][:limit]
 
 
+def find_removed_exact_by_name(cur, consultant_id: int, name: str):
+    """Exact (case-insensitive) first+last match among ARCHIVED customers.
+
+    Lookup handlers consult this only after the active search came up empty
+    for a full-name span: "Yamarie pigg bought which cc cream?" found no
+    active match for "yamarie pigg", then the single-token fuzzy fallback
+    silently substituted a different customer ("pigg" → a *rigg last name,
+    WRatio 77) and the consultant was never told the person she named is
+    archived in MyCustomers (weed-garden 2026-08-16, c124). Exact match
+    only, no fuzzy — this powers an "archived, unarchive to sync her back"
+    notice that must never fire speculatively. Order entry deliberately does
+    NOT use this (2026-07-25 decision: an archived record can be the same
+    woman re-added under a new surname, so order flows keep treating the
+    typed name as new-customer input).
+    """
+    parts = [p for p in (name or "").replace(",", " ").split() if p]
+    if len(parts) < 2:
+        return []
+
+    PH = "?" if _is_sqlite_cursor(cur) else "%s"
+    # "ana maria lopez" could split either way; try both
+    combos = {(parts[0], " ".join(parts[1:])), (" ".join(parts[:-1]), parts[-1])}
+    out = []
+    seen_ids = set()
+    for first, last in combos:
+        cur.execute(
+            f"""
+            SELECT id, first_name, last_name
+            FROM customers
+            WHERE consultant_id = {PH}
+              AND COALESCE(source_status, 'active') <> 'active'
+              AND LOWER(first_name) = {PH}
+              AND LOWER(last_name) = {PH}
+            """,
+            (consultant_id, first.lower(), last.lower()),
+        )
+        for r in _rows_to_dicts(cur):
+            if r["id"] not in seen_ids:
+                seen_ids.add(r["id"])
+                out.append(r)
+    return out
+
+
 def get_pcp_enrolled(cur, consultant_id: int, customer_id: int) -> bool:
     try:
         from db import is_postgres

@@ -583,6 +583,21 @@ ROUTE_CASES = [
     ("what did dana order",                      None, "recent_orders"),
     ("who last ordered under eye corrector",     None, "recent_orders"),      # cross-customer lookup, not entry
     ("recent orders for dana",                   None, "recent_orders"),
+    # --- weed-garden 2026-08-16 F1: relative-clause / "since" / spelled-number
+    # order-window questions → data_query. c9 asked 3 ways for "customers who
+    # have ordered since June 16" and every phrasing dead-ended: the entry-shape
+    # flip read "Customers who have ordered…" as <name> <order-verb> and
+    # proposed an ORDER; customers_by_product's time-word guard missed spelled
+    # "three" and "since" and word-salad'd the third try. ---
+    ("I need a list of all customers who have ordered since June 16", None, "data_query"),
+    ("Customers who have ordered since June 16, 2026", None, "data_query"),
+    ("Who are my customers who have ordered in the last three months?", None, "data_query"),
+    # negative guards — the new triggers/time-words must steal nothing:
+    ("ellie ordered makeup remover",             None, "new_order"),          # entry shape intact
+    ("customers who ordered the repair set",     None, "customers_by_product"),  # product tail intact
+    # "that"-form product tail lands in data_query (cbp's regex only knows
+    # "who") — deliberate: data_query's product LIKE path answers it correctly
+    ("customers that have ordered the miracle set", None, "data_query"),
     # catalog-search fixes 2026-07-03 (search_terms aliases + compound-word
     # normalization + trailing "ingredients" — all were June production failures)
     ("dwl",                                      None, "product_lookup"),   # search_terms alias
