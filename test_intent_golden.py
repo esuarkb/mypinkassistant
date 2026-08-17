@@ -118,6 +118,11 @@ CASES = [
     ("show my vip customers",                   "leaderboard",       "kw"),
     ("who spent the most",                      "leaderboard",       "kw"),
     ("who are my best customers",               "leaderboard",       "llm"),
+    # pcp_enroll carve-out (weed-garden 2026-08-17 F3): enroll-verb + pcp is an
+    # InTouch educate, never the lifetime leaderboard the pcp token used to buy.
+    ("Add my customer Tammy Fake to my PCP",    "pcp_enroll",        "kw"),
+    ("sign Jane up for pcp",                    "pcp_enroll",        "kw"),
+    ("remove Tammy Fake from my pcp",           "pcp_enroll",        "kw"),
     # NEGATIVE guards — VIP/PCP are customer TAGS too. A pasted customer entry
     # carrying one must reach the customer parser, not the top-customers list
     # (c28, 2026-08-05: lost the same new customer 5 times to this).
@@ -786,6 +791,11 @@ ROUTE_CASES = [
     ("can you send an invoice to Jane Smith",    None, "send_invoice"),
     ("invoice Jane Smith",                       None, "send_invoice"),
     ("I need to email an invoice to my customer", None, "send_invoice"),
+    # Verbless forms (weed-garden 2026-08-17 F2): bare "Invoice" fuzzy-matched a
+    # customer SURNAME at 77.1 and offered the wrong picker; the trailing form
+    # is how two consultants naturally typed it. Empty target → handler asks who.
+    ("Invoice",                                  None, "send_invoice"),
+    ("Tammy Fake invoice",                       None, "send_invoice"),
     # NEGATIVE GUARDS — the invoice rules must steal nothing.
     # "invoice" also shows up in subscription-billing questions.
     ("where do I see my invoices for my subscription", None,
@@ -795,6 +805,24 @@ ROUTE_CASES = [
     # (the two "must never be an invoice intent" assertions live in
     #  NEGATIVE_GUARD_CASES — what they assert is an absence, and the intent
     #  they DO land on is LLM-nondeterministic)
+
+    # --- PCP enroll educate (weed-garden 2026-08-17 F3) ---
+    ("Add my customer Tammy Fake to my PCP",     None, "pcp_enroll"),
+    ("add Tammy Fake to my pcp list",            None, "pcp_enroll"),
+    # NEGATIVE GUARDS — list/leaderboard phrasings keep their homes.
+    ("who is on my PCP list",                    None, "pcp_list"),
+    ("show my pcp list",                         None, "pcp_list"),
+    ("top 10 pcp customers",                     None, "pcp_list"),
+    ("who spent the most this year",             None, "leaderboard"),
+
+    # --- Stray digit, no pending picker (weed-garden 2026-08-17 F4) ---
+    # A bare digit after the picker closed used to reach the order parser and
+    # word-salad into "caught products". With a pending flow the pending layer
+    # still consumes digits — the rule must never claim there.
+    ("1",                                        None, "stray_digit"),
+    ("3.",                                       None, "stray_digit"),
+    ("2", {"pending": {"kind": "pick_customer"}}, ("unknown", "<llm-skipped>")),
+    ("1 dark brunette",                          None, "product_lookup"),
 ]
 
 

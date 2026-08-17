@@ -104,6 +104,10 @@ UI_EN = {
     "submitted_order_edit": "Once an order has been sent to MyCustomers I can't currently edit or remove it from chat. You can delete or change the order in <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, and MyPinkAssistant will get the corrected info on the next sync.",
     "submitted_order_add": "Heads up: we can't currently add to orders already submitted to MyCustomers. If you add the item to the order in <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, it will be added to MyPinkAssistant on the next sync.",
 
+    "pcp_enroll": "Adding or removing customers on PCP is done on Mary Kay InTouch — see your <a href=\"https://apps.marykayintouch.com/enrolled-preferred-customers\" target=\"_blank\">Preferred Customer Program</a> page. Your enrolled list shows up here automatically after each quarterly update — say <strong>show my PCP list</strong> to see it.",
+
+    "stray_digit": "That numbered list has already been answered, so a number by itself doesn't point to anything right now. Just ask again and I'll show you fresh choices.",
+
     "notes_educate": "We are working on the ability to add notes to customers. Currently you can log into <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a> to add or edit notes.",
     "mycustomers_link": "Here's the link to <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>&nbsp; <button class=\"fdp-copy copy-link-btn\" data-copy=\"https://apps.marykayintouch.com/customer-list\">Copy Link</button>",
     "bulk_text_educate": "I can't send texts directly to customers, but if you say <strong>Do I have any followups</strong> you can click the tap-to-text button to text a followup message directly from your phone.",
@@ -357,6 +361,10 @@ UI_ES = {
 
     "submitted_order_edit": "Una vez que un pedido se envió a MyCustomers, por el momento no puedo editarlo ni eliminarlo desde el chat. Puedes eliminar o cambiar el pedido en <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, y MyPinkAssistant recibirá la información corregida en la próxima sincronización.",
     "submitted_order_add": "Aviso: por el momento no podemos agregar artículos a pedidos ya enviados a MyCustomers. Si agregas el artículo al pedido en <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>, se agregará a MyPinkAssistant en la próxima sincronización.",
+
+    "pcp_enroll": "Agregar o quitar clientas del PCP se hace en Mary Kay InTouch — visita tu página del <a href=\"https://apps.marykayintouch.com/enrolled-preferred-customers\" target=\"_blank\">Programa de Clientas Preferidas</a>. Tu lista inscrita aparece aquí automáticamente después de cada actualización trimestral — di <strong>muestra mi lista PCP</strong> para verla.",
+
+    "stray_digit": "Esa lista numerada ya fue respondida, así que un número por sí solo no señala nada en este momento. Solo pregunta de nuevo y te mostraré opciones nuevas.",
 
     "notes_educate": "Estamos trabajando en la posibilidad de agregar notas a los clientes. Por ahora puedes iniciar sesión en <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a> para agregar o editar notas.",
     "mycustomers_link": "Aquí está el enlace a <a href=\"https://apps.marykayintouch.com/customer-list\" target=\"_blank\">MyCustomers</a>&nbsp; <button class=\"fdp-copy copy-link-btn\" data-copy=\"https://apps.marykayintouch.com/customer-list\">Copy Link</button>",

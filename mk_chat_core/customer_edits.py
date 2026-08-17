@@ -36,8 +36,11 @@ def looks_like_command(msg: str) -> bool:
     if re.search(r"\b\w+'\s*s?\s*(info|email|phone|address|birthday)\b", s):
         return True
 
-    # "add birthday X", "update phone X" etc. are field edits, not lookups
-    if re.match(r'^(add|edit|update|change)\s+(birthday|birthdate|bday|phone|email|address|name|tag|referred)', s):
+    # "add birthday X", "update phone X" etc. are field edits, not lookups.
+    # An article/possessive between verb and field ("Add THE address of …")
+    # must not flip the edit into a command — that nudge cost c31 an address
+    # and produced a duplicate customer (weed-garden 2026-08-17 F1).
+    if re.match(r'^(add|edit|update|change)\s+(?:(?:the|her|his|my|an?)\s+)?(birthday|birthdate|bday|phone|email|address|name|tag|referred)', s):
         return False
 
     # detect patterns like "Jane info"
@@ -148,11 +151,26 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
         low = txt.lower()
 
         # strip leading verbs
-        for prefix in ("edit ", "edit:", "add ", "add:", "update ", "update:"):
+        for prefix in ("edit ", "edit:", "add ", "add:", "update ", "update:",
+                       "change ", "change:"):
             if low.startswith(prefix):
                 txt = txt[len(prefix):].strip()
                 low = txt.lower()
                 break
+
+        # strip a leading article/possessive ONLY when a field word follows
+        # ("her birthday 4/1", "the phone 205-…") so those reach their field
+        # branches. Without this the paste guard below reads "her birthday" as
+        # a leading NAME + birthday and refuses the edit — the gate in
+        # looks_like_command admits these article forms, so the apply side must
+        # accept them too (weed-garden 2026-08-17 F1).
+        _art = re.match(
+            r"^(?:the|her|his|my|an?)\s+(?=(?:birthday|birthdate|bday|dob|phone|"
+            r"cell|mobile|email|address|direcci[oó]n|tags?|referred)\b)",
+            txt, flags=re.IGNORECASE)
+        if _art:
+            txt = txt[_art.end():].strip()
+            low = txt.lower()
 
         if not txt:
             continue
@@ -201,9 +219,11 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             continue
 
         # address: (Spanish "Dirección:" too — ES customer pastes kept the
-        # prefix in the street field; added 2026-07-11)
-        if low.startswith("address") or low.startswith("dirección") or low.startswith("direccion"):
-            addr = re.sub(r"^(?:address|direcci[oó]n)\s*(?:is|was|at|es)?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
+        # prefix in the street field; added 2026-07-11. Optional leading
+        # article/possessive + "of/to" so "[Add] the address of 5301 …" reaches
+        # the parser — weed-garden 2026-08-17 F1)
+        if re.match(r"^(?:(?:the|her|his|my|an?)\s+)?(?:address|direcci[oó]n)\b", low):
+            addr = re.sub(r"^(?:(?:the|her|his|my|an?)\s+)?(?:address|direcci[oó]n)\s*(?:of|is|was|at|to|es)?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
             if addr:
                 # ✅ Try smart parse first
                 parsed = parse_address_line(addr)

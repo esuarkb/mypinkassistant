@@ -1426,6 +1426,22 @@ class MKChatEngine:
             return ChatReply(_pcp_header + "\n" + _render_pcp(_pcp_customers, _pcp_done_ids, _pcp_quarter))
         return None
 
+    def _intent_stray_digit(self, ctx) -> Optional[ChatReply]:
+        # Bare digit with no pending picker — the numbered list it was answering
+        # already closed; the order parser used to word-salad it into "caught
+        # products" (c39 + c31, weed-garden 2026-08-17 F4). Fixed ui_text bubble.
+        if ctx.intent_result.intent == "stray_digit":
+            return ChatReply(ctx.ui["stray_digit"])
+        return None
+
+    def _intent_pcp_enroll(self, ctx) -> Optional[ChatReply]:
+        # "Add my customer X to my PCP" — enrollment lives on InTouch, so this
+        # educates instead of showing the lifetime leaderboard the pcp keyword
+        # used to trigger (c31, weed-garden 2026-08-17 F3). Fixed ui_text bubble.
+        if ctx.intent_result.intent == "pcp_enroll":
+            return ChatReply(ctx.ui["pcp_enroll"])
+        return None
+
     def _intent_leaderboard(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
         Returns None to decline — fall through to pending flow / normal parse."""
@@ -4088,6 +4104,8 @@ class MKChatEngine:
         "billing_help": "_intent_billing_help",
         "privacy_help": "_intent_privacy_help",
         "pcp_list": "_intent_pcp_list",
+        "pcp_enroll": "_intent_pcp_enroll",
+        "stray_digit": "_intent_stray_digit",
         "leaderboard": "_intent_leaderboard",
         "top_sellers": "_intent_top_sellers",
         "birthday_lookup": "_intent_birthday_lookup",

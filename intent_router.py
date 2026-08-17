@@ -171,6 +171,8 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "submitted_order_edit":  {"llm_allowed": False, "interrupts_pending": True,  "description": "add/remove against an already-submitted order — educate: change it in MyCustomers, syncs back"},
     "referral":              {"llm_allowed": False, "interrupts_pending": True,  "description": "consultant's referral link"},
     "pcp_list":              {"llm_allowed": False, "interrupts_pending": True,  "description": "PCP enrolled customer list"},
+    "pcp_enroll":            {"llm_allowed": False, "interrupts_pending": False, "description": "asking to add/remove a customer on PCP — educate: enrollment happens on InTouch (weed-garden 2026-08-17 F3)"},  # interrupts False: mid-confirm "add tag PCP" must stay a tag edit, not this bubble
+    "stray_digit":           {"llm_allowed": False, "interrupts_pending": False, "description": "bare digit with no pending picker — the list already closed; friendly nudge instead of order-parsing it (weed-garden 2026-08-17 F4)"},
     "birthday_lookup":       {"llm_allowed": False, "interrupts_pending": True,  "description": "birthdays today/this week/this month/..."},
     "followup":              {"llm_allowed": False, "interrupts_pending": True,  "description": "2+2+2 follow-up cards"},
     "customers_by_product":  {"llm_allowed": False, "interrupts_pending": True,  "description": "customers who bought/use a product"},
@@ -1504,6 +1506,17 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
             or ("top" in lowered and "customer" in lowered)
         )
     ):
+        # "Add my customer Crystal to my PCP" is an ENROLL request, not a
+        # top-customers question — enrollment lives on InTouch, so educate
+        # instead of answering with the lifetime leaderboard (c31, weed-garden
+        # 2026-08-17 F3). Same for remove/drop, the sibling action. "who/show"
+        # phrasings ("who should I add to my pcp") stay leaderboard/pcp_list.
+        if (
+            re.search(r"\bpcp\b", lowered)
+            and re.search(r"\b(add|enroll|enrol|put|sign|register|remove|drop)\b", lowered)
+            and not re.search(r"\b(who|show|enrolled|mailer)\b", lowered)
+        ):
+            return IntentResult(intent="pcp_enroll", confidence=0.95, raw_text=msg)
         return IntentResult(intent="leaderboard", confidence=0.95, raw_text=msg)
 
     # Per-customer possessive order history ("Jeannie's orders in 2024") must be caught
@@ -2132,6 +2145,15 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
     if "what does par mean" in lowered:
         return _claim("inventory_help")
 
+    # Bare digit with NO pending picker — the numbered list it answers has
+    # already been consumed (a second "3" after a picker resolved, or a digit
+    # typed after the flow closed). Without this it falls to the order parser,
+    # which word-salads it into "caught products" (c39 + c31, weed-garden
+    # 2026-08-17 F4). WITH a pending flow the pending layer consumes digits —
+    # this rule must never fire there.
+    if not pending and re.fullmatch(r"\s*[1-9]\s*[.!]?\s*", msg):
+        return _claim("stray_digit")
+
     # Exact product name match — handles data-send clicks from multi-result lists (not pending)
     if not pending:
         _exact = next((c for c in catalog if c['product_name'].lower() == lowered.strip()), None)
@@ -2253,8 +2275,13 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
         # no id — the handler turns that into her order list rather than a
         # dead end, which is the whole point of routing it here instead of
         # letting it fall through to a fuzzy customer lookup.
+        # The trailing/bare form ("Becky Smith invoice", plain "Invoice") is a
+        # verbless ask two consultants used (c121 8/15, c105 8/16 — the bare
+        # word fuzzy-matched a customer surname at 77.1 and offered the wrong
+        # picker; weed-garden 2026-08-17 F2). An empty target just asks who.
         if re.search(r"\b(?:send|email|make|create|generate|get|show|need|want|preview)\b", lowered) \
-           or re.match(r"^\s*invoices?\s+\S", lowered):
+           or re.match(r"^\s*invoices?\s+\S", lowered) \
+           or re.search(r"\binvoices?\s*[.!?]?\s*$", lowered):
             # Whatever is left after the command words is the customer name.
             # Anything that isn't a real name simply finds nobody, and the
             # handler asks who — a wrong guess here costs a question, not an email.
@@ -2366,8 +2393,11 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
     #         their handlers sit in mk_chat_core, so they cannot steal a
     #         message an earlier handler would have claimed ----
 
-    # leaderboard (not pending) and top_sellers (even mid-flow) claim their base intent here
-    if not pending and intent == "leaderboard":
+    # leaderboard (not pending) and top_sellers (even mid-flow) claim their base intent here.
+    # pcp_enroll rides the same position (it's carved out of the leaderboard
+    # keyword claim — weed-garden 2026-08-17 F3) and the same not-pending guard:
+    # mid-confirm "add tag PCP" must stay a tag edit.
+    if not pending and intent in ("leaderboard", "pcp_enroll"):
         return IntentResult(intent=intent, confidence=base.confidence, slots=base.slots, raw_text=msg)
     if intent == "top_sellers":
         return IntentResult(intent=intent, confidence=base.confidence, slots=base.slots, raw_text=msg)
