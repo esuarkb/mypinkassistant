@@ -274,6 +274,129 @@ UI_EN = {
         "• remove 1 satin hands from inventory\n"
         "• set satin hands inventory to 5"
     ),
+
+    # Inline engine.py reply strings migrated 2026-08-17 (Spanish-parity pass;
+    # trigger: c140 chose Español at signup and would have hit English prompts).
+    # EN text byte-identical to the originals, with two exceptions: the two
+    # "no email for the/an invoice" variants unified on one wording, and the
+    # order-line catalog-miss sites now reuse propose_top_no_match.
+    # ES command words: cancel/skip have recognized Spanish forms ("cancelar",
+    # "omitir" — intent_router.py:1382, render.py:61) so ES copy uses those;
+    # everything else (DELETE, invoice Jane Smith, inventory examples) stays
+    # English because the parsers only match English.
+
+    # product/category browsing
+    "category_big_list_hint": "That's a lot to list — here it is by type (tap one):",
+    "category_product_count": "{n} products",
+    "more_products_link": "+{n} more",
+    "product_search_no_matches": "I couldn't find any products matching that search.",
+    "product_not_found_try_different": "I couldn't find that product in the catalog. Try a different name or part of the name.",
+    "product_one_at_a_time": "I can look up one product at a time — try searching for each one separately.",
+    "look_book_line": 'Here\'s the <a href="{url}" class="inapp-overlay-link">{label}</a>&nbsp; <button class="fdp-copy copy-link-btn" data-copy="{url}">Copy Link</button>',
+    "inventory_no_thresholds": "You haven't set any desired on-hand levels yet.\nTry: \"keep 3 charcoal mask on hand\" and I'll track that for you.",
+
+    # delete customer confirms (DELETE stays English — deliberate friction;
+    # the handler also accepts "cancelar" as of this pass)
+    "delete_customer_confirm_orders": "This will delete {name} from MyPinkAssistant and also remove {count} local order(s). Type DELETE to confirm, or `cancel`.",
+    "delete_customer_confirm_plain": "This will delete {name} from MyPinkAssistant. Type DELETE to confirm, or <strong>cancel</strong>.",
+
+    # customer edit redirect
+    "edit_request_redirect": 'Changes or updates to customer information must currently be done from <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. The changes will then show in MyPinkAssistant on the next sync.',
+
+    # customer-vs-consultant disambiguation picker (engine-built rows)
+    "picker_found_options": "I found these options — which did you mean?",
+    "picker_multiple_matches": "I found multiple matches — reply with 1 or {total}:",
+    "picker_label_customer": "Customer",
+    "picker_label_consultant": "Consultant",
+
+    # invoices (2026-08-04 feature). invoice_sent must stay PLAIN text —
+    # app.js only switches a bubble to innerHTML on "<a ", "<div", "<strong".
+    # "Send invoice" is the literal button label (crm_store.py) — same for
+    # both languages until that button is translated.
+    "invoice_how": "To send an invoice, pull up the customer's orders and tap <strong>Send invoice</strong> on the one you want.",
+    "invoice_no_email_sync": "I don't have an email address for {name}, so there's nowhere to send the invoice. Add her email in MyCustomers and it'll sync over.",
+    "invoice_who": "Who is the invoice for? Say something like <strong>invoice Jane Smith</strong> and I'll show you her orders.",
+    "invoice_no_orders": "I don't see any orders for {name} to invoice.",
+    "invoice_which_order": "Which order?",
+    "invoice_order_not_found": "I couldn't find that order.",
+    "invoice_no_email_short": "I don't have an email address for {name}.",
+    "invoice_cds_blocked": "That one shipped from Mary Kay directly, so they already billed your customer for it — there's no invoice to send.",
+    "invoice_unpriced_blocked": "I can't send that one — I don't have a price on file for everything on it, so your customer would see an item as free. Nightly sync usually fills those in.",
+    "invoice_send_failed": "I couldn't send that invoice just now. Give it a minute and try again — if it keeps failing, email support@mypinkassistant.com.",
+    "invoice_sent": "✅ Invoice sent to {name} at {email}.",
+
+    # PCP list
+    "pcp_none": "No PCP customers found for the current quarter.",
+    "pcp_header": "<strong>PCP List</strong> ({remaining} remaining · {total} total)",
+
+    # top sellers + shared period labels (birthdays reuse the overlapping ones)
+    "top_sellers_none": "No order history found for {label}.",
+    "top_sellers_header": "<strong>Your Top Sellers</strong> ({label})",
+    "top_sellers_row": "{i}. {name} — {qty} units",
+    "period_this_month": "this month",
+    "period_this_quarter": "this quarter",
+    "period_this_year": "this year",
+    "period_all_time": "all time",
+    "period_last_12_months": "the last 12 months",
+    "period_today": "today",
+    "period_tomorrow": "tomorrow",
+    "period_this_week": "this week",
+    "period_next_week": "next week",
+    "period_next_month": "next month",
+    "period_next_30_days": "the next 30 days",
+
+    # birthdays. bday_header: EN reads "Customer Birthdays This Month" (scope
+    # prefixes the noun); ES reads "Cumpleaños de clientas este mes" (scope
+    # follows it) — the {scope} slot position differs by design.
+    "bday_in_month": "in {month}",
+    "month_names": "January,February,March,April,May,June,July,August,September,October,November,December",
+    "bday_none": "No {who} with birthdays {period}.",
+    "bday_who_customers": "customers",
+    "bday_who_consultants": "consultants",
+    "bday_who_both": "customers or consultants",
+    "bday_header": "<strong>{scope}Birthdays {period}</strong>",
+    "bday_scope_customers": "Customer ",
+    "bday_scope_consultants": "Consultant ",
+    "bday_scope_both": "",
+
+    # lapsed customers ("show all" expansion)
+    "lapsed_no_more": "No additional lapsed customers beyond the top 5.",
+    "lapsed_all_header": "All lapsed customers ({period}+):",
+    "unit_month": "month",
+    "unit_months": "months",
+    "unit_days": "days",
+    "months_ago": "{n} months ago",
+    "days_ago": "{n} days ago",
+
+    # customers-by-city coaching (example commands stay English — the router
+    # matches "customers in ...")
+    "city_lookup_hint": "This looks like a city/state lookup. Try \"customers in Madison\" or \"customers in Madison, WI\"",
+
+    # new-customer confirm validation gauntlet (each returns with pending kept
+    # open so the corrected value applies as an edit via customer_edits)
+    "cust_need_full_name": "I need both a first and last name before MyCustomers can save this customer. Please type <strong>cancel</strong> and re-enter the customer with the full name.",
+    "cust_bad_phone": "The phone number I have ({phone}) isn't 10 digits — MyCustomers requires a 10-digit US number. Please type the correct number or say cancel.",
+    "cust_partial_address": "I only see a partial address. Please enter the full address (street, city, state, and zip) or type cancel to save without one.",
+    "cust_bad_state": "I wasn't able to recognize \"{state}\" as a valid state. Please re-enter the address with the full state name (e.g. Texas) or abbreviation (e.g. TX), or say cancel.",
+    "cust_bad_zip": "The zip code I have ({zip}) isn't 5 digits — MyCustomers requires a 5-digit zip code. Please type the correct zip code or say cancel.",
+    "cust_email_space": "The email I have ({email}) has a space in it — please type it again without the space, or say cancel.",
+    "cust_email_invalid": "The email I have ({email}) doesn't look valid — please type the correct email or say cancel.",
+    "cust_future_birthday": "The birthday I have ({birthday}) is in the future — please type the correct birthday or say cancel.",
+
+    # awaiting_order_items guard
+    "add_item_prompt": "I don't see an item I can add to {first} {last}'s order. You can type what you would like to add to the order or say cancel to start over.",
+
+    # customer_edits.py confirmation notes ("Updated: Email updated, …")
+    "edit_notes_prefix": "Updated: ",
+    "edit_note_email": "Email updated",
+    "edit_note_phone": "Phone updated",
+    "edit_note_birthday": "Birthday updated",
+    "edit_note_referred_by": "Referred By updated",
+    "edit_note_tags": "Tags updated",
+    "edit_note_address": "Address updated",
+    "edit_note_address_street": "Address updated (street)",
+    "edit_note_zip": "Postal code updated",
+    "edit_note_failed": "Couldn't apply: “{raw}”",
 }
 
 UI_ES = {
@@ -534,4 +657,116 @@ UI_ES = {
         "• remove 1 satin hands from inventory\n"
         "• set satin hands inventory to 5"
     ),
+
+    # Cadenas migradas del engine.py 2026-08-17 (paridad de español).
+    # cancel/skip tienen formas en español reconocidas ("cancelar", "omitir");
+    # DELETE, los comandos de ejemplo ("invoice Jane Smith", "customers in
+    # Madison", "keep 3 ... on hand") y el botón "Send invoice" quedan en
+    # inglés — los parsers y botones solo reconocen esas formas.
+
+    # búsqueda de productos / categorías
+    "category_big_list_hint": "Es mucho para mostrar — aquí está por tipo (toca uno):",
+    "category_product_count": "{n} productos",
+    "more_products_link": "+{n} más",
+    "product_search_no_matches": "No encontré productos que coincidan con esa búsqueda.",
+    "product_not_found_try_different": "No encontré ese producto en el catálogo. Intenta con otro nombre o con parte del nombre.",
+    "product_one_at_a_time": "Puedo buscar un solo producto a la vez — intenta buscar cada uno por separado.",
+    "look_book_line": 'Aquí está <a href="{url}" class="inapp-overlay-link">{label}</a>&nbsp; <button class="fdp-copy copy-link-btn" data-copy="{url}">Copiar enlace</button>',
+    "inventory_no_thresholds": "Aún no has fijado niveles deseados de inventario.\nPrueba: \"keep 3 charcoal mask on hand\" y yo lo llevaré por ti.",
+
+    # confirmaciones de eliminar clienta (DELETE queda en inglés a propósito)
+    "delete_customer_confirm_orders": "Esto eliminará a {name} de MyPinkAssistant y también quitará {count} pedido(s) local(es). Escribe DELETE para confirmar, o `cancelar`.",
+    "delete_customer_confirm_plain": "Esto eliminará a {name} de MyPinkAssistant. Escribe DELETE para confirmar, o <strong>cancelar</strong>.",
+
+    # redirección de ediciones de clienta
+    "edit_request_redirect": 'Los cambios o actualizaciones a la información de una clienta por ahora se hacen desde <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. Los cambios aparecerán en MyPinkAssistant en la próxima sincronización.',
+
+    # selector clienta-vs-consultora
+    "picker_found_options": "Encontré estas opciones — ¿cuál querías decir?",
+    "picker_multiple_matches": "Encontré varias coincidencias — responde con 1 o {total}:",
+    "picker_label_customer": "Clienta",
+    "picker_label_consultant": "Consultora",
+
+    # facturas. invoice_sent debe quedar en TEXTO PLANO (sin HTML) — ver la
+    # nota en el dict de inglés.
+    "invoice_how": "Para enviar una factura, abre los pedidos de la clienta y toca <strong>Send invoice</strong> en el pedido que quieras.",
+    "invoice_no_email_sync": "No tengo correo electrónico de {name}, así que no hay a dónde enviar la factura. Agrega su correo en MyCustomers y se sincronizará.",
+    "invoice_who": "¿Para quién es la factura? Escribe algo como <strong>invoice Jane Smith</strong> y te mostraré sus pedidos.",
+    "invoice_no_orders": "No veo pedidos de {name} para facturar.",
+    "invoice_which_order": "¿Cuál pedido?",
+    "invoice_order_not_found": "No encontré ese pedido.",
+    "invoice_no_email_short": "No tengo correo electrónico de {name}.",
+    "invoice_cds_blocked": "Ese pedido lo envió Mary Kay directamente, así que ya le cobraron a tu clienta — no hay factura que enviar.",
+    "invoice_unpriced_blocked": "No puedo enviar ese — no tengo precio registrado de todo lo que incluye, y tu clienta vería un artículo como gratis. La sincronización nocturna normalmente completa esos precios.",
+    "invoice_send_failed": "No pude enviar la factura en este momento. Espera un minuto e intenta de nuevo — si sigue fallando, escribe a support@mypinkassistant.com.",
+    "invoice_sent": "✅ Factura enviada a {name} ({email}).",
+
+    # lista PCP
+    "pcp_none": "No encontré clientas PCP para el trimestre actual.",
+    "pcp_header": "<strong>Lista PCP</strong> ({remaining} pendientes · {total} en total)",
+
+    # más vendidos + etiquetas de período compartidas
+    "top_sellers_none": "No encontré historial de pedidos para {label}.",
+    "top_sellers_header": "<strong>Tus más vendidos</strong> ({label})",
+    "top_sellers_row": "{i}. {name} — {qty} unidades",
+    "period_this_month": "este mes",
+    "period_this_quarter": "este trimestre",
+    "period_this_year": "este año",
+    "period_all_time": "todo el tiempo",
+    "period_last_12_months": "los últimos 12 meses",
+    "period_today": "hoy",
+    "period_tomorrow": "mañana",
+    "period_this_week": "esta semana",
+    "period_next_week": "la próxima semana",
+    "period_next_month": "el próximo mes",
+    "period_next_30_days": "los próximos 30 días",
+
+    # cumpleaños — {scope} va después de "Cumpleaños" (ver nota en inglés)
+    "bday_in_month": "en {month}",
+    "month_names": "enero,febrero,marzo,abril,mayo,junio,julio,agosto,septiembre,octubre,noviembre,diciembre",
+    "bday_none": "No hay {who} con cumpleaños {period}.",
+    "bday_who_customers": "clientas",
+    "bday_who_consultants": "consultoras",
+    "bday_who_both": "clientas o consultoras",
+    "bday_header": "<strong>Cumpleaños{scope} {period}</strong>",
+    "bday_scope_customers": " de clientas",
+    "bday_scope_consultants": " de consultoras",
+    "bday_scope_both": "",
+
+    # clientas inactivas (expansión "show all")
+    "lapsed_no_more": "No hay más clientas inactivas después de las primeras 5.",
+    "lapsed_all_header": "Todas las clientas inactivas ({period}+):",
+    "unit_month": "mes",
+    "unit_months": "meses",
+    "unit_days": "días",
+    "months_ago": "hace {n} meses",
+    "days_ago": "hace {n} días",
+
+    # búsqueda por ciudad (los comandos de ejemplo quedan en inglés)
+    "city_lookup_hint": "Esto parece una búsqueda por ciudad/estado. Prueba \"customers in Madison\" o \"customers in Madison, WI\"",
+
+    # validaciones al confirmar una clienta nueva
+    "cust_need_full_name": "Necesito nombre y apellido para que MyCustomers pueda guardar a esta clienta. Escribe <strong>cancelar</strong> y vuelve a ingresarla con el nombre completo.",
+    "cust_bad_phone": "El número de teléfono que tengo ({phone}) no tiene 10 dígitos — MyCustomers requiere un número de EE. UU. de 10 dígitos. Escribe el número correcto o di cancelar.",
+    "cust_partial_address": "Solo veo una dirección incompleta. Escribe la dirección completa (calle, ciudad, estado y código postal) o escribe cancelar para guardar sin dirección.",
+    "cust_bad_state": "No pude reconocer \"{state}\" como un estado válido. Vuelve a escribir la dirección con el nombre completo del estado (p. ej. Texas) o su abreviatura (p. ej. TX), o di cancelar.",
+    "cust_bad_zip": "El código postal que tengo ({zip}) no tiene 5 dígitos — MyCustomers requiere un código postal de 5 dígitos. Escribe el código postal correcto o di cancelar.",
+    "cust_email_space": "El correo que tengo ({email}) tiene un espacio — escríbelo de nuevo sin el espacio, o di cancelar.",
+    "cust_email_invalid": "El correo que tengo ({email}) no parece válido — escribe el correo correcto o di cancelar.",
+    "cust_future_birthday": "El cumpleaños que tengo ({birthday}) está en el futuro — escribe el cumpleaños correcto o di cancelar.",
+
+    # guardia de awaiting_order_items
+    "add_item_prompt": "No veo un artículo que pueda agregar al pedido de {first} {last}. Escribe lo que quieras agregar al pedido o di cancelar para empezar de nuevo.",
+
+    # notas de confirmación de customer_edits.py
+    "edit_notes_prefix": "Actualizado: ",
+    "edit_note_email": "Correo actualizado",
+    "edit_note_phone": "Teléfono actualizado",
+    "edit_note_birthday": "Cumpleaños actualizado",
+    "edit_note_referred_by": "Referida por actualizado",
+    "edit_note_tags": "Etiquetas actualizadas",
+    "edit_note_address": "Dirección actualizada",
+    "edit_note_address_street": "Dirección actualizada (calle)",
+    "edit_note_zip": "Código postal actualizado",
+    "edit_note_failed": "No pude aplicar: “{raw}”",
 }

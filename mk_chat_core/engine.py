@@ -327,7 +327,7 @@ class MKChatEngine:
                         return ChatReply("<br>".join(lines))
                     # unknown bucket → fall through to whole-category view
                 if _cat_items:
-                    lines = [f"<strong>{CATEGORY_LABELS[_cat_slug]}</strong> — {len(_cat_items)} products"]
+                    lines = [f"<strong>{CATEGORY_LABELS[_cat_slug]}</strong> — " + ui["category_product_count"].format(n=len(_cat_items))]
                     if len(_cat_items) <= 50:
                         for m in sorted(_cat_items, key=lambda c: c["product_name"]):
                             lines.append(_fmt_product_list_item(m))
@@ -335,7 +335,7 @@ class MKChatEngine:
                         # big category → folded subcategory buckets, tap to drill
                         from .catalog import bucket_label
                         _send_cat = CATEGORY_SEND_TERM[_cat_slug]
-                        lines.append("That's a lot to list — here it is by type (tap one):")
+                        lines.append(ui["category_big_list_hint"])
                         for _sub, _its in category_buckets(_cat_items).items():
                             lines.append(f'• <a href="#" data-send="show all {_send_cat} {_sub.replace("-", " ")}">{bucket_label(_sub)}</a> ({len(_its)})')
                     return ChatReply("<br>".join(lines))
@@ -353,11 +353,11 @@ class MKChatEngine:
             if not _all_more:
                 _all_more = best_matches(catalog, _more_term, limit=20, min_score=50)
             if _all_more:
-                lines = ["<strong>Product Look Up</strong>"]
+                lines = [f"<strong>{ui['product_lookup_header']}</strong>"]
                 for m in _all_more:
                     lines.append(_fmt_product_list_item(m))
                 return ChatReply("<br>".join(lines))
-            return ChatReply("I couldn't find any products matching that search.")
+            return ChatReply(ui["product_search_no_matches"])
         print("[INTENT]", intent_result.intent, intent_result.confidence, intent_result.raw_text)
         _intent_log_id = None
         try:
@@ -421,6 +421,7 @@ class MKChatEngine:
         # (step 4) generated unpack of shared per-message context
         lowered = ctx.lowered
         language = ctx.language
+        ui = ctx.ui
         intent_result = ctx.intent_result
 
         # -------------------------
@@ -435,10 +436,7 @@ class MKChatEngine:
             else:
                 lb_url = "https://cdn.mypinkassistant.com/lookbook.pdf"
                 lb_label = "current Look Book"
-            return ChatReply(
-                f'Here\'s the <a href="{lb_url}" class="inapp-overlay-link">{lb_label}</a>&nbsp; '
-                f'<button class="fdp-copy copy-link-btn" data-copy="{lb_url}">Copy Link</button>'
-            )
+            return ChatReply(ui["look_book_line"].format(url=lb_url, label=lb_label))
         return None
 
     def _intent_order_of_application(self, ctx) -> Optional[ChatReply]:
@@ -631,7 +629,7 @@ class MKChatEngine:
                             lines.append(_fmt_product_list_item(m))
                         if len(word_matches) > 3:
                             remaining = len(word_matches) - 3
-                            lines.append(f'<a href="#" data-send="show all {product_text}">+{remaining} more</a>')
+                            lines.append(f'<a href="#" data-send="show all {product_text}">' + ui["more_products_link"].format(n=remaining) + '</a>')
                         return ChatReply("<br>".join(lines))
                     # Word match found nothing — fall back to fuzzy
                     matches = best_matches(catalog, product_text, limit=3, min_score=70)
@@ -659,7 +657,7 @@ class MKChatEngine:
                         for m in matches:
                             lines.append(_fmt_product_list_item(m))
                         return ChatReply("<br>".join(lines))
-                    return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
+                    return ChatReply(ui["product_not_found_try_different"])
 
         # -------------------------
         # Product price lookup (intent-based fallback)
@@ -674,8 +672,8 @@ class MKChatEngine:
                     return ChatReply(multi)
             if not matches:
                 if re.search(r',', product_text):
-                    return ChatReply("I can look up one product at a time — try searching for each one separately.")
-                return ChatReply("I couldn't find that product in the catalog. Try a different name or part of the name.")
+                    return ChatReply(ui["product_one_at_a_time"])
+                return ChatReply(ui["product_not_found_try_different"])
             top = matches[0]
             top_score = int(top.get("score") or 0)
             runner_up_score = int(matches[1].get("score") or 0) if len(matches) > 1 else 0
@@ -774,6 +772,7 @@ class MKChatEngine:
         # (step 4) generated unpack of shared per-message context
         consultant_id = ctx.consultant_id
         catalog = ctx.catalog
+        ui = ctx.ui
         intent_result = ctx.intent_result
         from db import tx
 
@@ -784,10 +783,7 @@ class MKChatEngine:
             from inventory_store import list_low_stock, has_any_thresholds
             with tx() as (conn, cur):
                 if not has_any_thresholds(cur, consultant_id=consultant_id):
-                    return ChatReply(
-                        "You haven't set any desired on-hand levels yet.\n"
-                        "Try: \"keep 3 charcoal mask on hand\" and I'll track that for you."
-                    )
+                    return ChatReply(ui["inventory_no_thresholds"])
                 rows = list_low_stock(cur, consultant_id=consultant_id)
             return ChatReply(_format_low_stock_list(rows, catalog))
         return None
@@ -983,14 +979,10 @@ class MKChatEngine:
                         save_session_state(state, session_id=sid)
 
                         if order_count > 0:
-                            return ChatReply(
-                                f"This will delete {state['pending']['customer_name']} from MyPinkAssistant and also remove "
-                                f"{order_count} local order(s). Type DELETE to confirm, or `cancel`."
-                            )
-                        return ChatReply(
-                            f"This will delete {state['pending']['customer_name']} from MyPinkAssistant. "
-                            f"Type DELETE to confirm, or <strong>cancel</strong>."
-                        )
+                            return ChatReply(ui["delete_customer_confirm_orders"].format(
+                                name=state["pending"]["customer_name"], count=order_count))
+                        return ChatReply(ui["delete_customer_confirm_plain"].format(
+                            name=state["pending"]["customer_name"]))
 
                     # delete by name
                     matches = find_customers_by_name(
@@ -1019,14 +1011,10 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
 
                     if order_count > 0:
-                        return ChatReply(
-                            f"This will delete {state['pending']['customer_name']} from MyPinkAssistant and also remove "
-                            f"{order_count} local order(s). Type DELETE to confirm, or `cancel`."
-                        )
-                    return ChatReply(
-                        f"This will delete {state['pending']['customer_name']} from MyPinkAssistant. "
-                        f"Type DELETE to confirm, or <strong>cancel</strong>."
-                    )
+                        return ChatReply(ui["delete_customer_confirm_orders"].format(
+                            name=state["pending"]["customer_name"], count=order_count))
+                    return ChatReply(ui["delete_customer_confirm_plain"].format(
+                        name=state["pending"]["customer_name"]))
 
                 # Multiple matches -> richer delete picker
 
@@ -1137,6 +1125,7 @@ class MKChatEngine:
         """Handler body moved verbatim from handle_message (step 4).
         Returns None to decline — fall through to pending flow / normal parse."""
         # (step 4) generated unpack of shared per-message context
+        ui = ctx.ui
         intent_result = ctx.intent_result
 
         # -------------------------
@@ -1144,11 +1133,7 @@ class MKChatEngine:
         # (covers both the keyword-classified intent and the text rule)
         # -------------------------
         if intent_result.intent == "edit_request":
-            return ChatReply(
-                'Changes or updates to customer information must currently be done from '
-                '<a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. '
-                'The changes will then show in MyPinkAssistant on the next sync.'
-            )
+            return ChatReply(ui["edit_request_redirect"])
         return None
 
     # --- feature-help bubbles (2026-07-06): one fixed ui_text bubble each;
@@ -1240,13 +1225,9 @@ class MKChatEngine:
                 inv = _invoice.build_invoice(cur, consultant_id, int(order_id),
                                              language=(ctx.language or "en"))
             if not inv:
-                return ChatReply("To send an invoice, pull up the customer's "
-                                 "orders and tap <strong>Send invoice</strong> on the one you want.")
+                return ChatReply(ui["invoice_how"])
             if not inv["sold_to"]["email"]:
-                return ChatReply(
-                    f"I don't have an email address for {inv['sold_to']['name']}, so there's "
-                    f"nowhere to send the invoice. Add her email in MyCustomers and it'll "
-                    f"sync over.")
+                return ChatReply(ui["invoice_no_email_sync"].format(name=inv["sold_to"]["name"]))
             # Remember which order the preview is asking about, so a typed
             # "email" means the same thing as the pink button. Only when the
             # invoice is actually sendable — a blocked preview shows no button
@@ -1262,8 +1243,7 @@ class MKChatEngine:
         # No order id — resolve the name to an order list.
         guess = (slots.get("target") or "").strip()
         if not guess:
-            return ChatReply("Who is the invoice for? Say something like "
-                             "<strong>invoice Jane Smith</strong> and I'll show you her orders.")
+            return ChatReply(ui["invoice_who"])
 
         with tx() as (conn, cur):
             matches = find_customers_by_name(cur, consultant_id=consultant_id,
@@ -1288,15 +1268,13 @@ class MKChatEngine:
             name = f"{c.get('first_name','')} {c.get('last_name','')}".strip()
             email = (c.get("email") or "").strip()
             if not email:
-                return ChatReply(f"I don't have an email address for {name}, so there's "
-                                 f"nowhere to send an invoice. Add her email in MyCustomers "
-                                 f"and it'll sync over.")
+                return ChatReply(ui["invoice_no_email_sync"].format(name=name))
             orders = get_recent_orders_for_customer(
                 cur, customer_id=int(c["id"]), limit=_INVOICE_ORDER_CHOICES)
 
         if not orders:
-            return ChatReply(f"I don't see any orders for {name} to invoice.")
-        return ChatReply("Which order?\n\n" + format_recent_orders(
+            return ChatReply(ui["invoice_no_orders"].format(name=name))
+        return ChatReply(ui["invoice_which_order"] + "\n\n" + format_recent_orders(
             name, orders, invoice_to=email))
 
     def _intent_send_invoice_confirm(self, ctx) -> Optional[ChatReply]:
@@ -1341,11 +1319,13 @@ class MKChatEngine:
         from db import tx, is_postgres
         from emailer import send_invoice_email
 
+        ui = UI_ES if (language or "en") == "es" else UI_EN
+
         with tx() as (conn, cur):
             inv = _invoice.build_invoice(cur, consultant_id, order_id,
                                          language=(language or "en"))
             if not inv:
-                return ChatReply("I couldn't find that order.")
+                return ChatReply(ui["invoice_order_not_found"])
             PH = "%s" if is_postgres() else "?"
             cur.execute(f"SELECT first_name, last_name, email, invoice_email "
                         f"FROM consultants WHERE id={PH}", (consultant_id,))
@@ -1353,7 +1333,7 @@ class MKChatEngine:
 
         to_email = inv["sold_to"]["email"]
         if not to_email:
-            return ChatReply(f"I don't have an email address for {inv['sold_to']['name']}.")
+            return ChatReply(ui["invoice_no_email_short"].format(name=inv["sold_to"]["name"]))
 
         # The preview already withholds the Email button when build_invoice sets
         # a block_reason, so reaching here means the phrasing was typed by hand
@@ -1365,16 +1345,9 @@ class MKChatEngine:
         # see: the id is ours and means nothing to her. The order is identified
         # by the customer's name and the preview she is looking at.
         if inv["block_reason"] == "cds":
-            return ChatReply(
-                f"That one shipped from Mary Kay directly, so they already "
-                f"billed your customer for it — there's no invoice to send."
-            )
+            return ChatReply(ui["invoice_cds_blocked"])
         if inv["block_reason"] == "unpriced":
-            return ChatReply(
-                f"I can't send that one — I don't have a price on file for "
-                f"everything on it, so your customer would see an item as free. "
-                f"Nightly sync usually fills those in."
-            )
+            return ChatReply(ui["invoice_unpriced_blocked"])
 
         cons_name = " ".join(str(p) for p in (row[0], row[1]) if p).strip()
         reply_to = (str(row[3] or "") or str(row[2] or "")).strip()
@@ -1392,8 +1365,7 @@ class MKChatEngine:
         except Exception as e:
             # Never surface the raw provider error to a consultant.
             print(f"[Invoice] send failed c={consultant_id} order={order_id}: {e}")
-            return ChatReply("I couldn't send that invoice just now. Give it a minute "
-                             "and try again — if it keeps failing, email support@mypinkassistant.com.")
+            return ChatReply(ui["invoice_send_failed"])
 
         # Plain text, one line, no markup. addMessage() only switches a bubble
         # to innerHTML when it spots "<a ", "<div" or "<strong" (web/app.js:110),
@@ -1401,13 +1373,14 @@ class MKChatEngine:
         # tags. Nothing needs escaping now that it renders as textContent —
         # escaping here would show "&amp;" in a name like "Ann & Co".
         return ChatReply(
-            f"✅ Invoice sent to {inv['sold_to']['name']} at {to_email}.")
+            ui["invoice_sent"].format(name=inv["sold_to"]["name"], email=to_email))
 
     def _intent_pcp_list(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
         Returns None to decline — fall through to pending flow / normal parse."""
         # (step 4) generated unpack of shared per-message context
         consultant_id = ctx.consultant_id
+        ui = ctx.ui
         intent_result = ctx.intent_result
         from db import tx
 
@@ -1420,9 +1393,9 @@ class MKChatEngine:
                 _pcp_customers, _pcp_quarter = _get_pcp(cur, consultant_id)
                 _pcp_done_ids = _get_pcp_done(cur, consultant_id, _pcp_quarter) if _pcp_quarter else set()
             if not _pcp_customers:
-                return ChatReply("No PCP customers found for the current quarter.")
+                return ChatReply(ui["pcp_none"])
             _pcp_pending = len([c for c in _pcp_customers if c.get("id") not in _pcp_done_ids])
-            _pcp_header = f"<strong>PCP List</strong> ({_pcp_pending} remaining · {len(_pcp_customers)} total)"
+            _pcp_header = ui["pcp_header"].format(remaining=_pcp_pending, total=len(_pcp_customers))
             return ChatReply(_pcp_header + "\n" + _render_pcp(_pcp_customers, _pcp_done_ids, _pcp_quarter))
         return None
 
@@ -1518,6 +1491,7 @@ class MKChatEngine:
         Returns None to decline — fall through to pending flow / normal parse."""
         # (step 4) generated unpack of shared per-message context
         consultant_id = ctx.consultant_id
+        ui = ctx.ui
         intent_result = ctx.intent_result
         from db import tx
 
@@ -1532,29 +1506,29 @@ class MKChatEngine:
             now = _datetime.now(timezone.utc)
             if timeframe == "month":
                 since = now - timedelta(days=30)
-                label = "this month"
+                label = ui["period_this_month"]
             elif timeframe == "quarter":
                 since = now - timedelta(days=90)
-                label = "this quarter"
+                label = ui["period_this_quarter"]
             elif timeframe == "year":
                 since = now - timedelta(days=365)
-                label = "this year"
+                label = ui["period_this_year"]
             elif timeframe == "all_time":
                 since = None
-                label = "all time"
+                label = ui["period_all_time"]
             else:
                 since = now - timedelta(days=365)
-                label = "the last 12 months"
+                label = ui["period_last_12_months"]
 
             with tx() as (conn, cur):
                 rows = get_top_sellers(cur, consultant_id=consultant_id, limit=5, since=since)
 
             if not rows:
-                return ChatReply(f"No order history found for {label}.")
+                return ChatReply(ui["top_sellers_none"].format(label=label))
 
-            lines = [f"<strong>Your Top Sellers</strong> ({label})"]
+            lines = [ui["top_sellers_header"].format(label=label)]
             for i, r in enumerate(rows, 1):
-                lines.append(f"{i}. {r['product_name']} — {r['total_qty']} units")
+                lines.append(ui["top_sellers_row"].format(i=i, name=r["product_name"], qty=r["total_qty"]))
             return ChatReply("<br>".join(lines))
         return None
 
@@ -1564,6 +1538,7 @@ class MKChatEngine:
         # (step 4) generated unpack of shared per-message context
         lowered = ctx.lowered
         consultant_id = ctx.consultant_id
+        ui = ctx.ui
         intent_result = ctx.intent_result
         from db import tx
 
@@ -1600,22 +1575,27 @@ class MKChatEngine:
                 _bday_results.sort(key=lambda r: r["days_until"])
 
                 _period_labels = {
-                    "today": "today", "tomorrow": "tomorrow",
-                    "month": "this month", "week": "this week", "next_week": "next week",
-                    "quarter": "this quarter", "upcoming": "the next 30 days", "next_month": "next month",
+                    "today": ui["period_today"], "tomorrow": ui["period_tomorrow"],
+                    "month": ui["period_this_month"], "week": ui["period_this_week"], "next_week": ui["period_next_week"],
+                    "quarter": ui["period_this_quarter"], "upcoming": ui["period_next_30_days"], "next_month": ui["period_next_month"],
                 }
                 _period_label = _period_labels.get(_bday_period, _bday_period)
                 if _bday_period.startswith("month:"):
-                    # Named month ("birthdays in July") — weed-garden 2026-07-11
-                    import calendar as _cal_bd
-                    _period_label = f"in {_cal_bd.month_name[int(_bday_period.split(':', 1)[1])]}"
+                    # Named month ("birthdays in July") — weed-garden 2026-07-11.
+                    # month_names comes from ui, not calendar.month_name, so the
+                    # Spanish dict names Spanish months.
+                    _month_name = ui["month_names"].split(",")[int(_bday_period.split(":", 1)[1]) - 1]
+                    _period_label = ui["bday_in_month"].format(month=_month_name)
 
                 if not _bday_results:
-                    _empty_who = {"customers": "customers", "consultants": "consultants", "both": "customers or consultants"}[_bday_scope]
-                    return ChatReply(f"No {_empty_who} with birthdays {_period_label}.")
+                    _empty_who = {"customers": ui["bday_who_customers"], "consultants": ui["bday_who_consultants"], "both": ui["bday_who_both"]}[_bday_scope]
+                    return ChatReply(ui["bday_none"].format(who=_empty_who, period=_period_label))
 
-                _scope_label = {"customers": "Customer ", "consultants": "Consultant ", "both": ""}[_bday_scope]
-                _header = f"<strong>{_scope_label}Birthdays {_period_label.title()}</strong>"
+                _scope_label = {"customers": ui["bday_scope_customers"], "consultants": ui["bday_scope_consultants"], "both": ui["bday_scope_both"]}[_bday_scope]
+                # .title() gives EN "Birthdays This Month"; Spanish doesn't
+                # title-case mid-sentence, so ES keeps the label as written.
+                _period_title = _period_label.title() if ui.get("lang") == "en" else _period_label
+                _header = ui["bday_header"].format(scope=_scope_label, period=_period_title)
                 _show_all = lowered.startswith("show all birthdays")
                 _limit = None if _show_all else 5
                 return ChatReply(_header + "\n" + _rbsc(_bday_results, _consultant_first, limit=_limit, period_label=_period_label, scope=_bday_scope))
@@ -1629,6 +1609,7 @@ class MKChatEngine:
         sid = ctx.sid
         state = ctx.state
         consultant_id = ctx.consultant_id
+        ui = ctx.ui
         pending = ctx.pending
         intent_result = ctx.intent_result
         import re
@@ -1666,15 +1647,18 @@ class MKChatEngine:
                 # Full plain list of the overflow customers
                 rest = result.get("rest") or []
                 months = _days // 30
-                period = f"{months} month{'s' if months != 1 else ''}" if _days % 30 == 0 else f"{_days} days"
+                if _days % 30 == 0:
+                    period = f"{months} {ui['unit_month'] if months == 1 else ui['unit_months']}"
+                else:
+                    period = f"{_days} {ui['unit_days']}"
                 if not rest:
-                    return ChatReply(f"No additional lapsed customers beyond the top 5.")
-                lines = [f"All lapsed customers ({period}+):"]
+                    return ChatReply(ui["lapsed_no_more"])
+                lines = [ui["lapsed_all_header"].format(period=period)]
                 for r in rest:
                     name = f"{(r.get('first_name') or '').strip()} {(r.get('last_name') or '').strip()}".strip()
                     d = int(r.get("days_since") or 0)
                     m = round(d / 30)
-                    age = f"{m} month{'s' if m != 1 else ''} ago" if m >= 2 else f"{d} days ago"
+                    age = ui["months_ago"].format(n=m) if m >= 2 else ui["days_ago"].format(n=d)
                     lines.append(f"• {name} — {age}")
                 return ChatReply("\n".join(lines))
 
@@ -1687,6 +1671,7 @@ class MKChatEngine:
         # (step 4) generated unpack of shared per-message context
         lowered = ctx.lowered
         consultant_id = ctx.consultant_id
+        ui = ctx.ui
         pending = ctx.pending
         intent_result = ctx.intent_result
         import re
@@ -1720,7 +1705,7 @@ class MKChatEngine:
                     city = _cm2.group(1).strip().title()
 
             if not city:
-                return ChatReply("This looks like a city/state lookup. Try \"customers in Madison\" or \"customers in Madison, WI\"")
+                return ChatReply(ui["city_lookup_hint"])
 
             # Guard: the LLM sometimes hands over a garbage "city" extracted
             # from a non-city question ("Who Are My" — live 2026-07-03, echoed
@@ -1728,7 +1713,7 @@ class MKChatEngine:
             # contains obvious question/name words, coach instead of querying.
             _CITY_GARBAGE = {"who", "are", "my", "name", "named", "customer", "customers", "the", "with"}
             if any(w in _CITY_GARBAGE for w in city.lower().split()):
-                return ChatReply("This looks like a city/state lookup. Try \"customers in Madison\" or \"customers in Madison, WI\"")
+                return ChatReply(ui["city_lookup_hint"])
 
             _city_part, _state_abbr, _state_display = parse_city_state(city)
 
@@ -2499,17 +2484,17 @@ class MKChatEngine:
                                     _cd2 = f' <span class="select-detail">• {" • ".join(_up2)}</span>' if _up2 else ""
                                     _extra_cons_rows.append(
                                         f'<div class="select-row" data-send="team member {_su2}"><span class="select-num">{_i}</span>'
-                                        f'<span class="select-text">{_su2} — Consultant{_cd2}</span></div>'
+                                        f'<span class="select-text">{_su2} — {ui["picker_label_consultant"]}{_cd2}</span></div>'
                                     )
                                 state["pending"] = {"kind": "pick_customer", "candidates": [c], "action": "info"}
                                 save_session_state(state, session_id=sid)
                                 return ChatReply(
-                                    f'<div class="select-intro">I found these options — which did you mean?</div>'
+                                    f'<div class="select-intro">{ui["picker_found_options"]}</div>'
                                     f'<div class="select-list">'
                                     f'<div class="select-row" data-send="1"><span class="select-num">1</span>'
-                                    f'<span class="select-text">{safe_c} — Customer{cust_detail}</span></div>'
+                                    f'<span class="select-text">{safe_c} — {ui["picker_label_customer"]}{cust_detail}</span></div>'
                                     f'<div class="select-row" data-send="team member {safe_u}"><span class="select-num">2</span>'
-                                    f'<span class="select-text">{safe_u} — Consultant{cons_detail}</span></div>'
+                                    f'<span class="select-text">{safe_u} — {ui["picker_label_consultant"]}{cons_detail}</span></div>'
                                     + "".join(_extra_cons_rows)
                                     + f'</div>'
                                 )
@@ -2526,14 +2511,14 @@ class MKChatEngine:
                                     _cd = f' <span class="select-detail">• {" • ".join(_up)}</span>' if _up else ""
                                     _cons_rows.append(
                                         f'<div class="select-row" data-send="team member {_su}"><span class="select-num">{_i}</span>'
-                                        f'<span class="select-text">{_su} — Consultant{_cd}</span></div>'
+                                        f'<span class="select-text">{_su} — {ui["picker_label_consultant"]}{_cd}</span></div>'
                                     )
                                 _total = 1 + len(_cons_rows)
                                 return ChatReply(
-                                    f'<div class="select-intro">I found multiple matches — reply with 1 or {_total}:</div>'
+                                    f'<div class="select-intro">{ui["picker_multiple_matches"].format(total=_total)}</div>'
                                     f'<div class="select-list">'
                                     f'<div class="select-row" data-send="1"><span class="select-num">1</span>'
-                                    f'<span class="select-text">{safe_c} — Customer{cust_detail}</span></div>'
+                                    f'<span class="select-text">{safe_c} — {ui["picker_label_customer"]}{cust_detail}</span></div>'
                                     + "".join(_cons_rows)
                                     + f'</div>'
                                 )
@@ -2564,7 +2549,7 @@ class MKChatEngine:
                             _extra_rows.append(
                                 f'<div class="select-row" data-send="team member {_su}">'
                                 f'<span class="select-num">{_i}</span>'
-                                f'<span class="select-text">{_su} — Consultant{_cd}</span></div>'
+                                f'<span class="select-text">{_su} — {ui["picker_label_consultant"]}{_cd}</span></div>'
                             )
                         # Append all consultant rows before the closing </div>
                         _insert = picker_html.rfind("</div>")
@@ -2694,14 +2679,10 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
 
                     if order_count > 0:
-                        return ChatReply(
-                            f"This will delete {customer_name} from MyPinkAssistant and also remove "
-                            f"{order_count} local order(s). Type DELETE to confirm, or `cancel`."
-                        )
-                    return ChatReply(
-                        f"This will delete {customer_name} from MyPinkAssistant. "
-                        f"Type DELETE to confirm, or <strong>cancel</strong>."
-                    )
+                        return ChatReply(ui["delete_customer_confirm_orders"].format(
+                            name=customer_name, count=order_count))
+                    return ChatReply(ui["delete_customer_confirm_plain"].format(
+                        name=customer_name))
 
                 if action == "spend":
                     with tx() as (conn, cur):
@@ -2999,36 +2980,25 @@ class MKChatEngine:
                     last = (customer.get("Last Name") or "").strip()
 
                     if not first or not last:
-                        return ChatReply(
-                            "I need both a first and last name before MyCustomers can save this customer. "
-                            "Please type <strong>cancel</strong> and re-enter the customer with the full name."
-                        )
+                        return ChatReply(ui["cust_need_full_name"])
 
                     phone_digits = normalize_phone(customer.get("Phone") or "")
                     if len(phone_digits) == 11 and phone_digits.startswith("1"):
                         phone_digits = phone_digits[1:]
                         customer["Phone"] = phone_digits
                     if phone_digits and len(phone_digits) != 10:
-                        return ChatReply(
-                            f"The phone number I have ({phone_digits}) isn't 10 digits — MyCustomers requires a 10-digit US number. "
-                            "Please type the correct number or say cancel."
-                        )
+                        return ChatReply(ui["cust_bad_phone"].format(phone=phone_digits))
 
                     street_val = (customer.get("Street") or "").strip()
                     city_val   = (customer.get("City") or "").strip()
                     zip_val    = (customer.get("Postal Code") or "").strip()
                     if street_val and not (city_val and state_val and zip_val):
-                        return ChatReply(
-                            "I only see a partial address. Please enter the full address (street, city, state, and zip) or type cancel to save without one."
-                        )
+                        return ChatReply(ui["cust_partial_address"])
 
                     valid_states = set(STATE_MAP.values())
                     state_ok = state_val in valid_states
                     if state_val and not state_ok:
-                        return ChatReply(
-                            f"I wasn't able to recognize \"{state_val}\" as a valid state. "
-                            "Please re-enter the address with the full state name (e.g. Texas) or abbreviation (e.g. TX), or say cancel."
-                        )
+                        return ChatReply(ui["cust_bad_state"].format(state=state_val))
 
                     # MyCustomers' address dialog rejects any zip that isn't
                     # exactly 5 digits with a field-level prompt and won't
@@ -3037,10 +3007,7 @@ class MKChatEngine:
                     # blocks the subscription toggles (c138 Maggie Walker
                     # 2026-08-17: zip "231188").
                     if zip_val and not re.fullmatch(r"\d{5}", zip_val):
-                        return ChatReply(
-                            f"The zip code I have ({zip_val}) isn't 5 digits — MyCustomers requires a 5-digit zip code. "
-                            "Please type the correct zip code or say cancel."
-                        )
+                        return ChatReply(ui["cust_bad_zip"].format(zip=zip_val))
 
                     email_val = (customer.get("Email") or "").strip()
                     if email_val:
@@ -3061,23 +3028,16 @@ class MKChatEngine:
                         # a chat bubble — a generic "doesn't look valid" just gets the
                         # same address typed back.
                         if any(ch.isspace() for ch in email_val):
-                            return ChatReply(
-                                f"The email I have ({email_val}) has a space in it — "
-                                "please type it again without the space, or say cancel."
-                            )
+                            return ChatReply(ui["cust_email_space"].format(email=email_val))
                         if _at <= 0 or _dot <= _at or _tld_len < 2:
-                            return ChatReply(
-                                f"The email I have ({email_val}) doesn't look valid — please type the correct email or say cancel."
-                            )
+                            return ChatReply(ui["cust_email_invalid"].format(email=email_val))
 
                     bday_val = (customer.get("Birthday") or "").strip()
                     if bday_val:
                         try:
                             parsed_bday = datetime.datetime.strptime(bday_val, "%Y-%m-%d").date()
                             if parsed_bday > datetime.date.today():
-                                return ChatReply(
-                                    f"The birthday I have ({birthday_display(bday_val)}) is in the future — please type the correct birthday or say cancel."
-                                )
+                                return ChatReply(ui["cust_future_birthday"].format(birthday=birthday_display(bday_val)))
                         except ValueError:
                             pass
 
@@ -3110,14 +3070,14 @@ class MKChatEngine:
                         ui["confirming_customer"] + "\n\n"
                         + self._format_customer_confirm(pending["customer"], ui)
                     )
-                updated, notes = apply_customer_edits(pending["customer"], msg)
+                updated, notes = apply_customer_edits(pending["customer"], msg, ui=ui)
                 pending["customer"] = updated
                 state["pending"] = pending
                 save_session_state(state, session_id=sid)
 
                 note_line = ""
                 if notes:
-                    note_line = "Updated: " + ", ".join(notes[:3]) + ("…" if len(notes) > 3 else "") + "\n\n"
+                    note_line = ui["edit_notes_prefix"] + ", ".join(notes[:3]) + ("…" if len(notes) > 3 else "") + "\n\n"
 
                 return ChatReply(note_line + self._format_customer_confirm(updated, ui))
 
@@ -3141,7 +3101,11 @@ class MKChatEngine:
                         return ChatReply(ui["deleted_customer"].format(name=name))
                     return ChatReply(ui["delete_failed"])
 
-                if answer.lower() in ("cancel", "stop", "no"):
+                # "cancelar" added 2026-08-17 — the cancel intent deliberately
+                # does NOT interrupt this pending (see the cancel guard above),
+                # so without it a Spanish speaker typing cancelar re-prompts
+                # forever.
+                if answer.lower() in ("cancel", "cancelar", "stop", "no"):
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["canceled"])
@@ -3213,18 +3177,15 @@ class MKChatEngine:
                 if yes(msg):
                     if not (top.get("sku") or "").strip():
                         # No match found — can't confirm a blank item
-                        _orig = (order["lines"][line_index].get("text") or "that product").strip()
-                        return ChatReply(
-                            f"I couldn't find \"{_orig}\" in the catalog. "
-                            "Try rewording it (brand, line, or shade helps), say <strong>skip</strong> to skip this item, or <strong>cancel</strong> to start over."
-                        )
+                        _orig = (order["lines"][line_index].get("text") or ui["propose_top_no_match_default_label"]).strip()
+                        return ChatReply(ui["propose_top_no_match"].format(label=f'"{_orig}"'))
                     order["lines"][line_index]["chosen"] = top
                     state["pending"] = None
                     return self._continue_resolving_and_reply(state, order, consultant_id, sid, catalog, ui)
 
                 if no(msg):
                     if not matches:
-                        _orig = (order["lines"][line_index].get("text") or "that product").strip()
+                        _orig = (order["lines"][line_index].get("text") or ui["propose_top_no_match_default_label"]).strip()
                         state["pending"] = {
                             "kind": "order_line_pick_top5_or_search",
                             "order": order,
@@ -3232,10 +3193,7 @@ class MKChatEngine:
                             "matches": [],
                         }
                         save_session_state(state, session_id=sid)
-                        return ChatReply(
-                            f"I couldn't find \"{_orig}\" in the catalog. "
-                            "Try rewording it (brand, line, or shade helps), say <strong>skip</strong> to skip this item, or <strong>cancel</strong> to start over."
-                        )
+                        return ChatReply(ui["propose_top_no_match"].format(label=f'"{_orig}"'))
                     state["pending"] = {
                         "kind": "order_line_pick_top5_or_search",
                         "order": order,
@@ -3324,10 +3282,7 @@ class MKChatEngine:
                 resolved_customer_id = pending.get("customer_id")
 
                 if looks_like_command(msg):
-                    return ChatReply(
-                        f"I don't see an item I can add to {cust_first} {cust_last}'s order. "
-                        f"You can type what you would like to add to the order or say cancel to start over."
-                    )
+                    return ChatReply(ui["add_item_prompt"].format(first=cust_first, last=cust_last))
 
                 # "none"/"nothing" answers the items question with "no items" —
                 # bail out like cancel instead of fuzzy-matching the word as a

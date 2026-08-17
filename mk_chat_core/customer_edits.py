@@ -12,6 +12,7 @@ from .normalize import (
     normalize_state,
     parse_address_line,
 )
+from .ui_text import UI_EN
 
 
 def looks_like_command(msg: str) -> bool:
@@ -136,11 +137,16 @@ def _looks_like_new_customer_paste(txt: str) -> bool:
     return bool(_extract_phone_candidate(s)) or _looks_like_birthday(s)
 
 
-def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]:
+def apply_customer_edits(customer: dict, message: str, ui: dict | None = None) -> Tuple[dict, List[str]]:
     """
     Applies 'add/edit' instructions to a pending customer dict.
     Returns: (updated_customer, notes[])
+
+    `ui` picks the language of the returned notes (defaults to English so
+    existing callers/tests are unchanged); the edit COMMANDS themselves are
+    parsed the same regardless of language.
     """
+    ui = ui or UI_EN
     c = dict(customer or {})
     notes: List[str] = []
 
@@ -181,7 +187,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             email = _extract_email(txt)
             if email:
                 c["Email"] = email
-                notes.append("Email updated")
+                notes.append(ui["edit_note_email"])
             continue
 
         # phone:
@@ -189,7 +195,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             ph = _extract_phone_candidate(txt)
             if ph:
                 c["Phone"] = ph
-                notes.append("Phone updated")
+                notes.append(ui["edit_note_phone"])
             continue
 
         # birthday:
@@ -198,7 +204,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             b = normalize_birthday(b_raw)
             if b:
                 c["Birthday"] = b
-                notes.append("Birthday updated")
+                notes.append(ui["edit_note_birthday"])
             continue
 
         # referred by:
@@ -206,7 +212,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             ref = re.sub(r"^(referred\s+by|referral\s+from|referral|ref\s+by)\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
             if ref:
                 c["Referred By"] = ref
-                notes.append("Referred By updated")
+                notes.append(ui["edit_note_referred_by"])
             continue
 
         # tags:
@@ -215,7 +221,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             tags = ", ".join(t.strip() for t in raw.split(",") if t.strip())
             if tags:
                 c["Tags"] = tags
-                notes.append("Tags updated")
+                notes.append(ui["edit_note_tags"])
             continue
 
         # address: (Spanish "Dirección:" too — ES customer pastes kept the
@@ -229,7 +235,7 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
                 parsed = parse_address_line(addr)
                 if parsed:
                     c.update(parsed)
-                    notes.append("Address updated")
+                    notes.append(ui["edit_note_address"])
                     continue
 
                 # Fallback: your existing comma split
@@ -246,12 +252,12 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
                             st_only = re.sub(r"\b\d{5}\b", "", stzip).strip()
                             if st_only:
                                 c["State"] = st_only
-                        notes.append("Address updated")
+                        notes.append(ui["edit_note_address"])
                         continue
 
                 # Final fallback: at least save it
                 c["Street"] = _normalize_street(addr)
-                notes.append("Address updated (street)")
+                notes.append(ui["edit_note_address_street"])
             continue
 
         # --- Guess by format ---
@@ -261,13 +267,13 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
         # pending customer. Leave the customer untouched and note it — safer than
         # corrupting a record that then lands in InTouch.
         if _looks_like_new_customer_paste(txt):
-            notes.append(f"Couldn't apply: “{raw}”")
+            notes.append(ui["edit_note_failed"].format(raw=raw))
             continue
 
         # Email guess
         if _looks_like_email(txt):
             c["Email"] = _extract_email(txt)
-            notes.append("Email updated")
+            notes.append(ui["edit_note_email"])
             continue
 
         # Birthday guess
@@ -275,21 +281,21 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
             b = normalize_birthday(txt)
             if b:
                 c["Birthday"] = b
-                notes.append("Birthday updated")
+                notes.append(ui["edit_note_birthday"])
                 continue
 
         # ✅ Address guess (must be BEFORE zip guess)
         parsed = parse_address_line(txt)
         if parsed:
             c.update(parsed)
-            notes.append("Address updated")
+            notes.append(ui["edit_note_address"])
             continue
 
         # Phone guess
         ph = _extract_phone_candidate(txt)
         if ph:
             c["Phone"] = ph
-            notes.append("Phone updated")
+            notes.append(ui["edit_note_phone"])
             continue
 
 
@@ -298,11 +304,11 @@ def apply_customer_edits(customer: dict, message: str) -> Tuple[dict, List[str]]
         z = _extract_zip(txt)
         if z:
             c["Postal Code"] = z
-            notes.append("Postal code updated")
+            notes.append(ui["edit_note_zip"])
             continue
 
         # Fallback: if they typed something else, ignore but keep a note
-        notes.append(f"Couldn't apply: “{raw}”")
+        notes.append(ui["edit_note_failed"].format(raw=raw))
 
     # Clean punctuation that causes "Street," to get saved to JSON
     for k in ("Street", "City", "State"):
