@@ -65,6 +65,7 @@ UI_EN = {
     "cds_ask_address_missing": "One more thing — CDS orders ship directly to the customer, and I don't have an address on file for {name}. What's the full street address? (like: <strong>444 4th St, Anytown, AL 35976</strong>), or type <strong>cancel</strong> if you don't have the address yet.",
     "cds_address_still_pobox": "That's still a PO Box — Mary Kay needs a physical street address for CDS delivery. What's the full street address? (like: <strong>444 4th St, Anytown, AL 35976</strong>)",
     "cds_address_parse_fail": "I couldn't read that as a complete address. Please send the street, city, state, and zip together — like: <strong>444 4th St, Anytown, AL 35976</strong> — or type <strong>cancel</strong>.",
+    "cds_address_bad_zip": "The zip code I have ({zip}) isn't 5 digits — Mary Kay needs a 5-digit zip code for CDS delivery. Please send the full address again with the correct zip, or type <strong>cancel</strong>.",
 
     "no_catalog_match": "I couldn't find that product in the catalog. Try rewording it (brand, line, or shade helps), or say <strong>cancel</strong> to start over.",
     "no_customer_found": "I couldn't find {name} in your saved customers. You can type <strong>help</strong> to see things you can do in chat.",
@@ -327,6 +328,7 @@ UI_ES = {
     "cds_ask_address_missing": "Una cosa más — los pedidos CDS se envían directamente al cliente, y no tengo una dirección registrada para {name}. ¿Cuál es la dirección física completa? (como: <strong>444 4th St, Anytown, AL 35976</strong>), o escribe <strong>cancelar</strong> si aún no tienes la dirección.",
     "cds_address_still_pobox": "Eso sigue siendo un apartado postal (PO Box) — Mary Kay necesita una dirección física para la entrega CDS. ¿Cuál es la dirección física completa? (como: <strong>444 4th St, Anytown, AL 35976</strong>)",
     "cds_address_parse_fail": "No pude leer eso como una dirección completa. Envía la calle, ciudad, estado y código postal juntos — como: <strong>444 4th St, Anytown, AL 35976</strong> — o escribe <strong>cancelar</strong>.",
+    "cds_address_bad_zip": "El código postal que tengo ({zip}) no tiene 5 dígitos — Mary Kay necesita un código postal de 5 dígitos para la entrega CDS. Envía la dirección completa de nuevo con el código postal correcto, o escribe <strong>cancelar</strong>.",
 
     "no_catalog_match": "No pude encontrar ese producto en el catálogo. Intenta describirlo de otra forma (marca, línea o tono ayuda), o di `cancelar` para empezar de nuevo.",
     "no_customer_found": "No encontré a {name} en tus clientes guardados. Puedes escribir <strong>ayuda</strong> para ver lo que puedes hacer en el chat.",

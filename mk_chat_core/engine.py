@@ -3030,6 +3030,18 @@ class MKChatEngine:
                             "Please re-enter the address with the full state name (e.g. Texas) or abbreviation (e.g. TX), or say cancel."
                         )
 
+                    # MyCustomers' address dialog rejects any zip that isn't
+                    # exactly 5 digits with a field-level prompt and won't
+                    # close — invisible to new_customer.py's modal-close wait,
+                    # so the address is silently lost and the stuck modal then
+                    # blocks the subscription toggles (c138 Maggie Walker
+                    # 2026-08-17: zip "231188").
+                    if zip_val and not re.fullmatch(r"\d{5}", zip_val):
+                        return ChatReply(
+                            f"The zip code I have ({zip_val}) isn't 5 digits — MyCustomers requires a 5-digit zip code. "
+                            "Please type the correct zip code or say cancel."
+                        )
+
                     email_val = (customer.get("Email") or "").strip()
                     if email_val:
                         _at = email_val.find("@")
@@ -3384,7 +3396,20 @@ class MKChatEngine:
                 _a_city = (_addr.get("City") or "").strip()
                 _a_zip = (_addr.get("Postal Code") or "").strip()
                 if not (_a_street and _a_city and _a_state and _a_zip):
+                    # parse_address_line only ever extracts 5-digit zips, so a
+                    # fat-fingered zip ("231188") fails the WHOLE parse and the
+                    # generic message would hide the real problem — name the
+                    # zip when the reply carries a 6-9 digit run (c138 Maggie
+                    # Walker 2026-08-17, same typo in the MyCustomers flow).
+                    _zip_typo = re.search(r"\b\d{6,9}\b", msg or "")
+                    if _zip_typo:
+                        return ChatReply(ui["cds_address_bad_zip"].format(zip=_zip_typo.group(0)))
                     return ChatReply(ui["cds_address_parse_fail"])
+                # Backstop: the CDS address dialog is fed this zip verbatim —
+                # never let a non-5-digit zip through even if the parser
+                # someday returns one.
+                if not re.fullmatch(r"\d{5}", _a_zip):
+                    return ChatReply(ui["cds_address_bad_zip"].format(zip=_a_zip))
                 if (_addr.get("Street2") or "").strip():
                     _a_street = f"{_a_street} {_addr['Street2'].strip()}"
                 order["cds_address_override"] = {
