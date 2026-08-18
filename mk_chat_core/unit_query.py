@@ -248,6 +248,11 @@ def _handle_unit_query(msg: str, consultant_id: int, ui: dict = None) -> "ChatRe
             _id_inject.append("career_level_desc")
         if "activity_status" not in _select_clause.lower():
             _id_inject.append("activity_status")
+        # phone is never displayed in list views (contact details live on the
+        # consultant card) — it powers the inline text-dot on each row
+        # (Andrea's request, 2026-08-17)
+        if "phone" not in _select_clause.lower():
+            _id_inject.append("phone")
         if _id_inject:
             sql = _re.sub(r'(?i)\bFROM\b', f', {", ".join(_id_inject)} FROM', sql, count=1)
             print(f"[UnitQuery] Injected {_id_inject} into SELECT")
@@ -411,6 +416,19 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
         safe = _html.escape(n)
         return f'<a href="#" data-send="team member {safe}">{safe}</a>'
 
+    def _dot(d: dict) -> str:
+        """Inline pink text-dot replacing the row bullet (Andrea, 2026-08-17).
+        Opens a BLANK sms composer — no prefilled body, unlike follow-up cards.
+        Rows without a usable 10-digit phone keep the plain bullet."""
+        import re as _re2
+        ph = _re2.sub(r"\D", "", str(d.get("phone") or ""))
+        if len(ph) == 11 and ph.startswith("1"):
+            ph = ph[1:]
+        if len(ph) != 10:
+            return "•"
+        return (f'<button class="followup-circle fc-inline" data-card-type="consultant" '
+                f'data-phone="{ph}" data-sms="sms:{ph}" aria-label="Send text">○</button>')
+
     _SHOW_DETAIL = 20  # rows shown with full detail before collapsing to names-only
 
     # Names-only result
@@ -419,15 +437,16 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
                                                  "is_personal_recruit", "recruiter_info",
                                                  "total_bundles", "production_month_key",
                                                  "level_achieved", "contest_begin_date",
-                                                 "contest_end_date", "total_star_quarters")]
+                                                 "contest_end_date", "total_star_quarters",
+                                                 "phone")]
     if has_name and not value_cols:
-        links = [_name_link(d) for d in dicts]
+        links = [f"{_dot(d)} {_name_link(d)}" for d in dicts]
         header = ui["unit_consultants_count" if len(links) != 1 else "unit_consultant_count"].format(n=len(links))
         shown = links[:_SHOW_DETAIL]
         rest  = links[_SHOW_DETAIL:]
-        body  = "\n".join(f"• {lnk}" for lnk in shown)
+        body  = "\n".join(shown)
         if rest:
-            rest_body = "\n".join(f"• {lnk}" for lnk in rest)
+            rest_body = "\n".join(rest)
             body += (
                 f"\n<details><summary style='cursor:pointer;color:var(--pink);font-weight:600'>"
                 f"+ {len(rest)} more</summary>\n{rest_body}\n</details>"
@@ -555,7 +574,7 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
                          and (p := _fmt_col(c, d.get(c))) is not None]
             suffix = "  —  " + ", ".join(val_parts) if val_parts else ""
 
-            return f"• {_name_link(d)}{meta}{suffix}{order_subline}"
+            return f"{_dot(d)} {_name_link(d)}{meta}{suffix}{order_subline}"
 
         detail_dicts = dicts[:_SHOW_DETAIL]
         rest_dicts   = dicts[_SHOW_DETAIL:]
@@ -573,14 +592,14 @@ def _format_unit_results(rows: list, original_msg: str, ui: dict = None) -> str:
 
     # Fallback: just names or count
     if has_name:
-        links = [_name_link(d) for d in dicts]
+        links = [f"{_dot(d)} {_name_link(d)}" for d in dicts]
         total = len(links)
         header = ui["unit_consultants_count" if total != 1 else "unit_consultant_count"].format(n=total)
         shown = links[:_SHOW_DETAIL]
         rest  = links[_SHOW_DETAIL:]
-        body  = "\n".join(f"• {lnk}" for lnk in shown)
+        body  = "\n".join(shown)
         if rest:
-            rest_body = "\n".join(f"• {lnk}" for lnk in rest)
+            rest_body = "\n".join(rest)
             body += (
                 f"\n<details><summary style='cursor:pointer;color:var(--pink);font-weight:600'>"
                 f"+ {len(rest)} more</summary>\n{rest_body}\n</details>"

@@ -597,6 +597,16 @@ body.noticeActive .layout {
     cursor: default;
 }
 
+/* Inline dot on unit/team list rows — replaces the bullet, no card around it */
+.followup-circle.fc-inline {
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    vertical-align: text-bottom;
+    margin-right: 2px;
+}
+
 .followup-info {
     display: flex;
     flex-direction: column;

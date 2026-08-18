@@ -326,7 +326,39 @@ chat.addEventListener("click", function(e) {
     if (!btn) return;
 
     var card = btn.closest(".followup-card");
-    if (!card) return;
+
+    // Card-less inline dots (unit/team lists): data lives on the button itself.
+    // No prefilled message and nothing to mark complete — mobile opens a blank
+    // composer, desktop copies the number (clipboard API can be unavailable in
+    // the iOS PWA, so always fall back to the textarea trick).
+    if (!card) {
+        var inlineSms = btn.dataset.sms || "";
+        if (!inlineSms) return;
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            window.location.href = inlineSms;
+        } else {
+            var inlinePhone = btn.dataset.phone || "";
+            function inlineFallbackCopy() {
+                var ta = document.createElement("textarea");
+                ta.value = inlinePhone;
+                ta.style.position = "fixed";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(inlinePhone).catch(inlineFallbackCopy);
+            } else {
+                inlineFallbackCopy();
+            }
+            btn.title = "Number copied";
+        }
+        // No done-state here — the dot is just a quick way to open a text,
+        // not a tracked follow-up, so it stays pink and re-tappable.
+        return;
+    }
 
     var cardType = btn.dataset.cardType || "order";
     var orderId = parseInt(btn.dataset.orderId, 10);
