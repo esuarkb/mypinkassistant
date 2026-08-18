@@ -815,6 +815,17 @@ ROUTE_CASES = [
     ("top 10 pcp customers",                     None, "pcp_list"),
     ("who spent the most this year",             None, "leaderboard"),
 
+    # --- Bare "pcp" shows the enrolled list (Brian, 2026-08-18) ---
+    # 4 bare-"pcp" messages in 30 days all got the lifetime leaderboard, a
+    # default from before pcp_list existed. Only the essentially-bare word
+    # moves; suggestion phrasings stay leaderboard.
+    ("pcp",                                      None, "pcp_list"),
+    ("PCP?",                                     None, "pcp_list"),
+    ("show me the pcp",                          None, "pcp_list"),
+    # NEGATIVE GUARDS — pick-help phrasings keep the leaderboard.
+    ("who should I add to my pcp",               None, "leaderboard"),
+    ("pcp candidates",                           None, "leaderboard"),
+
     # --- Stray digit, no pending picker (weed-garden 2026-08-17 F4) ---
     # A bare digit after the picker closed used to reach the order parser and
     # word-salad into "caught products". With a pending flow the pending layer

@@ -2401,7 +2401,16 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
             any(t in lowered for t in ("list", "who", "show", "enrolled", "my pcp", "customers", "mailer")) and
             not any(t in lowered for t in ("should", "candidate", "score", "add", "drop", "remove"))
         )
-        if _pcp_show:
+        # Bare "pcp" (± filler/punctuation) means "show my PCP list", not the
+        # lifetime leaderboard — that default predates pcp_list existing, and
+        # 4 bare-"pcp" messages in 30 days (3 consultants) all got top
+        # spenders instead (Brian, 2026-08-18). Longer suggestion phrasings
+        # ("who should I add to my pcp", "pcp candidates") stay leaderboard.
+        _pcp_bare = re.fullmatch(
+            r"(?:(?:show|me|the|my|please)\s+)*pcp(?:\s+please)?\s*[?!.]*",
+            lowered.strip(),
+        )
+        if _pcp_show or _pcp_bare:
             return _claim("pcp_list")
 
     # ---- 6. Handler-position rules — text rules interleaved exactly where

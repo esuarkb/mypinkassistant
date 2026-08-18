@@ -839,9 +839,21 @@ def get_pcp_completed_ids(cur, consultant_id: int, quarter: str) -> set:
 
 def _pcp_lookbook_message(first: str) -> str:
     name = first.strip().title() if first.strip() else "there"
+    # Holiday 2026 The Look mails Sept 7, 2026 — before that the book is "on
+    # its way"; from mail day on, ask whether it arrived. MK hasn't named the
+    # sample (page says only "exclusive sample of a new product"); slot the
+    # product name in here if they announce it.
+    from datetime import date
+    if date.today() < date(2026, 9, 7):
+        return (
+            f"Hey {name}! Your Mary Kay Holiday look book is on its way — gift ideas, "
+            f"holiday bundles, and a free sample of a brand-new product tucked inside. "
+            f"Keep an eye on your mailbox! \U0001f381"
+        )
     return (
-        f"Hey {name}! Just checking in — has your Mary Kay look book arrived in the mail? "
-        f"There's also a men's cologne sample tucked inside. Would love to hear what you think! \U0001f338"
+        f"Hey {name}! Just checking in — has your Mary Kay Holiday look book arrived in the mail? "
+        f"There's a free sample of a brand-new product tucked inside, plus lots of gift ideas "
+        f"for the season. Would love to help with your holiday wish list! \U0001f381"
     )
 
 

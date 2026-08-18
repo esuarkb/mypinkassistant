@@ -29,9 +29,11 @@ def current_quarter() -> str:
     return f"{today.year}-Q{q}"
 
 
-# Observed live: Q2 "Summer" (2026-05), Q3 "Fall/Holiday" (2026-08 rollover —
-# our "Holiday" guess matched zero). Q1/Q4 are still guesses: verify the label
-# on the enrolled-PCP report before each quarter's sweep.
+# All four labels observed live: Q2 "Summer" (2026-05), Q3 "Fall/Holiday"
+# (2026-08 rollover — our "Holiday" guess matched zero), Q1 "Spring" / Q4
+# "Winter" (2026-08-18 sweep: a consultant's feed retained "PCP Spring 2026
+# Program" and "PCP Winter 2025 Program"). Still worth glancing at the report
+# label before each quarter's sweep — MK renamed Q3 once already.
 _QUARTER_TO_SEASON = {1: "Spring", 2: "Summer", 3: "Fall/Holiday", 4: "Winter"}
 
 def current_pcp_program() -> str:
