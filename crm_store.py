@@ -325,14 +325,17 @@ def get_pcp_enrolled(cur, consultant_id: int, customer_id: int) -> bool:
     try:
         from db import is_postgres
         PH = "%s" if is_postgres() else "?"
+        # Quarter anchor is platform-wide, not per-consultant: a consultant who
+        # enrolled nobody this quarter must read as EMPTY once the new sweep
+        # lands, not keep showing last quarter's list (Brian, 2026-08-18).
         cur.execute(f"""
             SELECT 1 FROM pcp_enrollments
             WHERE customer_id = {PH}
               AND consultant_id = {PH}
-              AND quarter = (SELECT MAX(quarter) FROM pcp_enrollments WHERE consultant_id = {PH})
+              AND quarter = (SELECT MAX(quarter) FROM pcp_enrollments)
               AND enrolled = TRUE
             LIMIT 1
-        """, (customer_id, consultant_id, consultant_id))
+        """, (customer_id, consultant_id))
         return cur.fetchone() is not None
     except Exception:
         return False
@@ -349,9 +352,9 @@ def get_pcp_list(cur, consultant_id: int) -> tuple[list[dict], str]:
         LEFT JOIN customers c ON c.id = pe.customer_id
         WHERE pe.consultant_id = {PH}
           AND pe.enrolled = TRUE
-          AND pe.quarter = (SELECT MAX(quarter) FROM pcp_enrollments WHERE consultant_id = {PH})
+          AND pe.quarter = (SELECT MAX(quarter) FROM pcp_enrollments)
         ORDER BY pe.pcp_name
-    """, (consultant_id, consultant_id))
+    """, (consultant_id,))
     rows = _rows_to_dicts(cur)
     if not rows:
         return [], ""

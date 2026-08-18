@@ -29,7 +29,10 @@ def current_quarter() -> str:
     return f"{today.year}-Q{q}"
 
 
-_QUARTER_TO_SEASON = {1: "Spring", 2: "Summer", 3: "Holiday", 4: "Winter"}
+# Observed live: Q2 "Summer" (2026-05), Q3 "Fall/Holiday" (2026-08 rollover —
+# our "Holiday" guess matched zero). Q1/Q4 are still guesses: verify the label
+# on the enrolled-PCP report before each quarter's sweep.
+_QUARTER_TO_SEASON = {1: "Spring", 2: "Summer", 3: "Fall/Holiday", 4: "Winter"}
 
 def current_pcp_program() -> str:
     today = date.today()
@@ -69,12 +72,17 @@ def scrape_enrolled(page, username: str, password: str, skip_login: bool = False
 
     program = current_pcp_program()
     print(f"[PcpSync] {len(raw_records)} total records from API, filtering to '{program}'")
-    return [
+    enrolled = [
         {"name": f"{r['firstName']} {r['lastName']}", "enrolled": True}
         for r in raw_records
         if r.get("firstName") and r.get("lastName")
         and r.get("programName") == program
     ]
+    if raw_records and not enrolled:
+        seen = sorted({str(r.get("programName")) for r in raw_records})
+        print(f"[PcpSync] WARNING: 0 of {len(raw_records)} records matched "
+              f"'{program}' — programName values seen: {seen}")
+    return enrolled
 
 
 def get_consultants(cur, consultant_id: int | None) -> list:
