@@ -365,6 +365,28 @@ chat.addEventListener("click", function(e) {
     var followupWindow = parseInt(btn.dataset.windowId, 10);
     var customerId = parseInt(btn.dataset.customerId, 10);
     var canComplete = !isNaN(customerId);
+
+    // Customer has no phone on file → data-sms is empty. Without this guard
+    // the mobile path navigates to "" (a full page reload that looks like a
+    // chat reset) and marks the follow-up complete with no text sent
+    // (phoneless PCP customer, 2026-08-18). Same tap-again-to-dismiss
+    // behavior as the desktop panel; no done-state.
+    if (!card.dataset.sms) {
+        var npExisting = card.querySelector(".followup-desktop-panel");
+        if (npExisting) {
+            npExisting.remove();
+        } else {
+            var npPanel = document.createElement("div");
+            npPanel.className = "followup-desktop-panel";
+            var npNote = document.createElement("div");
+            npNote.className = "fdp-phone";
+            npNote.textContent = "📵 No phone number on file — add one in InTouch to text this customer.";
+            npPanel.appendChild(npNote);
+            card.appendChild(npPanel);
+        }
+        return;
+    }
+
     var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     if (isMobile) {
