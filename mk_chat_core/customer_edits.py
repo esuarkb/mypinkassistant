@@ -81,7 +81,10 @@ def _extract_email(s: str) -> str:
 
 
 def _extract_zip(s: str) -> str:
-    m = re.search(r"\b(\d{5})\b", s or "")
+    # ZIP+4 kept intact — MyCustomers accepts exactly 5 digits or 5-4
+    # (owner-verified 2026-08-18); truncating here would silently drop the +4
+    # a consultant deliberately re-typed.
+    m = re.search(r"\b(\d{5}(?:-\d{4})?)\b", s or "")
     return (m.group(1) if m else "").strip()
 
 
@@ -249,7 +252,7 @@ def apply_customer_edits(customer: dict, message: str, ui: dict | None = None) -
                             z = _extract_zip(stzip)
                             if z:
                                 c["Postal Code"] = z
-                            st_only = re.sub(r"\b\d{5}\b", "", stzip).strip()
+                            st_only = re.sub(r"\b\d{5}(?:-\d{4})?\b", "", stzip).strip()
                             if st_only:
                                 c["State"] = st_only
                         notes.append(ui["edit_note_address"])

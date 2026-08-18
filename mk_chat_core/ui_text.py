@@ -376,9 +376,9 @@ UI_EN = {
     # open so the corrected value applies as an edit via customer_edits)
     "cust_need_full_name": "I need both a first and last name before MyCustomers can save this customer. Please type <strong>cancel</strong> and re-enter the customer with the full name.",
     "cust_bad_phone": "The phone number I have ({phone}) isn't 10 digits — MyCustomers requires a 10-digit US number. Please type the correct number or say cancel.",
-    "cust_partial_address": "I only see a partial address. Please enter the full address (street, city, state, and zip) or type cancel to save without one.",
+    "cust_partial_address": "I only see a partial address. Please enter the full address (street, city, state, and zip) — or say “no address” to save this customer without one.",
     "cust_bad_state": "I wasn't able to recognize \"{state}\" as a valid state. Please re-enter the address with the full state name (e.g. Texas) or abbreviation (e.g. TX), or say cancel.",
-    "cust_bad_zip": "The zip code I have ({zip}) isn't 5 digits — MyCustomers requires a 5-digit zip code. Please type the correct zip code or say cancel.",
+    "cust_bad_zip": "The zip code I have ({zip}) doesn't look right — MyCustomers requires a 5-digit zip code (or ZIP+4 like 12345-6789). Please type the correct zip code or say cancel.",
     "cust_email_space": "The email I have ({email}) has a space in it — please type it again without the space, or say cancel.",
     "cust_email_invalid": "The email I have ({email}) doesn't look valid — please type the correct email or say cancel.",
     "cust_future_birthday": "The birthday I have ({birthday}) is in the future — please type the correct birthday or say cancel.",
@@ -396,6 +396,7 @@ UI_EN = {
     "edit_note_address": "Address updated",
     "edit_note_address_street": "Address updated (street)",
     "edit_note_zip": "Postal code updated",
+    "edit_note_address_removed": "Address removed — will save without one",
     "edit_note_failed": "Couldn't apply: “{raw}”",
 }
 
@@ -748,9 +749,9 @@ UI_ES = {
     # validaciones al confirmar una clienta nueva
     "cust_need_full_name": "Necesito nombre y apellido para que MyCustomers pueda guardar a esta clienta. Escribe <strong>cancelar</strong> y vuelve a ingresarla con el nombre completo.",
     "cust_bad_phone": "El número de teléfono que tengo ({phone}) no tiene 10 dígitos — MyCustomers requiere un número de EE. UU. de 10 dígitos. Escribe el número correcto o di cancelar.",
-    "cust_partial_address": "Solo veo una dirección incompleta. Escribe la dirección completa (calle, ciudad, estado y código postal) o escribe cancelar para guardar sin dirección.",
+    "cust_partial_address": "Solo veo una dirección incompleta. Escribe la dirección completa (calle, ciudad, estado y código postal) — o escribe “sin dirección” para guardar sin dirección.",
     "cust_bad_state": "No pude reconocer \"{state}\" como un estado válido. Vuelve a escribir la dirección con el nombre completo del estado (p. ej. Texas) o su abreviatura (p. ej. TX), o di cancelar.",
-    "cust_bad_zip": "El código postal que tengo ({zip}) no tiene 5 dígitos — MyCustomers requiere un código postal de 5 dígitos. Escribe el código postal correcto o di cancelar.",
+    "cust_bad_zip": "El código postal que tengo ({zip}) no parece válido — MyCustomers requiere un código postal de 5 dígitos (o ZIP+4 como 12345-6789). Escribe el código postal correcto o di cancelar.",
     "cust_email_space": "El correo que tengo ({email}) tiene un espacio — escríbelo de nuevo sin el espacio, o di cancelar.",
     "cust_email_invalid": "El correo que tengo ({email}) no parece válido — escribe el correo correcto o di cancelar.",
     "cust_future_birthday": "El cumpleaños que tengo ({birthday}) está en el futuro — escribe el cumpleaños correcto o di cancelar.",
@@ -768,5 +769,6 @@ UI_ES = {
     "edit_note_address": "Dirección actualizada",
     "edit_note_address_street": "Dirección actualizada (calle)",
     "edit_note_zip": "Código postal actualizado",
+    "edit_note_address_removed": "Dirección eliminada — se guardará sin dirección",
     "edit_note_failed": "No pude aplicar: “{raw}”",
 }

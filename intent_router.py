@@ -649,6 +649,20 @@ def _looks_like_full_customer_entry(text: str) -> bool:
     has_month_name = bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b", t, re.IGNORECASE))
     has_address_word = any(x in t.lower() for x in ("address", "street", "st ", "road", "rd ", "avenue", "ave ", "drive", "dr ", "lane", "ln ", "court", "ct ", "circle", "cir ", "way", "blvd", "boulevard", "unit", "apt", "apartment", "lot"))
     has_referred_by = bool(re.search(r'\breferred\s+by\b', t, re.IGNORECASE))
+    # An explicit LEADING creation phrase is the consultant stating outright
+    # that this is a customer entry — credit it like a field. Without it,
+    # "Add new customer Linda Larson address 228 … 54401" scored 1 (zip and
+    # address words share one bucket) and "Add new customer NAME phone …"
+    # scored 1, so both dead-ended in the customer_info lookup instead of
+    # falling through to the parser — two customers lost on PCP-deadline day
+    # (c55 + c138 ×6, weed-garden 2026-08-18 F2). Leading-anchor only: an
+    # "add" buried mid-sentence, or "Add tag X to NAME" (no other field),
+    # still scores too low to claim.
+    has_create_verb = bool(re.match(
+        r"^\s*(?:please\s+)?(?:(?:add|create|enter)\s+(?:a\s+|my\s+)?(?:new\s+)?(?:customer|client)\b"
+        r"|new\s+customer\b"
+        r"|add\s+new\b)",
+        t, re.IGNORECASE))
 
     score = sum([
         has_zip or has_address_word,
@@ -656,6 +670,7 @@ def _looks_like_full_customer_entry(text: str) -> bool:
         has_email,
         has_birthday_word or has_month_name,
         has_referred_by,
+        has_create_verb,
     ])
 
     # if it looks like a bundle of customer fields, treat it as a customer entry

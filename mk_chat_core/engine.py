@@ -3001,12 +3001,15 @@ class MKChatEngine:
                         return ChatReply(ui["cust_bad_state"].format(state=state_val))
 
                     # MyCustomers' address dialog rejects any zip that isn't
-                    # exactly 5 digits with a field-level prompt and won't
+                    # exactly 5 digits — OR 5 digits + dash + exactly 4
+                    # (ZIP+4, owner-verified against the live field
+                    # 2026-08-18) — with a field-level prompt and won't
                     # close — invisible to new_customer.py's modal-close wait,
                     # so the address is silently lost and the stuck modal then
                     # blocks the subscription toggles (c138 Maggie Walker
-                    # 2026-08-17: zip "231188").
-                    if zip_val and not re.fullmatch(r"\d{5}", zip_val):
+                    # 2026-08-17: zip "231188"). InTouch itself syncs ZIP+4
+                    # back to us, so blocking it here was a false positive.
+                    if zip_val and not re.fullmatch(r"\d{5}(?:-\d{4})?", zip_val):
                         return ChatReply(ui["cust_bad_zip"].format(zip=zip_val))
 
                     email_val = (customer.get("Email") or "").strip()
@@ -3064,6 +3067,28 @@ class MKChatEngine:
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["cust_reject"])
+
+                # "no address" / "skip address" / "sin dirección": the escape
+                # hatch the partial-address guard offers — clear the address
+                # fields and re-show the confirm. Must sit BEFORE
+                # looks_like_command (its "<word> address" lookup pattern would
+                # nudge this away as a command). The old copy said "type cancel
+                # to save without one", but cancel discards the whole pending
+                # customer — a consultant followed it to the letter and lost
+                # her customer entirely (c138, weed-garden 2026-08-18 F4).
+                if re.fullmatch(
+                    r"(?:no|skip)\s+(?:the\s+)?address|sin\s+direcci[oó]n",
+                    (msg or "").strip(), flags=re.IGNORECASE,
+                ):
+                    for _k in ("Street", "Street2", "City", "State", "Postal Code"):
+                        if pending["customer"].get(_k):
+                            pending["customer"][_k] = ""
+                    state["pending"] = pending
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(
+                        ui["edit_notes_prefix"] + ui["edit_note_address_removed"] + "\n\n"
+                        + self._format_customer_confirm(pending["customer"], ui)
+                    )
 
                 if looks_like_command(msg):
                     return ChatReply(
@@ -4200,7 +4225,7 @@ class MKChatEngine:
         if phone_digits and len(phone_digits) != 10:
             warning = f"⚠️ Phone number looks incomplete ({phone_digits}) — please correct it before confirming.\n\n"
         elif street_base and not (city and st and postal):
-            warning = "⚠️ I only see a partial address — please enter the full address (street, city, state, and zip) or type cancel to save without one.\n\n"
+            warning = "⚠️ I only see a partial address — please enter the full address (street, city, state, and zip), or say “no address” to save without one.\n\n"
         elif email_val:
             _at = email_val.find("@")
             _dot = email_val.rfind(".")
