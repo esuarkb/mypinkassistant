@@ -387,6 +387,17 @@ NEGATIVE_GUARD_CASES = [
      "tax as an ORDER modifier must stay with the order flow, not set the rate (discount feature 2026-07-18)"),
     ("New order for Jane Doe: charcoal mask, 20% off", "set_sales_tax",
      "discount phrasing must not drift to the tax intent"),
+    # per-customer tax rate (2026-08-19): the new possessive/for-name rule
+    # must not steal order modifiers, the consultant's own rate, or the
+    # Spanish own-rate phrase ("de ventas" is not a customer name).
+    ("lipstick and mascara for Jane Smith with 5.5% sales tax", "customer_tax_rate",
+     "tax as an order modifier (no 'order' word) must not set the customer's saved rate"),
+    ("Start a new order for Jane Doe. One powder. 7% sales tax.", "customer_tax_rate",
+     "order-message tax modifier must not reach the customer rate intent"),
+    ("set my sales tax to 7.5%", "customer_tax_rate",
+     "the consultant's own rate must stay with set_sales_tax"),
+    ("cuál es el impuesto de ventas", "customer_tax_rate",
+     "Spanish own-rate question has no customer name — 'ventas' must not read as one"),
     ("what fragrances do I have in stock", "show_all_products",
      "first-person inventory question must not be claimed by the category browse (2026-07-19)"),
     ("what color is the kind spirit blush", "recent_orders",
@@ -531,6 +542,13 @@ ROUTE_CASES = [
     ("set my sales tax to 8.25%",                None, "set_sales_tax"),
     ("set my sales tax to 0",                    None, "set_sales_tax"),        # \btax\b exit keeps the set-to-N guardrail pattern off it
     ("what's my sales tax rate",                 None, "set_sales_tax"),
+    # per-customer tax rate (2026-08-19)
+    ("set Jane Smith's tax rate to 5.5%",        None, "customer_tax_rate"),
+    ("what is Jane's tax rate",                  None, "customer_tax_rate"),
+    ("clear Jane's tax rate",                    None, "customer_tax_rate"),
+    ("set the tax rate for Jane to 5.5",         None, "customer_tax_rate"),
+    ("establecer el impuesto de Jane en 5.5",    None, "customer_tax_rate"),
+    ("borrar el impuesto de Jane",               None, "customer_tax_rate"),
     ("set 3 satin hands to 5",                   None, "inventory_guardrail"),  # inventory set-to-N unchanged by the tax exit
     ("keep 3 charcoal mask on hand",             None, "inventory_threshold"),
     ("delete jane doe",                          None, "delete_customer"),

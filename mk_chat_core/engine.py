@@ -533,6 +533,96 @@ class MKChatEngine:
             return ChatReply(ui["sales_tax_cleared"])
         return ChatReply(ui["sales_tax_set"].format(rate=f"{rate:g}"))
 
+    def _intent_customer_tax_rate(self, ctx) -> Optional[ChatReply]:
+        """Set / show / clear a CUSTOMER's saved sales tax rate
+        (customers.tax_rate: NULL = unset → consultant default applies,
+        0 = tax-exempt). Companion to _intent_set_sales_tax above; the
+        post-order save-prompt writes the same column (2026-08-19). Only the
+        deterministic router rule can claim this intent (llm_allowed False),
+        so every message here names a customer and says "tax"."""
+        import re
+        from db import tx
+        from crm_store import find_customers_by_name
+        msg = ctx.msg
+        ui = ctx.ui
+        consultant_id = ctx.consultant_id
+        if ctx.intent_result.intent != "customer_tax_rate":
+            return None
+
+        # Strip the leading command words first so the possessive capture
+        # can't swallow them ("clear Jane's…" must yield "Jane", not "clear Jane").
+        lead = re.sub(
+            r"^(?:please\s+|can\s+you\s+|could\s+you\s+)?"
+            r"(?:set|update|change|clear|remove|delete|unset|show|check|"
+            r"what(?:'s|’s)?(?:\s+is)?|establece(?:r)?|configura(?:r)?|"
+            r"borra(?:r)?|quita(?:r)?|muestra|mostrar|ver|cu[aá]l(?:\s+es)?)\s+"
+            r"(?:the\s+|el\s+|la\s+)?",
+            "", msg.strip(), flags=re.I)
+
+        name = None
+        pm = re.match(r"([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)?)['’]s\s+(?:sales\s+)?tax", lead, re.I)
+        if pm:
+            name = pm.group(1)
+        if not name:
+            # "tax rate for Jane" / "impuesto de Jane"; (?!ventas?) keeps the
+            # Spanish "impuesto de ventas" phrase itself from reading as a name
+            fm = re.search(
+                r"(?:sales\s+tax|tax\s+rate|impuestos?(?:\s+de\s+ventas?)?)\s+"
+                r"(?:for|de|para)\s+(?!ventas?\b)([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)?)",
+                lead, re.I)
+            if fm:
+                name = fm.group(1)
+        if name:
+            # the two-word capture can pick up a trailing connector ("jane to")
+            name = re.sub(r"\s+(?:to|at|en|a|is)$", "", name.strip(), flags=re.I)
+        if not name:
+            return None  # can't tell who — fall through to the normal pipeline
+
+        with tx() as (conn, cur):
+            matches = find_customers_by_name(cur, consultant_id, name)
+        if not matches:
+            return ChatReply(ui["no_customer_found"].format(name=name.title()))
+        if len(matches) > 1:
+            exact = [c for c in matches
+                     if f"{(c.get('first_name') or '').strip()} {(c.get('last_name') or '').strip()}".lower()
+                     == " ".join(name.lower().split())]
+            if len(exact) == 1:
+                matches = exact
+            else:
+                return ChatReply(ui["customer_tax_ambiguous"].format(name=name.title()))
+        cust = matches[0]
+        cust_id = int(cust["id"])
+        disp = (cust.get("first_name") or "").strip() or name.title()
+
+        if re.search(r"\b(?:clear|remove|delete|unset|borrar?|quitar?)\b", msg, re.I):
+            with tx() as (conn, cur):
+                cur.execute(
+                    f"UPDATE customers SET tax_rate = NULL WHERE id = {PH} AND consultant_id = {PH}",
+                    (cust_id, consultant_id))
+            return ChatReply(ui["customer_tax_cleared"].format(name=disp))
+
+        # a standalone number means SET; none means SHOW (same shape as
+        # _intent_set_sales_tax; search AFTER the name so "Jane 2" can't leak)
+        m = re.search(r"(?<![\w.])(\d{1,3}(?:\.\d+)?)\s*%?(?![\w.])", msg)
+        if m is None:
+            saved = self._get_customer_tax_rate(cust_id)
+            if saved is None:
+                return ChatReply(ui["customer_tax_unset"].format(name=disp))
+            if saved == 0:
+                return ChatReply(ui["customer_tax_show_exempt"].format(name=disp))
+            return ChatReply(ui["customer_tax_show"].format(name=disp, rate=f"{saved:g}"))
+
+        rate = float(m.group(1))
+        if rate > 100:  # same cap as the consultant field
+            return ChatReply(ui["sales_tax_invalid"])
+        with tx() as (conn, cur):
+            cur.execute(
+                f"UPDATE customers SET tax_rate = {PH} WHERE id = {PH} AND consultant_id = {PH}",
+                (rate, cust_id, consultant_id))
+        if rate == 0:
+            return ChatReply(ui["customer_tax_saved_exempt"].format(name=disp))
+        return ChatReply(ui["customer_tax_set"].format(name=disp, rate=f"{rate:g}"))
+
     def _intent_inventory_guardrail(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
         Returns None to decline — fall through to pending flow / normal parse."""
@@ -2709,6 +2799,7 @@ class MKChatEngine:
                         "First Name": (c.get("first_name") or "").strip(),
                         "Last Name": (c.get("last_name") or "").strip(),
                     }
+                    self._apply_customer_tax_rate(order_draft)
 
                     # Drop any items whose text is just a customer name token —
                     # happens when the LLM mistakes a last name for a product
@@ -3180,6 +3271,40 @@ class MKChatEngine:
                 save_session_state(state, session_id=sid)
                 return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
 
+            if kind == "save_customer_tax_rate":
+                # Post-order tax save-prompt (2026-08-19): she typed a rate (or
+                # "no tax") on an order that doesn't match the customer's saved
+                # rate, and we offered to remember it. TRANSPARENT like
+                # invoice_confirm above — the order is already placed and her
+                # next message is at least as likely her next task as an answer:
+                # only an explicit yes writes, an explicit no acks, anything
+                # else clears the pending and replays through handle_message.
+                answer = (msg or "").strip().lower().rstrip("!.? ")
+                rate = float(pending.get("rate") or 0)
+                cust_name = pending.get("name") or ""
+                cust_id = int(pending.get("customer_id") or 0)
+
+                if cust_id and answer in ("yes", "y", "ok", "okay", "sure",
+                                          "yes please", "sí", "si", "claro"):
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    with tx() as (conn, cur):
+                        cur.execute(
+                            f"UPDATE customers SET tax_rate = {PH} WHERE id = {PH} AND consultant_id = {PH}",
+                            (rate, cust_id, consultant_id))
+                    if rate == 0:
+                        return ChatReply(ui["customer_tax_saved_exempt"].format(name=cust_name))
+                    return ChatReply(ui["customer_tax_saved"].format(name=cust_name, rate=f"{rate:g}"))
+
+                if answer in ("no", "n", "nope", "no thanks", "no thank you", "nah"):
+                    state["pending"] = None
+                    save_session_state(state, session_id=sid)
+                    return ChatReply(ui["customer_tax_save_declined"])
+
+                state["pending"] = None
+                save_session_state(state, session_id=sid)
+                return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
+
             if kind == "order_line_confirm_top":
                 order = pending["order"]
                 line_index = pending["line_index"]
@@ -3336,6 +3461,7 @@ class MKChatEngine:
                     cust_first, cust_last, items, fulfillment_method, leave_pending,
                     modifiers=_eom(msg), tax_rate=self._get_tax_rate(consultant_id))
                 order_draft["customer_id"] = resolved_customer_id
+                self._apply_customer_tax_rate(order_draft)
                 order_draft["order_date"] = ((_parsed.get("order") or {}).get("order_date") or "").strip()
                 if not order_draft["lines"]:
                     return ChatReply(ui["no_items_caught"])
@@ -3668,6 +3794,9 @@ class MKChatEngine:
                         customer={"First Name": cust_first, "Last Name": cust_last},
                     )
                 customer_id = int(customer_id)
+                # keep the resolved id on the order — the save-prompt below
+                # needs it even when the draft came in bound only by name
+                order["customer_id"] = customer_id
                 create_order_from_confirmed(
                     cur,
                     consultant_id=consultant_id,
@@ -3753,8 +3882,39 @@ class MKChatEngine:
         state["last_ref_customer_id"] = None
         state["last_ref_customer_name"] = None
         state["last_customer"] = None
+
+        # Save-prompt (2026-08-19): she mentioned a rate on THIS order (an
+        # explicit % or "no tax" → 0 = tax-exempt) — offer to remember it as
+        # the customer's rate. Skip when it matches the rate already saved,
+        # or (customer has none saved) when it just restates the consultant
+        # default — don't pin defaults onto customers. CDS never carries tax
+        # so no prompt there. Ignoring the prompt dissolves it (see the
+        # save_customer_tax_rate pending handler).
+        _reply = ui["order_confirmed"].format(first=cust_first, last=cust_last)
+        _mentioned = None
+        if order.get("no_tax"):
+            _mentioned = 0.0
+        elif order.get("tax_percent_override") is not None:
+            _mentioned = min(float(order["tax_percent_override"]), 100.0)
+        if _mentioned is not None and order.get("customer_id") and _fulfillment != "cds":
+            _saved = self._get_customer_tax_rate(order["customer_id"])
+            _skip = ((_saved is not None and _mentioned == _saved)
+                     or (_saved is None and _mentioned == self._get_tax_rate(consultant_id)))
+            if not _skip:
+                state["pending"] = {
+                    "kind": "save_customer_tax_rate",
+                    "customer_id": int(order["customer_id"]),
+                    "rate": _mentioned,
+                    "name": cust_first,
+                }
+                if _mentioned == 0:
+                    _reply += "\n\n" + ui["customer_tax_save_prompt_exempt"].format(name=cust_first)
+                else:
+                    _reply += "\n\n" + ui["customer_tax_save_prompt"].format(
+                        name=cust_first, rate=f"{_mentioned:g}")
+
         save_session_state(state, session_id=sid)
-        return ChatReply(ui["order_confirmed"].format(first=cust_first, last=cust_last))
+        return ChatReply(_reply)
 
     def _intent_data_query(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
@@ -4030,6 +4190,7 @@ class MKChatEngine:
 
             order_draft = self._make_order_draft(cust_first, cust_last, items, fulfillment_method, leave_pending, discount_requested=_disc_req, modifiers=_order_mods, tax_rate=_cons_tax_rate)
             order_draft["customer_id"] = resolved_customer_id
+            self._apply_customer_tax_rate(order_draft)
             order_draft["order_date"] = (order.get("order_date") or "").strip()
             if not order_draft["lines"]:
                 return ChatReply(ui["no_items_caught"])
@@ -4084,6 +4245,7 @@ class MKChatEngine:
         "order_of_application": "_intent_order_of_application",
         "conversion_chart": "_intent_conversion_chart",
         "set_sales_tax": "_intent_set_sales_tax",
+        "customer_tax_rate": "_intent_customer_tax_rate",
         "inventory_guardrail": "_intent_inventory_guardrail",
         "inventory_print": "_intent_inventory_print",
         "product_lookup": "_intent_product_lookup",
@@ -4296,6 +4458,35 @@ class MKChatEngine:
         except Exception:
             return 0.0
 
+    def _get_customer_tax_rate(self, customer_id):
+        """Customer's saved sales tax rate (customers.tax_rate).
+        None = unset (fall back to the consultant default); 0 = tax-exempt."""
+        try:
+            from db import tx as _tx
+            with _tx() as (conn, cur):
+                cur.execute(f"SELECT tax_rate FROM customers WHERE id = {PH}", (customer_id,))
+                row = cur.fetchone()
+            return float(row[0]) if row and row[0] is not None else None
+        except Exception:
+            return None
+
+    def _apply_customer_tax_rate(self, order_draft) -> None:
+        """Overlay the bound customer's saved rate onto a draft — call right
+        after order_draft["customer_id"] is set (the customer picker,
+        awaiting_order_items, and the main parse path all bind there).
+        Leaves the consultant-default tax_rate alone when the customer has
+        none saved. tax_rate_source drives the confirm-line label and the
+        post-order save-prompt skip rules; a per-order mention still wins in
+        _order_money (no_tax → override → tax_rate)."""
+        customer_id = order_draft.get("customer_id")
+        if not customer_id:
+            return
+        rate = self._get_customer_tax_rate(customer_id)
+        if rate is None:
+            return
+        order_draft["tax_rate"] = rate
+        order_draft["tax_rate_source"] = "customer"
+
     @staticmethod
     def _order_money(order: dict) -> dict:
         """One source of truth for order math (confirm display AND save/queue).
@@ -4444,7 +4635,10 @@ class MKChatEngine:
             "discount_value": modifiers.get("discount_value") if modifiers else None,
             "tax_percent_override": modifiers.get("tax_percent_override") if modifiers else None,
             "no_tax": bool(modifiers.get("no_tax")) if modifiers else False,
-            "tax_rate": tax_rate,  # consultant's saved rate, snapshotted at draft time
+            # consultant default snapshotted at draft time; _apply_customer_tax_rate
+            # overlays the customer's saved rate (and sets tax_rate_source) once
+            # a customer_id binds to the draft.
+            "tax_rate": tax_rate,
         }
 
     def _aggregate_lines_for_preview(self, order: dict) -> List[dict]:
@@ -4640,9 +4834,27 @@ class MKChatEngine:
                         amount=f"${money['discount_amount']:.2f}"))
             if money.get("discount_over_total"):
                 out.append(ui["discount_over_total"])
+            # Rate-source labeling (2026-08-19): a saved customer rate is shown
+            # AS a saved rate so she never wonders whether it stuck (Brian).
+            # A per-order mention (override / no tax) keeps the plain line —
+            # she just typed it. Saved-0 customers get an explicit exempt note;
+            # otherwise "no line" is ambiguous with "no default set".
+            _cust_rate_drives = (
+                order.get("tax_rate_source") == "customer"
+                and order.get("tax_percent_override") is None
+                and not order.get("no_tax"))
+            _cust_first_name = ((order.get("customer") or {}).get("First Name") or "").strip()
             if money["tax_amount"] > 0:
-                out.append(ui["order_tax_line"].format(
-                    rate=f"{money['tax_percent']:g}", amount=f"${money['tax_amount']:.2f}"))
+                if _cust_rate_drives:
+                    out.append(ui["order_tax_line_saved"].format(
+                        rate=f"{money['tax_percent']:g}",
+                        amount=f"${money['tax_amount']:.2f}",
+                        name=_cust_first_name))
+                else:
+                    out.append(ui["order_tax_line"].format(
+                        rate=f"{money['tax_percent']:g}", amount=f"${money['tax_amount']:.2f}"))
+            elif _cust_rate_drives and float(order.get("tax_rate") or 0) == 0:
+                out.append(ui["order_tax_exempt_note"].format(name=_cust_first_name))
             if money["discount_amount"] > 0 or money["tax_amount"] > 0:
                 out.append(ui["order_grand_total"].format(total=f"${money['grand_total']:.2f}"))
 

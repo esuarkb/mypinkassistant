@@ -154,6 +154,7 @@ INTENT_REGISTRY: Dict[str, Dict[str, Any]] = {
     "inventory":         {"llm_allowed": False, "interrupts_pending": False, "description": "generic inventory mention (always refined to a specific inventory_* intent by the hijack chain)"},
     "car_program":       {"llm_allowed": False, "interrupts_pending": False, "description": "career car / co-pay questions (director feature)"},
     "set_sales_tax":     {"llm_allowed": True,  "interrupts_pending": True,  "description": "set or show the consultant's sales tax rate (auto-applied to My Inventory orders; discount feature 2026-07-18)"},  # interrupts like look_book: a settings command mid-order should answer, not be eaten by the pending confirm (found in local replay 2026-07-18)
+    "customer_tax_rate": {"llm_allowed": False, "interrupts_pending": True,  "description": "set/show/clear a CUSTOMER's saved sales tax rate (per-customer tax feature 2026-08-19)"},  # llm_allowed False: a silent write must never ride an LLM coin-flip (the 2026-08-07 set_sales_tax lesson); only the deterministic rule can claim it
     # --- heuristic-claimed intents (hijack chain / handler-position rules) ---
     "show_all_products":     {"llm_allowed": False, "interrupts_pending": True,  "description": "'show all <term>' product list expansion (UI tap)"},  # answered before intent logging — special-cased in handle_message, not dispatched
     "look_book":             {"llm_allowed": False, "interrupts_pending": True,  "description": "current Look Book PDF link"},
@@ -1538,6 +1539,28 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # before the broad "orders in " data_query trigger grabs it.
     if re.search(r"\b\w+'s orders\b", lowered):
         return IntentResult(intent="recent_orders", confidence=0.92, raw_text=msg)
+
+    # Per-customer tax rate (2026-08-19): "set Jane's tax rate to 5.5%",
+    # "what is Jane Smith's sales tax rate", "clear Jane's tax rate",
+    # "set the tax rate for Jane to 5.5", "establecer el impuesto de Jane en 5.5".
+    # MUST run before the consultant set_sales_tax rule below: its set-branch
+    # has no my/our anchor, so "set Jane's tax rate to 5.5" would otherwise
+    # overwrite the CONSULTANT default. Guards: no "order" (tax rides orders as
+    # a modifier), no my/our/mi (that's the consultant's own rate), and the
+    # message must START with a command/question word — order messages carry
+    # tax as a trailing modifier and never lead with one. The (?!ventas?) in
+    # the Spanish branch keeps "cuál es el impuesto de ventas" (own rate, no
+    # name) out of this rule.
+    if (re.search(r"\b(?:sales\s+tax|tax\s+rate|impuestos?)\b", lowered)
+            and "order" not in lowered
+            and not re.search(r"\b(?:my|our|mi|nuestro)\b", lowered)
+            and re.match(r"(?:please\s+|can\s+you\s+|could\s+you\s+)?"
+                         r"(?:set|update|change|clear|remove|delete|unset|show|check|what|"
+                         r"establece|configura|borra|quita|muestra|mostrar|ver|cu[aá]l)", lowered)):
+        if (re.search(r"['’]s\s+(?:sales\s+)?tax(?:\s+rate)?\b", lowered)
+                or re.search(r"\b(?:sales\s+tax|tax\s+rate)\s+(?:for|de|para)\s+\S", lowered)
+                or re.search(r"\bimpuestos?(?:\s+de\s+ventas?)?\s+de\s+(?!ventas?\b)\S", lowered)):
+            return IntentResult(intent="customer_tax_rate", confidence=0.95, raw_text=msg)
 
     # Sales tax rate — set/show the consultant's rate (discount feature 2026-07-18).
     # "set my sales tax to 8.25%", "my tax rate is 7", "what's my sales tax rate".
