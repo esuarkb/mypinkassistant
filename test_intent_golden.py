@@ -396,6 +396,8 @@ NEGATIVE_GUARD_CASES = [
      "order-message tax modifier must not reach the customer rate intent"),
     ("set my sales tax to 7.5%", "customer_tax_rate",
      "the consultant's own rate must stay with set_sales_tax"),
+    ("set my tax to 0", "customer_tax_rate",
+     "bare 'tax' with my/our is still the consultant's own rate (2026-08-19 bare-possessive fix)"),
     ("cuál es el impuesto de ventas", "customer_tax_rate",
      "Spanish own-rate question has no customer name — 'ventas' must not read as one"),
     ("what fragrances do I have in stock", "show_all_products",
@@ -544,6 +546,7 @@ ROUTE_CASES = [
     ("what's my sales tax rate",                 None, "set_sales_tax"),
     # per-customer tax rate (2026-08-19)
     ("set Jane Smith's tax rate to 5.5%",        None, "customer_tax_rate"),
+    ("set Jane's tax to 0",                      None, "customer_tax_rate"),
     ("what is Jane's tax rate",                  None, "customer_tax_rate"),
     ("clear Jane's tax rate",                    None, "customer_tax_rate"),
     ("set the tax rate for Jane to 5.5",         None, "customer_tax_rate"),

@@ -592,7 +592,8 @@ class MKChatEngine:
                 return ChatReply(ui["customer_tax_ambiguous"].format(name=name.title()))
         cust = matches[0]
         cust_id = int(cust["id"])
-        disp = (cust.get("first_name") or "").strip() or name.title()
+        disp = (f"{(cust.get('first_name') or '').strip()} "
+                f"{(cust.get('last_name') or '').strip()}").strip() or name.title()
 
         if re.search(r"\b(?:clear|remove|delete|unset|borrar?|quitar?)\b", msg, re.I):
             with tx() as (conn, cur):

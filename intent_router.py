@@ -1550,8 +1550,10 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     # message must START with a command/question word — order messages carry
     # tax as a trailing modifier and never lead with one. The (?!ventas?) in
     # the Spanish branch keeps "cuál es el impuesto de ventas" (own rate, no
-    # name) out of this rule.
-    if (re.search(r"\b(?:sales\s+tax|tax\s+rate|impuestos?)\b", lowered)
+    # name) out of this rule. The ['’]s\s+tax alternative admits the bare
+    # possessive "set Jeanie's tax to 0" (2026-08-19: without it that message
+    # fell through to set_sales_tax and turned off the CONSULTANT default).
+    if (re.search(r"\b(?:sales\s+tax|tax\s+rate|impuestos?)\b|['’]s\s+tax\b", lowered)
             and "order" not in lowered
             and not re.search(r"\b(?:my|our|mi|nuestro)\b", lowered)
             and re.match(r"(?:please\s+|can\s+you\s+|could\s+you\s+)?"
