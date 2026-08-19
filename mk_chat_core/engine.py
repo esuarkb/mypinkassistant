@@ -3598,6 +3598,17 @@ class MKChatEngine:
                             + self._format_order_confirm(order, ui) + "\n\n"
                             + ui["order_adjust_hint"]
                         )
+                    # Consultants copy-paste confirm lines back: "remove Clear Proof
+                    # Clarifying Cleansing Gel $20.00 x1" — the "$20" token never
+                    # matches a product word so _name_matches vetoes every line
+                    # (weed-garden 2026-08-19, c62 on 8/18: 3 tries + cancel).
+                    # Strip a trailing price/qty suffix and leading bullet from the
+                    # TARGET only — add/search semantics untouched.
+                    target = target.lstrip("•· ").strip()
+                    target = re.sub(
+                        r"\s*\$\d[\d,]*(?:\.\d{2})?(?:\s*x\s*\d+)?\s*$",
+                        "", target,
+                    ).strip()
                     # Strip leading count: "2 apple and almond lotion" → count=2, target="apple and almond lotion"
                     # Word numbers count too — "remove one dark brunette" failed while
                     # "remove 1 lash love fanorama" worked (weed-garden 2026-07-08, c92+c114).
@@ -4084,15 +4095,21 @@ class MKChatEngine:
 
             _PRONOUNS = {"she", "he", "they", "her", "him", "them"}
 
+            # "I caught the products but not who they're for" is a lie when the
+            # parser caught NO items either (bare "New order", "she wants to
+            # order" — weed-garden 2026-08-19, c123 + c140 on 8/18): use the
+            # neutral start prompt instead.
+            _no_items_parsed = not (order.get("items") or [])
+
             if cust_first.lower() in _PRONOUNS or cust_last.lower() in _PRONOUNS or cust_last.lower() == "ordered":
-                return ChatReply(ui["need_customer_for_order"])
+                return ChatReply(ui["order_start_prompt" if _no_items_parsed else "need_customer_for_order"])
 
             customer_name_for_lookup = " ".join([p for p in [cust_first, cust_last] if p]).strip()
 
             if not customer_name_for_lookup:
                 if fulfillment_method == "cds":
                     return ChatReply('To create a CDS order, type: <strong>New CDS order for [customer name]</strong> and then tell me the products.')
-                return ChatReply(ui["need_customer_for_order"])
+                return ChatReply(ui["order_start_prompt" if _no_items_parsed else "need_customer_for_order"])
 
             # Resolve CRM customer match once and carry it through the order flow
             resolved_customer_id = None

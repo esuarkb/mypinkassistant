@@ -2421,6 +2421,14 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
 
     # PCP enrolled list (not pending)
     if not pending:
+        # PCP + consultant/team-member vocabulary = a UNIT question ("Which
+        # consultants signed up for PCP?") — unit_query answers it correctly
+        # via unit_members.segments. Without this claim the "pcp" token buys
+        # either the customer pcp_list or the lifetime leaderboard, both
+        # wrong (c60 8/17 + c71 8/18). Must run before the leaderboard
+        # handler-position rule below.
+        if "pcp" in lowered and any(t in lowered for t in ("consultant", "team member")):
+            return _claim("unit_query")
         _pcp_show = (
             "pcp" in lowered and
             any(t in lowered for t in ("list", "who", "show", "enrolled", "my pcp", "customers", "mailer")) and
@@ -2652,6 +2660,46 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 return _claim("customers_by_product",
                               {"product_term": _product_term, "terms": terms,
                                "or_terms": _or_terms, "category": _cat_slug})
+
+    # "<Name> wants/needs <catalog products>" → new order (not pending).
+    # Live LLM coin-flip on 8/18 (weed-garden 2026-08-19, c62 + c123): the
+    # same phrasing shape classified new_order one time and customer_info /
+    # data_query the next. Deterministic: a short name-like prefix + the verb
+    # + a tail naming catalog product(s) is an order; the LLM order parser
+    # still does all extraction from raw_text. Guards keep the neighbors
+    # whole: "wants to ..." (join my team, book a facial) is excluded, and a
+    # pronoun/question-word prefix stays with the existing pronoun funnel
+    # (need_customer flow) and question intents. Placed last so it can only
+    # override the LLM guess — every deterministic rule above already
+    # returned.
+    if not pending:
+        _wm = re.match(
+            r"^\s*([a-z][a-z.’'-]*(?:\s+[a-z][a-z.’'-]*){0,2})\s+"
+            r"(?:wants|needs|quiere)\b(?!\s+to\b)\s+(.+)$",
+            lowered,
+        )
+        if _wm:
+            _NOT_NAMES = {
+                "she", "he", "they", "her", "him", "them", "i", "we", "you", "it",
+                "who", "what", "which", "when", "where", "why", "how",
+                "someone", "anyone", "everyone", "nobody",
+                "my", "the", "a", "an", "this", "that", "customer", "customers",
+            }
+            if not any(w in _NOT_NAMES for w in _wm.group(1).split()):
+                # Any comma/"and"-separated segment (counts stripped — digits
+                # AND word numbers, "wants two skin vigor brushes") made
+                # entirely of catalog words = a product tail. Per-segment so
+                # multi-item tails work ("2 beige c120 and 1 toner" → the
+                # "toner" segment qualifies).
+                _seg_hit = any(
+                    _phrase_is_all_product_words(
+                        re.sub(r"\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b",
+                               " ", _s),
+                        catalog)
+                    for _s in re.split(r"\band\b|,|\+", _wm.group(2))
+                )
+                if _seg_hit:
+                    return _claim("new_order")
 
     # ---- 7. Fallthrough: the classified intent stands. handle_message
     #         dispatches it (recent_orders, customer_spend, cancel,

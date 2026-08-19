@@ -452,6 +452,17 @@ NEGATIVE_GUARD_CASES = [
      "city-guard rejects must not relocate to the product catch-all"),
     ("did my customers sync", "customers_by_city",
      "verb capture must not be claimed as a city"),
+    # weed-garden 2026-08-19 batch — the new rules must steal nothing:
+    ("Jane wants to join my team", "new_order",
+     "'wants to <verb>' (join, book, host) is never an order (F1 guard)"),
+    ("Who wants a catalog", "new_order",
+     "question-word prefix must stay out of the name-wants order claim (F1 guard)"),
+    ("My customer wants a facial", "new_order",
+     "non-name prefix must stay out of the name-wants order claim (F1 guard)"),
+    ("Consultants who signed up for PCP", "pcp_list",
+     "consultant/unit PCP questions must not get the customer PCP list (F4)"),
+    ("Which of my team members are doing pcp", "pcp_list",
+     "team-member phrasing must not get the customer PCP list (F4)"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -855,6 +866,20 @@ ROUTE_CASES = [
     ("3.",                                       None, "stray_digit"),
     ("2", {"pending": {"kind": "pick_customer"}}, ("unknown", "<llm-skipped>")),
     ("1 dark brunette",                          None, "product_lookup"),
+
+    # --- "<Name> wants/needs <products>" is an order (weed-garden 2026-08-19
+    # F1, two consultants on 8/18: this shape was a live LLM coin-flip —
+    # new_order one time, customer_info/data_query the next) ---
+    ("Carla Jacobs wants repair serum",          None, "new_order"),
+    ("Dana wants 2 beige c120 and 1 toner",      None, "new_order"),
+    ("Marie needs satin hands",                  None, "new_order"),
+
+    # --- consultant/team-member PCP questions are UNIT questions, not the
+    # customer PCP list or the leaderboard (weed-garden 2026-08-19 F4,
+    # c60 8/17 + c71 8/18) ---
+    ("Which consultants signed up for PCP",      None, "unit_query"),
+    ("Consultants who signed for PCP",           None, "unit_query"),
+    ("How many team members are doing PCP",      None, "unit_query"),
 ]
 
 

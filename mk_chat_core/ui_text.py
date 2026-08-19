@@ -38,6 +38,7 @@ UI_EN = {
     "order_grand_total": "<strong>Order total: {total}</strong>",
 
     "need_customer_for_order": "I caught the products but not who they're for! Please retype the order with the customer's name in front — like <strong>New order for Jane: CC cream, mascara</strong>.",
+    "order_start_prompt": "Tell me who the order is for and what they'd like — like <strong>New order for Jane: CC cream, mascara</strong>.",
     "need_customer_info": "Okay, tell me the customer's name and information.",
     "need_items": "What items should I add to the order?",
     "got_it_ordering_for": "Got it — order for {name}.",
@@ -443,6 +444,7 @@ UI_ES = {
     "order_grand_total": "<strong>Total del pedido: {total}</strong>",
 
     "need_customer_for_order": "Entendí los productos, ¡pero no para quién son! Vuelve a escribir el pedido con el nombre del cliente al frente — como <strong>New order for Jane: CC cream, mascara</strong>.",
+    "order_start_prompt": "Dime para quién es el pedido y qué le gustaría — como <strong>New order for Jane: CC cream, mascara</strong>.",
     "need_customer_info": "Perfecto, dime el nombre del cliente y su información.",
     "need_items": "¿Qué artículos debo agregar al pedido?",
     "got_it_ordering_for": "Listo — pedido para {name}.",
