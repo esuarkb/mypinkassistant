@@ -107,7 +107,7 @@ function scrollChatToBottom() {
 function addMessage(text, who) {
     const div = document.createElement("div");
     div.className = `msg ${who}`;
-    if (who === "bot" && (text.includes("<a ") || text.includes("<div") || text.includes("<strong"))) {
+    if (who === "bot" && (text.includes("<a ") || text.includes("<div") || text.includes("<strong") || text.includes("<em"))) {
         // Server-generated HTML (e.g. customer cards, follow-up cards)
         div.innerHTML = text;
     } else {

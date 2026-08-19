@@ -589,11 +589,25 @@ class MKChatEngine:
             if len(exact) == 1:
                 matches = exact
             else:
-                return ChatReply(ui["customer_tax_ambiguous"].format(name=name.title()))
-        cust = matches[0]
+                # Ambiguous — standard customer picker; the pick_customer
+                # pending handler re-runs this message against the choice.
+                top = matches[:3]
+                ctx.state["pending"] = {"kind": "pick_customer", "candidates": top,
+                                        "action": "customer_tax", "tax_msg": msg}
+                save_session_state(ctx.state, session_id=ctx.sid)
+                return ChatReply(render_customer_picker(top, ui=ui))
+        return self._customer_tax_execute(ui, consultant_id, matches[0], msg,
+                                          fallback_name=name)
+
+    def _customer_tax_execute(self, ui, consultant_id, cust, msg, fallback_name=None):
+        """Set / show / clear the saved tax rate for an already-resolved
+        customer. Shared by _intent_customer_tax_rate (unique match) and the
+        pick_customer "customer_tax" action (picker choice, 2026-08-19)."""
+        import re
+        from db import tx
         cust_id = int(cust["id"])
         disp = (f"{(cust.get('first_name') or '').strip()} "
-                f"{(cust.get('last_name') or '').strip()}").strip() or name.title()
+                f"{(cust.get('last_name') or '').strip()}").strip() or (fallback_name or "").title()
 
         if re.search(r"\b(?:clear|remove|delete|unset|borrar?|quitar?)\b", msg, re.I):
             with tx() as (conn, cur):
@@ -2788,6 +2802,12 @@ class MKChatEngine:
                     # period label (stored if we want; fall back)
                     period = pending.get("period_label") or "lifetime"
                     return ChatReply(ui["customer_spent"].format(name=customer_name, total=f"{total_spent:,.2f}", period=period))
+
+                if action == "customer_tax":
+                    # re-run the original tax message against the chosen
+                    # customer (per-customer tax picker, 2026-08-19)
+                    return self._customer_tax_execute(
+                        ui, consultant_id, c, pending.get("tax_msg") or "")
 
                 if action == "order_customer_pick":
                     order_draft = pending.get("order_draft") or {}
