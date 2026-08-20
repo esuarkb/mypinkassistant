@@ -170,6 +170,54 @@ _NAME_GUESS_BLOCKLIST = {
 # 2026-08-06). Customers with fewer orders simply show fewer.
 _INVOICE_ORDER_CHOICES = 3
 
+# Mid-flow order detection (weed-garden 2026-08-20 F1b). A message that LEADS
+# with order language while another flow is pending ("Bought hydrogel eye
+# patches" during a customer confirm; "Lee Ice has ordered a repair set…"
+# during awaiting_order_items) is an ORDER the consultant expects to start —
+# not a customer edit, not item lines for the locked customer. Brian's call:
+# EDUCATE (finish/cancel the pending flow, then re-send), never auto-start or
+# fork a draft. v2t may lowercase names, so the name group is case-insensitive.
+_ORDER_VERB_LEAD_RE = re.compile(
+    r"^\s*(?:(?:she|he|they|i|we|ella|él|el)\s+)?(?:just\s+|also\s+)?"
+    r"(?:bought|ordered|purchased|compr[oó]|orden[oó])\b",
+    re.IGNORECASE,
+)
+_ORDER_FOR_LEAD_RE = re.compile(
+    r"^\s*(?:new\s+)?(?:order|pedido)\s+(?:for|para)\s+"
+    r"([A-Za-z][\w.'’-]*(?:\s+[A-Za-z][\w.'’-]*)?)",
+    re.IGNORECASE,
+)
+_NAME_ORDERED_RE = re.compile(
+    r"^\s*([A-Za-z][\w.'’-]*(?:\s+[A-Za-z][\w.'’-]*)?)\s+"
+    r"(?:has\s+|have\s+|just\s+)?(?:ordered|bought|purchased|compr[oó]|orden[oó])\b",
+    re.IGNORECASE,
+)
+
+
+def _leading_order_mention(msg: str):
+    """None = message doesn't lead with order language. "" = it does, with no
+    name (bare/pronoun verb lead: "Bought hydrogel eye patches"). Non-empty
+    string = it does AND names a person ("Lee Ice has ordered…")."""
+    s = (msg or "").strip()
+    if not s:
+        return None
+    if _ORDER_VERB_LEAD_RE.match(s):
+        return ""
+    m = _ORDER_FOR_LEAD_RE.match(s)
+    if m:
+        return m.group(1).strip()
+    m = _NAME_ORDERED_RE.match(s)
+    if m:
+        name = m.group(1).strip()
+        # function words / generic person words before the verb aren't a name
+        # ("Also ordered…", "My customer ordered…")
+        _generic = {"customer", "client", "clienta", "cliente", "someone", "somebody"}
+        if all(w in _generic or w in _NAME_GUESS_BLOCKLIST for w in name.lower().split()):
+            return ""
+        return name
+    return None
+
+
 def _is_plausible_name_guess(guess: str) -> bool:
     """Reject a customer-name guess made up entirely of common English
     function words / verbs — those are stray leftovers, not a name."""
@@ -378,9 +426,16 @@ class MKChatEngine:
         except Exception:
             pass
 
+        # Every return below this line answers the row just inserted — carry
+        # its id so app.py writes response_text onto THAT row, not "latest for
+        # the consultant" (weed-garden 2026-08-20 F3). The show_all returns
+        # above deliberately stay untagged: they logged nothing.
+        def _tag_reply(_r: ChatReply) -> ChatReply:
+            _r.intent_log_id = _intent_log_id
+            return _r
 
         if not msg:
-            return ChatReply(ui["empty_prompt"])
+            return _tag_reply(ChatReply(ui["empty_prompt"]))
         
         lowered = msg.lower()
 
@@ -404,16 +459,16 @@ class MKChatEngine:
         if _handler_name is not None and (not pending or _interrupts_pending(intent_result.intent)):
             _reply = getattr(self, _handler_name)(ctx)
             if _reply is not None:
-                return _reply
+                return _tag_reply(_reply)
 
         # Pending flows consume the message next (order confirm, pickers, ...)
         if pending:
             _reply = self._handle_pending(ctx)
             if _reply is not None:
-                return _reply
+                return _tag_reply(_reply)
 
         # Nothing claimed it — OpenAI order/customer parser
-        return self._normal_parse(ctx)
+        return _tag_reply(self._normal_parse(ctx))
 
     def _intent_look_book(self, ctx) -> Optional[ChatReply]:
         """Handler body moved verbatim from handle_message (step 4).
@@ -2701,7 +2756,25 @@ class MKChatEngine:
                     save_session_state(state, session_id=sid)
                     return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
 
+                # muscle-memory punctuation on a pick ("1.", "2!") still counts
+                if choice.rstrip(".!").strip().isdigit():
+                    choice = choice.rstrip(".!").strip()
+
                 if not choice.isdigit():
+                    # A non-digit reply that reads like a real request means the
+                    # consultant has moved on — don't trap them in the picker
+                    # (weed-garden 2026-08-20 F1a: c122 asked about a different
+                    # customer mid-picker and got the "reply 1-3" nag twice).
+                    # Deterministic-only probe (no_llm skips the OpenAI
+                    # fallback): re-route ONLY when a keyword rule confidently
+                    # claims the message on its own, exactly like the
+                    # "team member " escape above. stray_digit stays excluded
+                    # so odd numeric shapes still get the nag below.
+                    _probe = route(msg, {"pending": None}, catalog, no_llm=True)
+                    if _probe.confidence >= 0.85 and _probe.intent not in ("unknown", "stray_digit"):
+                        state["pending"] = None
+                        save_session_state(state, session_id=sid)
+                        return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
                     return ChatReply(ui["multiple_matches"])
 
                 idx = int(choice)
@@ -3202,6 +3275,19 @@ class MKChatEngine:
                         + self._format_customer_confirm(pending["customer"], ui)
                     )
 
+                # "Bought hydrogel eye patches" mid-confirm is an ORDER, not a
+                # customer edit — the old path fed it to apply_customer_edits
+                # and answered "Couldn't apply…" (c122, weed-garden 2026-08-20
+                # F1b). Educate: finish the confirm, then re-send the order.
+                # Never auto-start a draft (Brian's call). Sits BEFORE
+                # looks_like_command so the specific copy wins over the generic
+                # confirming_customer nag.
+                if _leading_order_mention(msg) is not None:
+                    return ChatReply(ui["confirm_order_educate"].format(
+                        first=(pending["customer"].get("First Name") or "").strip(),
+                        last=(pending["customer"].get("Last Name") or "").strip(),
+                    ))
+
                 if looks_like_command(msg):
                     return ChatReply(
                         ui["confirming_customer"] + "\n\n"
@@ -3465,6 +3551,21 @@ class MKChatEngine:
                     state["pending"] = None
                     save_session_state(state, session_id=sid)
                     return ChatReply(ui["canceled"])
+
+                # "Lee Ice has ordered a repair set…" mid-items is an order for
+                # a DIFFERENT person — parsing it here would land Lee's items on
+                # the locked customer's order (weed-garden 2026-08-20 F1b).
+                # Educate and keep the pending intact; Brian chose educate over
+                # auto-forking a second draft. A bare verb lead ("ordered 2
+                # cleansers") or the locked customer's own name still flows
+                # through as a normal items reply.
+                _lead_name = _leading_order_mention(msg)
+                if _lead_name:
+                    _lead_toks = set(_lead_name.lower().split())
+                    _cust_toks = {cust_first.strip().lower(), cust_last.strip().lower()}
+                    if not (_lead_toks & _cust_toks):
+                        return ChatReply(ui["flow_order_other_person"].format(
+                            name=_lead_name.title(), first=cust_first, last=cust_last))
 
                 _parsed = {}
                 try:
@@ -4035,9 +4136,30 @@ class MKChatEngine:
             customer["Birthday"] = normalize_birthday(customer.get("Birthday", ""))
             customer["City"] = normalize_city(customer.get("City", ""))
 
+            # Duplicate heads-up BEFORE the confirm (weed-garden 2026-08-20
+            # F4): an exact-name re-add created an InTouch duplicate needing a
+            # manual merge, and archived customers get re-added by consultants
+            # who don't know unarchive brings them back with history. Exact
+            # first+last match only, non-blocking — yes still saves, and the
+            # copy never asserts identity (2026-07-25 rationale: an exact name
+            # can be a different woman).
+            _dup_warn = ""
+            if _first and _last:
+                from crm_store import find_active_exact_by_name, find_removed_exact_by_name
+                _dup_query = f"{_first} {_last}"
+                with tx() as (_dc, _dcur):
+                    _act = find_active_exact_by_name(_dcur, consultant_id, _dup_query)
+                    _arch = [] if _act else find_removed_exact_by_name(_dcur, consultant_id, _dup_query)
+                if _act:
+                    _dn = f"{(_act[0].get('first_name') or '').strip()} {(_act[0].get('last_name') or '').strip()}".strip()
+                    _dup_warn = ui["cust_dup_active_warn"].format(name=_dn) + "\n\n"
+                elif _arch:
+                    _dn = f"{(_arch[0].get('first_name') or '').strip()} {(_arch[0].get('last_name') or '').strip()}".strip()
+                    _dup_warn = ui["cust_dup_archived_warn"].format(name=_dn) + "\n\n"
+
             state["pending"] = {"kind": "customer_confirm", "customer": customer}
             save_session_state(state, session_id=sid)
-            return ChatReply(self._format_customer_confirm(customer, ui))
+            return ChatReply(_dup_warn + self._format_customer_confirm(customer, ui))
 
         if parsed.get("type") == "order":
             order = parsed.get("order") or {}

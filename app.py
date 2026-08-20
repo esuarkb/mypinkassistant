@@ -2294,13 +2294,20 @@ async def chat(request: Request):
             engine.handle_message, message, cid, None, ua
         )
         try:
-            with tx() as (_lc, _lcu):
-                _lcu.execute(
-                    f"UPDATE intent_logs SET response_text = {PH}"
-                    f" WHERE id = (SELECT id FROM intent_logs WHERE consultant_id = {PH}"
-                    f" ORDER BY created_at DESC LIMIT 1)",
-                    (reply_obj.reply[:300] if reply_obj.reply else "", cid),
-                )
+            # Pair response_text to the EXACT row this reply answers. The old
+            # "latest row for the consultant" subquery let unlogged replies
+            # (show_all taps) and concurrent threadpool requests overwrite the
+            # PREVIOUS message's response — fabricated intent/response
+            # contradictions in the logs (weed-garden 2026-08-20 F3). No log
+            # id → no row was inserted for this reply → skip, never guess.
+            _log_id = getattr(reply_obj, "intent_log_id", None)
+            if _log_id is not None:
+                with tx() as (_lc, _lcu):
+                    _lcu.execute(
+                        f"UPDATE intent_logs SET response_text = {PH}"
+                        f" WHERE id = {PH} AND consultant_id = {PH}",
+                        (reply_obj.reply[:300] if reply_obj.reply else "", _log_id, cid),
+                    )
         except Exception:
             pass
         return {"reply": reply_obj.reply}

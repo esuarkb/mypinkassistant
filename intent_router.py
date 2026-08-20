@@ -786,6 +786,12 @@ def _feature_help_intent(text: str) -> Optional[str]:
     # here. (Reported 2026-08-08.)
     if re.search(r"\bwhat\s+(?:is|are)\s+(?:her|his|their|\w+['’]s)\b", t):
         return None
+    # "price OF/FOR a thing" is a product question, never a billing one — the
+    # price-query rule upstream claims these now, but any shape that slips its
+    # extraction must not land on the $5.99 subscription copy (c107 + c105,
+    # weed-garden 2026-08-20 F2). Bare "what is the price?" stays billing_help.
+    if re.search(r"\bprice\s+(?:of|for)\b", t):
+        return None
     _q = (
         re.search(
             r"^(?:hey |hi |ok(?:ay)? )?(?:how\s+do(?:es)?\s+(?:i|it|you|the|this|my)?|how\s+can\s+i|how\s+to\b|what\s+(?:can|does|is|are)|when\s+do(?:es)?\b|tell\s+me\s+about|explain)\b",
@@ -844,6 +850,12 @@ def _looks_like_inventory_show(msg: str) -> bool:
 # Common search terms that differ from MK's official product naming
 _PRODUCT_QUERY_SYNONYMS: dict = {
     "eyeshadow": "eye shadow",
+    # bare "Lipgloss" found 1 of 16 glosses while "eyeshadow" listed all 31 —
+    # _COMPOUND_WORD_FIXES has lipgloss but doesn't feed this path (c114,
+    # weed-garden 2026-08-20 F6)
+    "lipgloss": "lip gloss",
+    "lipglosses": "lip gloss",
+    "lip glosses": "lip gloss",
     "eye liner": "eyeliner",
     "lip color": "lipstick",
     "lip colour": "lipstick",
@@ -866,6 +878,12 @@ def _looks_like_product_price_query(msg: str) -> bool:
     if re.search(r"\bhow much\b.{0,30}\bcost\b", s):
         return True
     if re.search(r"\bprice\b.{0,30}\bfor\b", s) and "order" not in s:
+        return True
+    # "price of X" ANYWHERE, not just leading — "What is that price of the olde
+    # timewise luminous foundations?" slipped every anchored shape above and was
+    # claimed by billing_help's "price" topic word instead (c107 + c105,
+    # weed-garden 2026-08-20 F2). Same order-entry guard as the "for" rule.
+    if re.search(r"\bprice\s+(?:of|for)\b", s) and "order" not in s:
         return True
     # part number / sku queries (weed-garden 2026-07-09) — must route through the
     # same extraction path as "price of X"/"ingredients in X" below, otherwise the
@@ -897,6 +915,11 @@ def _parse_product_price_query_text(msg: str) -> str:
         r"(?i)^(?:what(?:'s| is)?\s+)?(?:the\s+)?(?:part\s*(?:number|no\.?|#)|item\s+number|sku)\b\s*(?:of|for|on)?\s*(?:the\s+)?(.+?)\s*\??$",
         r"(?i)^(?:can you\s+)?tell me about\s+(?:the\s+)?(.+?)\s*\??$",
         r"(?i)^(.+?)\s+ingredients?\s*\??$",
+        # Mid-sentence fallback for the "price of/for X" shapes the widened
+        # predicate now claims ("What is that price of the …", c107 weed-garden
+        # 2026-08-20 F2). Leading .*? because this loop uses re.match; must stay
+        # LAST — the anchored patterns above extract more precisely.
+        r"(?i)^.*?\bprice\s+(?:of|for)\s+(?:the\s+)?(.+?)\s*\??$",
     ):
         m = re.match(pattern, s)
         if m:
@@ -1350,7 +1373,7 @@ _DQ_TIMEFRAME_TRIGGERS = (
 )
 
 
-def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
+def parse_intent(message: str, state: Optional[dict] = None, no_llm: bool = False) -> IntentResult:
     msg = (message or "").strip()
     msg = msg.replace('’', "'").replace('‘', "'")  # normalize iOS curly apostrophes
     lowered = msg.lower()
@@ -1843,6 +1866,27 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     if _has_edit_verb and _has_edit_field and not _is_setup_phrase:
         return IntentResult(intent="edit_request", confidence=0.95, raw_text=msg)
 
+    # Verbless field-value STATEMENTS — "Birthday is 7-10-1972", "her email is
+    # jane@x.com" — are edit attempts without an edit verb (weed-garden
+    # 2026-08-20 F5: a post-submit birthday correction bounced between intents
+    # because only verbed phrasings reached the edit_request educate).
+    # Statement shape only: FIELD is/: VALUE containing a digit or @, so
+    # questions ("when is her birthday?") and name-only chitchat never match.
+    # Guards, each load-bearing:
+    #   • not pending — during a customer_confirm these exact shapes are LIVE
+    #     edits consumed by apply_customer_edits, and edit_request interrupts
+    #     pending, so an unguarded claim would steal mid-confirm corrections.
+    #   • not a full customer entry (score ≥2 fields) — "Jane Doe phone is
+    #     205-555-1234 birthday 7/10" is new-customer input for the parser.
+    #   • not _is_setup_phrase — "new/add …" belongs to entry/edit-add rules.
+    if (not (state or {}).get("pending")
+            and not _is_setup_phrase
+            and not _looks_like_full_customer_entry(msg)
+            and re.search(r"\b(?:address|phone(?:\s+number)?|cell|email|e-?mail|birthday|birthdate"
+                          r"|direcci[oó]n|tel[eé]fono|celular|correo|cumplea[ñn]os)\s+(?:is|es|:)\s*\S", lowered)
+            and re.search(r"[\d@]", lowered)):
+        return IntentResult(intent="edit_request", confidence=0.9, raw_text=msg)
+
     # "ingredients in X" → always product_lookup (must come before customer_info catch-all)
     if re.search(r"\bingredients?\b", lowered):
         return IntentResult(intent="product_lookup", confidence=0.95, raw_text=msg)
@@ -1897,8 +1941,12 @@ def parse_intent(message: str, state: Optional[dict] = None) -> IntentResult:
     ) and "order" not in lowered:
         return IntentResult(intent="customer_info", confidence=0.85, raw_text=msg)
 
-    # fallback to OpenAI only if the message is worth checking
-    if not should_use_openai_intent_fallback(msg):
+    # fallback to OpenAI only if the message is worth checking. no_llm=True
+    # skips the fallback entirely — used for deterministic-only probes (the
+    # pick_customer escape re-routes only on a confident keyword claim, never
+    # on an LLM guess; weed-garden 2026-08-20 F1a). Thread-safe, unlike
+    # monkeypatching parse_intent_with_openai (app.py runs in a threadpool).
+    if no_llm or not should_use_openai_intent_fallback(msg):
         return IntentResult(intent="unknown", confidence=0.0, raw_text=msg)
 
     return parse_intent_with_openai(msg, state)
@@ -2065,7 +2113,7 @@ def _phrase_is_all_product_words(phrase: str, catalog: Optional[List[dict]]) -> 
     return bool(toks) and all(t in vocab for t in toks)
 
 
-def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dict]] = None) -> IntentResult:
+def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dict]] = None, no_llm: bool = False) -> IntentResult:
     """
     Classify a chat message into the intent that will handle it.
 
@@ -2118,8 +2166,9 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 and not _phrase_is_all_product_words(_wpi_tail, catalog)):
             return _claim("recent_orders", {"product_filter": _wpi_word})
 
-    # ---- 3. Classify: keyword rules, then LLM fallback ----
-    base = parse_intent(msg, state)
+    # ---- 3. Classify: keyword rules, then LLM fallback (skipped when the
+    # caller asked for a deterministic-only probe; weed-garden 2026-08-20 F1a) ----
+    base = parse_intent(msg, state, no_llm=no_llm)
     intent = base.intent
 
     # ---- 4. Override: some "recent_orders" phrasings are actually NEW order entry ----

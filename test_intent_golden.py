@@ -463,6 +463,14 @@ NEGATIVE_GUARD_CASES = [
      "consultant/unit PCP questions must not get the customer PCP list (F4)"),
     ("Which of my team members are doing pcp", "pcp_list",
      "team-member phrasing must not get the customer PCP list (F4)"),
+    # --- weed-garden 2026-08-20 F5: the verbless edit rule must steal nothing ---
+    ("Birthday is 7-10-1972", "edit_request",
+     "mid-confirm corrections must stay with apply_customer_edits, not the educate",
+     {"pending": {"kind": "customer_confirm"}}),
+    ("Jane Doe phone is 205-555-1234 birthday is 7/10/1972", "edit_request",
+     "a full new-customer entry with verbless fields must reach the parser"),
+    ("when is her birthday?", "edit_request",
+     "birthday questions are lookups, not edit attempts"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -880,6 +888,26 @@ ROUTE_CASES = [
     ("Which consultants signed up for PCP",      None, "unit_query"),
     ("Consultants who signed for PCP",           None, "unit_query"),
     ("How many team members are doing PCP",      None, "unit_query"),
+
+    # --- "price OF/FOR a product" is a product question, never billing
+    # (weed-garden 2026-08-20 F2: c107's exact shape hit billing_help conf 1.0
+    # and got the $5.99 subscription copy; c105 fought 3 rephrasings 7/21) ---
+    ("What is that price of the timewise luminous foundations?", None, "product_lookup"),
+    ("Do you know the price for the satin hands set?",           None, "product_lookup"),
+    # guards: genuine billing phrasings keep the billing bubble
+    ("What is your pricing?",                    None, "billing_help"),
+    ("what is the monthly price",                None, "billing_help"),
+
+    # --- bare "lipgloss" must list the gloss family like "eyeshadow" does
+    # (weed-garden 2026-08-20 F6: found 1 of 16 glosses) ---
+    ("Lipgloss",                                 None, "product_lookup"),
+    ("lipglosses",                               None, "product_lookup"),
+
+    # --- weed-garden 2026-08-20 F5: verbless field-value statements are edit
+    # attempts → the edit educate (previously an LLM coin-flip). EN + ES.
+    ("Birthday is 7-10-1972",                    None, "edit_request"),
+    ("her email is jane@example.com",            None, "edit_request"),
+    ("cumpleaños es 7-10-1972",                  None, "edit_request"),
 ]
 
 

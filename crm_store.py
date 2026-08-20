@@ -291,7 +291,10 @@ def find_removed_exact_by_name(cur, consultant_id: int, name: str):
     notice that must never fire speculatively. Order entry deliberately does
     NOT use this (2026-07-25 decision: an archived record can be the same
     woman re-added under a new surname, so order flows keep treating the
-    typed name as new-customer input).
+    typed name as new-customer input). New-customer entry DOES consult it
+    (weed-garden 2026-08-20 F4) — but only for a non-blocking heads-up on the
+    confirm card that never asserts identity, so the 2026-07-25 rationale
+    still holds: the consultant decides, the flow never hard-stops.
     """
     parts = [p for p in (name or "").replace(",", " ").split() if p]
     if len(parts) < 2:
@@ -309,6 +312,42 @@ def find_removed_exact_by_name(cur, consultant_id: int, name: str):
             FROM customers
             WHERE consultant_id = {PH}
               AND COALESCE(source_status, 'active') <> 'active'
+              AND LOWER(first_name) = {PH}
+              AND LOWER(last_name) = {PH}
+            """,
+            (consultant_id, first.lower(), last.lower()),
+        )
+        for r in _rows_to_dicts(cur):
+            if r["id"] not in seen_ids:
+                seen_ids.add(r["id"])
+                out.append(r)
+    return out
+
+
+def find_active_exact_by_name(cur, consultant_id: int, name: str):
+    """Exact (case-insensitive) first+last match among ACTIVE customers.
+
+    Mirror of find_removed_exact_by_name above; powers the new-customer entry
+    duplicate heads-up (weed-garden 2026-08-20 F4: an existing customer was
+    re-added under her exact name, creating an InTouch duplicate needing a
+    manual merge). Exact match only, no fuzzy — the heads-up is non-blocking
+    and must never fire speculatively.
+    """
+    parts = [p for p in (name or "").replace(",", " ").split() if p]
+    if len(parts) < 2:
+        return []
+
+    PH = "?" if _is_sqlite_cursor(cur) else "%s"
+    combos = {(parts[0], " ".join(parts[1:])), (" ".join(parts[:-1]), parts[-1])}
+    out = []
+    seen_ids = set()
+    for first, last in combos:
+        cur.execute(
+            f"""
+            SELECT id, first_name, last_name
+            FROM customers
+            WHERE consultant_id = {PH}
+              AND COALESCE(source_status, 'active') = 'active'
               AND LOWER(first_name) = {PH}
               AND LOWER(last_name) = {PH}
             """,

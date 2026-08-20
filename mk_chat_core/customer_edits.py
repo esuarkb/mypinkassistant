@@ -174,8 +174,9 @@ def apply_customer_edits(customer: dict, message: str, ui: dict | None = None) -
         # looks_like_command admits these article forms, so the apply side must
         # accept them too (weed-garden 2026-08-17 F1).
         _art = re.match(
-            r"^(?:the|her|his|my|an?)\s+(?=(?:birthday|birthdate|bday|dob|phone|"
-            r"cell|mobile|email|address|direcci[oó]n|tags?|referred)\b)",
+            r"^(?:the|her|his|my|an?|el|la|su|mi)\s+(?=(?:birthday|birthdate|bday|dob|phone|"
+            r"cell|mobile|email|address|direcci[oó]n|tags?|referred|"
+            r"cumplea[ñn]os|tel[eé]fono|celular|correo)\b)",
             txt, flags=re.IGNORECASE)
         if _art:
             txt = txt[_art.end():].strip()
@@ -186,7 +187,7 @@ def apply_customer_edits(customer: dict, message: str, ui: dict | None = None) -
 
         # --- Explicit field targets first ---
         # email:
-        if low.startswith("email"):
+        if low.startswith("email") or low.startswith("correo"):
             email = _extract_email(txt)
             if email:
                 c["Email"] = email
@@ -194,7 +195,7 @@ def apply_customer_edits(customer: dict, message: str, ui: dict | None = None) -
             continue
 
         # phone:
-        if low.startswith("phone") or low.startswith("cell") or low.startswith("mobile"):
+        if low.startswith(("phone", "cell", "mobile", "teléfono", "telefono", "celular")):
             ph = _extract_phone_candidate(txt)
             if ph:
                 c["Phone"] = ph
@@ -202,8 +203,11 @@ def apply_customer_edits(customer: dict, message: str, ui: dict | None = None) -
             continue
 
         # birthday:
-        if low.startswith("birthday") or low.startswith("birthdate") or low.startswith("bday") or low.startswith("dob"):
-            b_raw = re.sub(r"^(birthday|birthdate|bday|dob)\s*(?:is|was)?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
+        # Spanish field words added 2026-08-20 (weed-garden F5: the expanded
+        # edit educate's ES tip says "cumpleaños es 7/10/1972" works mid-confirm
+        # — these branches make that true; same for teléfono/celular/correo)
+        if low.startswith(("birthday", "birthdate", "bday", "dob", "cumpleaños", "cumpleanos")):
+            b_raw = re.sub(r"^(birthday|birthdate|bday|dob|cumplea[ñn]os)\s*(?:is|was|es)?\s*[:\-]?\s*", "", txt, flags=re.IGNORECASE).strip()
             b = normalize_birthday(b_raw)
             if b:
                 c["Birthday"] = b

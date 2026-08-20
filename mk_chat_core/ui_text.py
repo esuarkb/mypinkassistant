@@ -77,6 +77,13 @@ UI_EN = {
     # identity — an archived record can be the same woman re-added under a
     # new surname (weed-garden 2026-08-16, c124)
     "customer_archived_lookup": "<strong>{name}</strong> matches a customer who's archived in your MyCustomers, so she doesn't show up in searches here. If you'd like her back, unarchive her in MyCustomers and she'll come into MyPinkAssistant on the next sync — order history and all.",
+
+    # new-customer entry duplicate heads-up (weed-garden 2026-08-20 F4).
+    # Non-blocking and NEVER asserts identity (2026-07-25: an exact name can
+    # be a different woman) — it informs, the consultant decides on the
+    # confirm that follows.
+    "cust_dup_active_warn": '⚠️ Heads up — you already have a customer named <strong>{name}</strong>. If this is the same person, say no below and make your updates in <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a> instead — adding her again would create a duplicate. If it\'s a different {name}, just confirm below.',
+    "cust_dup_archived_warn": '⚠️ Heads up — <strong>{name}</strong> matches a customer who\'s archived in your MyCustomers. If that\'s the same person, say no below and unarchive her in <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a> — she\'ll come back on the next sync with her order history, and adding her here would create a duplicate. If it\'s someone new, just confirm below.',
     "no_customer_id": "I couldn't find a customer with ID {cid}.",
     "customer_spent": "{name} has spent ${total} ({period}).",
     "who_is_customer": "Who is the customer? Try: \u201cshow Jane\u2019s info\u201d.",
@@ -314,7 +321,10 @@ UI_EN = {
     "delete_customer_confirm_plain": "This will delete {name} from MyPinkAssistant. Type DELETE to confirm, or <strong>cancel</strong>.",
 
     # customer edit redirect
-    "edit_request_redirect": 'Changes or updates to customer information must currently be done from <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. The changes will then show in MyPinkAssistant on the next sync.',
+    # Expanded 2026-08-20 (weed-garden F5): the old one-liner didn't say WHEN
+    # the change shows up or that mid-confirm corrections ARE supported here,
+    # so consultants kept re-trying edits in chat.
+    "edit_request_redirect": 'Updates to a saved customer\'s info (address, phone, email, birthday) are made in <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a> — open her card there and make the change. It will show up in MyPinkAssistant automatically after the next overnight sync.<br><br>💡 Tip: while you\'re still confirming a <em>new</em> customer here (before you reply yes), you can type corrections like "birthday is 7/10/1972" and I\'ll update the card right away.',
 
     # customer-vs-consultant disambiguation picker (engine-built rows)
     "picker_found_options": "I found these options — which did you mean?",
@@ -399,6 +409,11 @@ UI_EN = {
     # awaiting_order_items guard
     "add_item_prompt": "I don't see an item I can add to {first} {last}'s order. You can type what you would like to add to the order or say cancel to start over.",
 
+    # mid-flow order educate (weed-garden 2026-08-20 F1b): an order-ish message
+    # arrived while another flow was pending — educate, never auto-start a draft
+    "flow_order_other_person": "That looks like an order for {name}, but we're still working on {first} {last}'s order. Finish this one first (or type cancel), then send {name}'s order again and I'll start it fresh.",
+    "confirm_order_educate": "That looks like an order. Let's finish saving {first} {last} first — reply yes to save this customer, or no to discard. Once that's done, send the order again and I'll take care of it.",
+
     # customer_edits.py confirmation notes ("Updated: Email updated, …")
     "edit_notes_prefix": "Updated: ",
     "edit_note_email": "Email updated",
@@ -474,6 +489,10 @@ UI_ES = {
     "no_customer_found": "No encontré a {name} en tus clientes guardados. Puedes escribir <strong>ayuda</strong> para ver lo que puedes hacer en el chat.",
     "no_customer_found_yet": "Aún no encontré a {name} en tus clientes guardados. Puedes escribir <strong>ayuda</strong> para ver lo que puedes hacer en el chat.",
     "customer_archived_lookup": "<strong>{name}</strong> coincide con una clienta archivada en tu MyCustomers, por eso no aparece en las búsquedas aquí. Si quieres recuperarla, desarchívala en MyCustomers y volverá a MyPinkAssistant en la próxima sincronización — con todo su historial de pedidos.",
+
+    # new-customer entry duplicate heads-up (weed-garden 2026-08-20 F4)
+    "cust_dup_active_warn": '⚠️ Atención — ya tienes una clienta llamada <strong>{name}</strong>. Si es la misma persona, responde no abajo y haz los cambios en <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a> — agregarla de nuevo crearía un duplicado. Si es otra {name}, simplemente confirma abajo.',
+    "cust_dup_archived_warn": '⚠️ Atención — <strong>{name}</strong> coincide con una clienta archivada en tu MyCustomers. Si es la misma persona, responde no abajo y desarchívala en <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a> — volverá en la próxima sincronización con su historial de pedidos, y agregarla aquí crearía un duplicado. Si es alguien nuevo, simplemente confirma abajo.',
     "no_customer_id": "No encontré un cliente con ID {cid}.",
     "customer_spent": "{name} ha gastado ${total} ({period}).",
     "who_is_customer": "¿Quién es el cliente? Prueba: \u201cinfo de Jane\u201d.",
@@ -706,7 +725,8 @@ UI_ES = {
     "delete_customer_confirm_plain": "Esto eliminará a {name} de MyPinkAssistant. Escribe DELETE para confirmar, o <strong>cancelar</strong>.",
 
     # redirección de ediciones de clienta
-    "edit_request_redirect": 'Los cambios o actualizaciones a la información de una clienta por ahora se hacen desde <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a>. Los cambios aparecerán en MyPinkAssistant en la próxima sincronización.',
+    # Expanded 2026-08-20 (weed-garden F5)
+    "edit_request_redirect": 'Los cambios a la información de una clienta ya guardada (dirección, teléfono, correo, cumpleaños) se hacen en <a href="https://apps.marykayintouch.com/customer-list" target="_blank">MyCustomers</a> — abre su tarjeta allí y haz el cambio. Aparecerá en MyPinkAssistant automáticamente después de la próxima sincronización nocturna.<br><br>💡 Consejo: mientras todavía estás confirmando una clienta <em>nueva</em> aquí (antes de responder sí), puedes escribir correcciones como "cumpleaños es 7/10/1972" y actualizo la tarjeta al momento.',
 
     # selector clienta-vs-consultora
     "picker_found_options": "Encontré estas opciones — ¿cuál querías decir?",
@@ -784,6 +804,10 @@ UI_ES = {
 
     # guardia de awaiting_order_items
     "add_item_prompt": "No veo un artículo que pueda agregar al pedido de {first} {last}. Escribe lo que quieras agregar al pedido o di cancelar para empezar de nuevo.",
+
+    # mid-flow order educate (weed-garden 2026-08-20 F1b)
+    "flow_order_other_person": "Eso parece un pedido para {name}, pero todavía estamos trabajando en el pedido de {first} {last}. Termina este primero (o escribe cancelar) y luego envía de nuevo el pedido de {name} para empezarlo desde cero.",
+    "confirm_order_educate": "Eso parece un pedido. Primero terminemos de guardar a {first} {last} — responde sí para guardar este cliente, o no para descartarlo. Cuando esté listo, envía el pedido de nuevo y yo me encargo.",
 
     # notas de confirmación de customer_edits.py
     "edit_notes_prefix": "Actualizado: ",
