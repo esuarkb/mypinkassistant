@@ -8860,3 +8860,479 @@ Logged in.
   No changes.
 
 No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+    Warning: SKU 10257257: ElementHandle.click: Timeout 30000ms exceeded.
+Call log:
+  - attempting click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dw9c1565c5/hi-res/10000/NEW_TWR_Ultimate_Sets.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div data-is-starter-kits="false" data-pid="990338211US10262871" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-bundle product-wrapper product-detail product clearfix" data-product-url="/timewise-repair-ultimate-volu-firm-set-10262871/990338211US10262871.html?lang=en_US" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window.">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 20ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dw9c1565c5/hi-res/10000/NEW_TWR_Ultimate_Sets.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  2 × retrying click action
+      - waiting 100ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+  10 × retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div data-is-starter-kits="false" data-pid="990338211US10262871" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-bundle product-wrapper product-detail product clearfix" data-product-url="/timewise-repair-ultimate-volu-firm-set-10262871/990338211US10262871.html?lang=en_US" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window.">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dw9c1565c5/hi-res/10000/NEW_TWR_Ultimate_Sets.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div data-is-starter-kits="false" data-pid="990338211US10262871" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-bundle product-wrapper product-detail product clearfix" data-product-url="/timewise-repair-ultimate-volu-firm-set-10262871/990338211US10262871.html?lang=en_US" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window.">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dw9c1565c5/hi-res/10000/NEW_TWR_Ultimate_Sets.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+
+  CHANGED (101):
+    ~ 10249002  name: Special-Edition Skinvigorate Duo Facial Device → Special-Edition Skinvigorate Duo Facial Device - Special-Edition† Skinvigorate™ Duo Facial Device
+    ~ 10238345  name: Mary Kay Lash Love Fanorama Define + Lift Mascara → Mary Kay Lash Love Fanorama Define + Lift Mascara - Mary Kay&reg; Lash Love Fanorama&trade; Define + Lift Mascara
+    ~ 10238964  name: Mary Kay True Optimism Eau de Parfum → Mary Kay True Optimism Eau de Parfum - Mary Kay® True Optimism™ Eau de Parfum
+    ~ 10248713  name: Mary Kay Complexion Sponge → Mary Kay Complexion Sponge - Mary Kay® Complexion Sponge
+    ~ 10229067  name: Special-Edition Mary Kay After-Sun Replenishing Gel → Special-Edition Mary Kay After-Sun Replenishing Gel - Special-Edition† Mary Kay® After-Sun Replenishing Gel
+    ~ 10201304  name: Mary Kay Hydrating Cleanser → Mary Kay Hydrating Cleanser - Mary Kay® Hydrating Cleanser
+    ~ 10201340  name: Mary Kay Mattifying Cleanser → Mary Kay Mattifying Cleanser - Mary Kay® Mattifying Cleanser
+    ~ 10201374  name: Mary Kay Hydrating Moisturizer → Mary Kay Hydrating Moisturizer - Mary Kay® Hydrating Moisturizer
+    ~ 10201376  name: Mary Kay Mattifying Moisturizer → Mary Kay Mattifying Moisturizer - Mary Kay® Mattifying Moisturizer
+    ~ 10201384  name: Mary Kay Balancing Toner → Mary Kay Balancing Toner - Mary Kay® Balancing Toner
+    ~ 10201395  name: Mary Kay Exfoliating Scrub → Mary Kay Exfoliating Scrub - Mary Kay® Exfoliating Scrub
+    ~ 10217385  name: TimeWise Daytime Defender Sunscreen Broad Spectrum SPF 30 → TimeWise Daytime Defender Sunscreen Broad Spectrum SPF 30 - TimeWise® Daytime Defender Sunscreen Broad Spectrum SPF 30†
+    ~ 10254268  name: TimeWise Nighttime Recovery → TimeWise Nighttime Recovery - TimeWise® Nighttime Recovery
+    ~ 10217408  name: TimeWise Eye Cream → TimeWise Eye Cream - TimeWise® Eye Cream
+    ~ 10225538  name: TimeWise Firming Eye Cream → TimeWise Firming Eye Cream - TimeWise® Firming Eye Cream
+    ~ 10198866  name: TimeWise Microdermabrasion Plus Set → TimeWise Microdermabrasion Plus Set - TimeWise® Microdermabrasion Plus Set
+    ~ 10224657  name: TimeWise Microdermabrasion Refine → TimeWise Microdermabrasion Refine - TimeWise® Microdermabrasion Refine
+    ~ 10198715  name: TimeWise Pore Minimizer → TimeWise Pore Minimizer - TimeWise® Pore Minimizer
+    ~ 10219506  name: TimeWise Targeted-Action Toning Lotion → TimeWise Targeted-Action Toning Lotion - TimeWise® Targeted-Action® Toning Lotion
+    ~ 10088897  name: TimeWise Repair Revealing Radiance Facial Peel → TimeWise Repair Revealing Radiance Facial Peel - TimeWise Repair® Revealing Radiance® Facial Peel
+    ~ 10107547  name: TimeWise Repair Lifting Bio-Cellulose Mask → TimeWise Repair Lifting Bio-Cellulose Mask - TimeWise Repair® Lifting Bio-Cellulose Mask
+    ~ 10243392  name: TimeWise Repair Volu-Firm Night Treatment → TimeWise Repair Volu-Firm Night Treatment - TimeWise Repair® Volu-Firm® Night Treatment
+    ~ 10262871  name: TimeWise Repair Ultimate Volu-Firm Set → TimeWise Repair Ultimate Volu-Firm Set - TimeWise Repair® Ultimate Volu-Firm® Set
+    ~ 10257257  name: TimeWise Repair Volu-Firm Foaming Cleanser → TimeWise Repair Volu-Firm Foaming Cleanser - TimeWise Repair® Volu-Firm® Foaming Cleanser
+    ~ 10257266  name: TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30 → TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30 - TimeWise Repair® Volu-Firm® Day Cream Sunscreen Broad Spectrum SPF 30*
+    ~ 10243732  name: TimeWise Repair Volu-Firm Set → TimeWise Repair Volu-Firm Set - TimeWise Repair® Volu-Firm® Set
+    ~ 10208547  name: TimeWise Repair Volu-Firm Eye Renewal Cream → TimeWise Repair Volu-Firm Eye Renewal Cream - TimeWise Repair® Volu-Firm® Eye Renewal Cream
+    ~ 10243720  name: TimeWise Repair Volu-Firm The Go Set → TimeWise Repair Volu-Firm The Go Set - TimeWise Repair Volu-Firm The Go Set®
+    ~ 10056743  name: Clear Proof Blemish Control Toner → Clear Proof Blemish Control Toner - Clear Proof® Blemish Control Toner**
+    ~ 10095054  name: Clear Proof Acne Treatment Gel → Clear Proof Acne Treatment Gel - Clear Proof® Acne Treatment Gel*
+    ~ 10094148  name: Clear Proof Deep-Cleansing Charcoal Mask → Clear Proof Deep-Cleansing Charcoal Mask - Clear Proof® Deep-Cleansing Charcoal Mask
+    ~ 10233587  name: Clear Proof Acne System Set → Clear Proof Acne System Set - Clear Proof® Acne System Set
+    ~ 10233551  name: Clear Proof Clarifying Cleansing Gel → Clear Proof Clarifying Cleansing Gel - Clear Proof® Clarifying Cleansing Gel**
+    ~ 10241535  name: Clear Proof Oil-Free Moisturizer for Acne-Prone Skin → Clear Proof Oil-Free Moisturizer for Acne-Prone Skin - Clear Proof® Oil-Free Moisturizer for Acne-Prone Skin
+    ~ 10242538  name: MKMen Regimen → MKMen Regimen - MKMen® Regimen
+    ~ 10234778  name: MKMen Daily Facial Wash → MKMen Daily Facial Wash - MKMen® Daily Facial Wash
+    ~ 10234520  name: MKMen Moisturizing Shave Cream → MKMen Moisturizing Shave Cream - MKMen® Moisturizing Shave Cream
+    ~ 10234780  name: MKMen Ultimate Moisturizer → MKMen Ultimate Moisturizer - MKMen® Ultimate Moisturizer
+    ~ 10243384  name: TimeWise Repair Volu-Firm Advanced Lifting Serum → TimeWise Repair Volu-Firm Advanced Lifting Serum - TimeWise Repair® Volu-Firm® Advanced Lifting Serum
+    ~ 10173736  name: Mary Kay Instant Puffiness Reducer → Mary Kay Instant Puffiness Reducer - Mary Kay® Instant Puffiness Reducer
+    ~ 10190660  name: Indulge Soothing Eye Gel → Indulge Soothing Eye Gel - Indulge® Soothing Eye Gel
+    ~ 10179024  name: Mary Kay Oil-Free Eye Makeup Remover → Mary Kay Oil-Free Eye Makeup Remover - Mary Kay® Oil-Free Eye Makeup Remover
+    ~ 10203701  name: Mary Kay Hydrogel Eye Patches → Mary Kay Hydrogel Eye Patches - Mary Kay® Hydrogel Eye Patches, pk./30 pairs
+    ~ 10261957  name: Mix & Mask → Mix & Mask - Mix & Mask
+    ~ 10235578  name: Mary Kay Hydrating Cream Mask → Mary Kay Hydrating Cream Mask - Mary Kay® Hydrating Cream Mask
+    ~ 10160886  name: Mary Kay Micellar Water → Mary Kay Micellar Water - Mary Kay® Micellar Water
+    ~ 10041758  name: Beauty Blotters Oil-Absorbing Tissues → Beauty Blotters Oil-Absorbing Tissues - Beauty Blotters® Oil-Absorbing Tissues
+    ~ 10235072  name: Mary Kay Nourishing Oil → Mary Kay Nourishing Oil - Mary Kay® Nourishing Oil
+    ~ 10072682  name: Mary Kay Extra Emollient Night Cream → Mary Kay Extra Emollient Night Cream - Mary Kay® Extra Emollient Night Cream
+    ~ 10031541  name: Mary Kay Intense Moisturizing Cream (Dry) → Mary Kay Intense Moisturizing Cream (Dry) - Mary Kay® Intense Moisturizing Cream
+    ~ 10197545  name: Mary Kay Oil-Free Hydrating Gel (Normal/Oily) → Mary Kay Oil-Free Hydrating Gel (Normal/Oily) - Mary Kay® Oil-Free Hydrating Gel
+    ~ 10135951  name: Mary Kay Mask Applicator → Mary Kay Mask Applicator - Mary Kay® Mask Applicator
+    ~ 10152557  name: Mary Kay Makeup Finishing Spray by Skindinävia → Mary Kay Makeup Finishing Spray by Skindinävia - Mary Kay® Makeup Finishing Spray by Skindinävia
+    ~ 10060182  name: Mary Kay Translucent Loose Powder → Mary Kay Translucent Loose Powder - Mary Kay® Translucent Loose Powder
+    ~ 10233087  name: Mary Kay Foundation Primer Sunscreen Broad Spectrum SPF 15 → Mary Kay Foundation Primer Sunscreen Broad Spectrum SPF 15 - Mary Kay® Foundation Primer Sunscreen Broad Spectrum SPF 15*
+    ~ 10202992  name: Mary Kay Perfect Palette (unfilled) → Mary Kay Perfect Palette (unfilled) - Mary Kay Perfect Palette®
+    ~ 10114610  name: Mary Kay Petite Palette (unfilled) → Mary Kay Petite Palette (unfilled) - Mary Kay Petite Palette®
+    ~ 10134452  name: Cosmetic Sponges → Cosmetic Sponges - Cosmetic Sponges
+    ~ 10128063  name: Mary Kay Blending Brush → Mary Kay Blending Brush - Mary Kay® Blending Brush
+    ~ 10107305  name: Mary Kay Essential Brush Collection → Mary Kay Essential Brush Collection - Mary Kay® Essential Brush Collection
+    ~ 10122325  name: Mary Kay Liquid Foundation Brush → Mary Kay Liquid Foundation Brush - Mary Kay® Liquid Foundation Brush
+    ~ 10122329  name: Mary Kay Cream Color Brush → Mary Kay Cream Color Brush - Mary Kay® Cream Color Brush
+    ~ 10122328  name: Mary Kay Eyebrow/Eyeliner Brush → Mary Kay Eyebrow/Eyeliner Brush - Mary Kay® Eyebrow/Eyeliner Brush
+    ~ 10122320  name: Mary Kay All-Over Powder Brush → Mary Kay All-Over Powder Brush - Mary Kay® All-Over Powder Brush
+    ~ 10122321  name: Mary Kay Cheek Brush → Mary Kay Cheek Brush - Mary Kay® Cheek Brush
+    ~ 10168938  name: Mary Kay Eye Blending Brush → Mary Kay Eye Blending Brush - Mary Kay® Eye Blending Brush
+    ~ 10122322  name: Mary Kay Eye Crease Brush → Mary Kay Eye Crease Brush - Mary Kay® Eye Crease Brush
+    ~ 10122323  name: Mary Kay All-Over Eye Shadow Brush → Mary Kay All-Over Eye Shadow Brush - Mary Kay® All-Over Eye Shadow Brush
+    ~ 10122324  name: Mary Kay Eye Smudger Brush → Mary Kay Eye Smudger Brush - Mary Kay® Eye Smudger Brush
+    ~ 10143940  name: Mary Kay Travel Roll-Up Bag, (unfilled) → Mary Kay Travel Roll-Up Bag, (unfilled) - Mary Kay® Travel Roll-Up Bag,
+    ~ 10202993  name: Mary Kay Pro Palette (unfilled) → Mary Kay Pro Palette (unfilled) - Mary Kay Pro Palette®
+    ~ 10080376  name: Hello, Clean → Hello, Clean - Hello, Clean
+    ~ 10162409  name: Mary Kay Apple & Almond Scented Body Lotion - Apple & Almond → Mary Kay Apple & Almond Scented Body Lotion - Mary Kay® Apple & Almond Scented Body Lotion
+    ~ 10162408  name: Mary Kay Apple & Almond Scented Shower Gel - Apple & Almond → Mary Kay Apple & Almond Scented Shower Gel - Mary Kay® Apple & Almond Scented Shower Gel
+    ~ 10162416  name: Mary Kay Berry & Vanilla Scented Body Lotion - Berry & Vanilla → Mary Kay Berry & Vanilla Scented Body Lotion - Mary Kay® Berry & Vanilla Scented Body Lotion
+    ~ 10162443  name: Mary Kay Berry & Vanilla Scented Shower Gel - Berry & Vanilla → Mary Kay Berry & Vanilla Scented Shower Gel - Mary Kay® Berry & Vanilla Scented Shower Gel
+    ~ 10136769  name: Mary Kay 2-In-1 Body Wash & Shave → Mary Kay 2-In-1 Body Wash & Shave - Mary Kay® 2-In-1 Body Wash & Shave
+    ~ 10073789  name: Mary Kay Hydrating Lotion → Mary Kay Hydrating Lotion - Mary Kay® Hydrating Lotion
+    ~ 10091504  name: White Tea & Citrus Satin Body Revitalizing Shea Scrub → White Tea & Citrus Satin Body Revitalizing Shea Scrub - White Tea & Citrus Satin Body® Revitalizing Shea Scrub
+    ~ 10091502  name: White Tea & Citrus Satin Body Indulgent Shea Wash → White Tea & Citrus Satin Body Indulgent Shea Wash - White Tea & Citrus Satin Body® Indulgent Shea Wash
+    ~ 10091493  name: White Tea & Citrus Satin Body Silkening Shea Lotion → White Tea & Citrus Satin Body Silkening Shea Lotion - White Tea & Citrus Satin Body® Silkening Shea Lotion
+    ~ 10090638  name: White Tea & Citrus Satin Hands Pampering Set - White Tea & Citrus → White Tea & Citrus Satin Hands Pampering Set - White Tea & Citrus Satin Hands® Pampering Set
+    ~ 10088632  name: White Tea & Citrus Satin Hands Nourishing Shea Cream → White Tea & Citrus Satin Hands Nourishing Shea Cream - White Tea & Citrus Satin Hands® Nourishing Shea Cream
+    ~ 10156069  name: Fragrance-Free Satin Hands Nourishing Shea Cream → Fragrance-Free Satin Hands Nourishing Shea Cream - Fragrance-Free Satin Hands® Nourishing Shea Cream
+    ~ 10238148  name: Fragrance-Free Satin Hands Pampering Set → Fragrance-Free Satin Hands Pampering Set - Fragrance-Free Satin Hands® Pampering Set
+    ~ 10223788  name: Mint Bliss Energizing Lotion for Feet & Legs → Mint Bliss Energizing Lotion for Feet & Legs - Mint Bliss™ Energizing Lotion for Feet & Legs
+    ~ 10235051  name: Mary Kay Confidently You Eau de Parfum → Mary Kay Confidently You Eau de Parfum - Mary Kay Confidently You™ Eau de Parfum
+    ~ 10192900  name: Belara Eau de Parfum → Belara Eau de Parfum - Belara® Eau de Parfum
+    ~ 10012512  name: Bella Belara Eau de Parfum → Bella Belara Eau de Parfum - Bella Belara® Eau de Parfum
+    ~ 10095688  name: Enchanted Wish Eau de Toilette → Enchanted Wish Eau de Toilette - Enchanted Wish® Eau de Toilette
+    ~ 10088620  name: Forever Diamonds Eau de Parfum → Forever Diamonds Eau de Parfum - Forever Diamonds® Eau de Parfum
+    ~ 10094305  name: Live Fearlessly Eau de Parfum → Live Fearlessly Eau de Parfum - Live Fearlessly® Eau de Parfum
+    ~ 10141779  name: Mary Kay Illuminea Extrait de Parfum → Mary Kay Illuminea Extrait de Parfum - Mary Kay Illuminea™ Extrait de Parfum
+    ~ 10218635  name: Thinking of You Eau de Parfum → Thinking of You Eau de Parfum - Thinking of You® Eau de Parfum
+    ~ 10028783  name: Domain Cologne Spray → Domain Cologne Spray - Domain® Cologne Spray
+    ~ 10109680  name: MK High Intensity Cologne Spray → MK High Intensity Cologne Spray - MK High Intensity® Cologne Spray
+    ~ 10095123  name: MK High Intensity Ocean Cologne Spray → MK High Intensity Ocean Cologne Spray - MK High Intensity Ocean® Cologne Spray
+    ~ 10075680  name: MK High Intensity Sport Cologne Spray → MK High Intensity Sport Cologne Spray - MK High Intensity® Sport Cologne Spray
+    ~ 10221421  name: Cityscape Cologne Spray → Cityscape Cologne Spray - Cityscape® Cologne Spray
+    ~ 10048515  name: True Original Cologne Spray → True Original Cologne Spray - True Original® Cologne Spray
+    ~ 10237969  name: Limited-Edition Mary Kay Lavender & Coconut Body Spray → Limited-Edition Mary Kay Lavender & Coconut Body Spray - Limited-Edition† Mary Kay® Lavender & Coconut Body Spray
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+
+  CHANGED (101):
+    ~ 10249002  name: Skinvigorate Duo Facial Device de edición especial → Skinvigorate Duo Facial Device de edición especial - Skinvigorate™ Duo Facial Device de edición especial†
+    ~ 10238345  name: Mary Kay Lash Love Fanorama Define + Lift Mascara → Mary Kay Lash Love Fanorama Define + Lift Mascara - Mary Kay&reg; Lash Love Fanorama&trade; Define + Lift Mascara
+    ~ 10238964  name: Mary Kay True Optimism Eau de Parfum → Mary Kay True Optimism Eau de Parfum - Mary Kay® True Optimism™ Eau de Parfum
+    ~ 10248713  name: Mary Kay Complexion Sponge → Mary Kay Complexion Sponge - Mary Kay® Complexion Sponge
+    ~ 10229067  name: Mary Kay After-Sun Replenishing Gel de edición especial → Mary Kay After-Sun Replenishing Gel de edición especial - Mary Kay® After-Sun Replenishing Gel de edición especial†
+    ~ 10201304  name: Mary Kay Hydrating Cleanser → Mary Kay Hydrating Cleanser - Mary Kay® Hydrating Cleanser
+    ~ 10201340  name: Mary Kay Mattifying Cleanser → Mary Kay Mattifying Cleanser - Mary Kay® Mattifying Cleanser
+    ~ 10201374  name: Mary Kay Hydrating Moisturizer → Mary Kay Hydrating Moisturizer - Mary Kay® Hydrating Moisturizer
+    ~ 10201376  name: Mary Kay Mattifying Moisturizer → Mary Kay Mattifying Moisturizer - Mary Kay® Mattifying Moisturizer
+    ~ 10201384  name: Mary Kay Balancing Toner → Mary Kay Balancing Toner - Mary Kay® Balancing Toner
+    ~ 10201395  name: Mary Kay Exfoliating Scrub → Mary Kay Exfoliating Scrub - Mary Kay® Exfoliating Scrub
+    ~ 10217385  name: TimeWise Daytime Defender Sunscreen Broad Spectrum SPF 30 → TimeWise Daytime Defender Sunscreen Broad Spectrum SPF 30 - TimeWise® Daytime Defender Sunscreen Broad Spectrum SPF 30†
+    ~ 10254268  name: TimeWise Nighttime Recovery → TimeWise Nighttime Recovery - TimeWise® Nighttime Recovery
+    ~ 10217408  name: TimeWise Eye Cream → TimeWise Eye Cream - TimeWise® Eye Cream
+    ~ 10225538  name: TimeWise Firming Eye Cream → TimeWise Firming Eye Cream - TimeWise® Firming Eye Cream
+    ~ 10198866  name: TimeWise Microdermabrasion Plus Set → TimeWise Microdermabrasion Plus Set - TimeWise® Microdermabrasion Plus Set
+    ~ 10224657  name: TimeWise Microdermabrasion Refine → TimeWise Microdermabrasion Refine - TimeWise® Microdermabrasion Refine
+    ~ 10198715  name: TimeWise Pore Minimizer → TimeWise Pore Minimizer - TimeWise® Pore Minimizer
+    ~ 10219506  name: TimeWise Targeted-Action Toning Lotion → TimeWise Targeted-Action Toning Lotion - TimeWise® Targeted-Action® Toning Lotion
+    ~ 10088897  name: TimeWise Repair Revealing Radiance Facial Peel → TimeWise Repair Revealing Radiance Facial Peel - TimeWise Repair® Revealing Radiance® Facial Peel
+    ~ 10107547  name: TimeWise Repair Lifting Bio-Cellulose Mask → TimeWise Repair Lifting Bio-Cellulose Mask - TimeWise Repair® Lifting Bio-Cellulose Mask
+    ~ 10243392  name: TimeWise Repair Volu-Firm Night Treatment → TimeWise Repair Volu-Firm Night Treatment - TimeWise Repair® Volu-Firm® Night Treatment
+    ~ 10262871  name: TimeWise Repair Ultimate Volu-Firm Set → TimeWise Repair Ultimate Volu-Firm Set - TimeWise Repair® Ultimate Volu-Firm® Set
+    ~ 10257257  name: TimeWise Repair Volu-Firm Foaming Cleanser → TimeWise Repair Volu-Firm Foaming Cleanser - TimeWise Repair® Volu-Firm® Foaming Cleanser
+    ~ 10257266  name: TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30 → TimeWise Repair Volu-Firm Day Cream Sunscreen Broad Spectrum SPF 30 - TimeWise Repair® Volu-Firm® Day Cream Sunscreen Broad Spectrum SPF 30*
+    ~ 10243732  name: TimeWise Repair Volu-Firm Set → TimeWise Repair Volu-Firm Set - TimeWise Repair® Volu-Firm® Set
+    ~ 10208547  name: TimeWise Repair Volu-Firm Eye Renewal Cream → TimeWise Repair Volu-Firm Eye Renewal Cream - TimeWise Repair® Volu-Firm® Eye Renewal Cream
+    ~ 10243720  name: TimeWise Repair Volu-Firm The Go Set → TimeWise Repair Volu-Firm The Go Set - TimeWise Repair Volu-Firm The Go Set®
+    ~ 10056743  name: Clear Proof Blemish Control Toner → Clear Proof Blemish Control Toner - Clear Proof® Blemish Control Toner
+    ~ 10095054  name: Clear Proof Acne Treatment Gel → Clear Proof Acne Treatment Gel - Clear Proof® Acne Treatment Gel*
+    ~ 10094148  name: Clear Proof Deep-Cleansing Charcoal Mask → Clear Proof Deep-Cleansing Charcoal Mask - Clear Proof® Deep-Cleansing Charcoal Mask
+    ~ 10233587  name: Clear Proof Acne System Set → Clear Proof Acne System Set - Clear Proof® Acne System Set
+    ~ 10233551  name: Clear Proof Clarifying Cleansing Gel → Clear Proof Clarifying Cleansing Gel - Clear Proof® Clarifying Cleansing Gel**
+    ~ 10241535  name: Clear Proof Oil-Free Moisturizer for Acne-Prone Skin → Clear Proof Oil-Free Moisturizer for Acne-Prone Skin - Clear Proof® Oil-Free Moisturizer for Acne-Prone Skin
+    ~ 10242538  name: MKMen Regimen → MKMen Regimen - MKMen® Regimen
+    ~ 10234778  name: MKMen Daily Facial Wash → MKMen Daily Facial Wash - MKMen® Daily Facial Wash
+    ~ 10234520  name: MKMen Moisturizing Shave Cream → MKMen Moisturizing Shave Cream - MKMen® Moisturizing Shave Cream
+    ~ 10234780  name: MKMen Ultimate Moisturizer → MKMen Ultimate Moisturizer - MKMen® Ultimate Moisturizer
+    ~ 10243384  name: TimeWise Repair Volu-Firm Advanced Lifting Serum → TimeWise Repair Volu-Firm Advanced Lifting Serum - TimeWise Repair® Volu-Firm® Advanced Lifting Serum
+    ~ 10173736  name: Mary Kay Instant Puffiness Reducer → Mary Kay Instant Puffiness Reducer - Mary Kay® Instant Puffiness Reducer
+    ~ 10190660  name: Indulge Soothing Eye Gel → Indulge Soothing Eye Gel - Indulge® Soothing Eye Gel
+    ~ 10179024  name: Mary Kay Oil-Free Eye Makeup Remover → Mary Kay Oil-Free Eye Makeup Remover - Mary Kay® Oil-Free Eye Makeup Remover
+    ~ 10203701  name: Mary Kay Hydrogel Eye Patches, paq./30 pares → Mary Kay Hydrogel Eye Patches, paq./30 pares - Mary Kay® Hydrogel Eye Patches, paq./30 pares
+    ~ 10261957  name: Mix & Mask → Mix & Mask - Mix & Mask
+    ~ 10235578  name: Mary Kay Hydrating Cream Mask → Mary Kay Hydrating Cream Mask - Mary Kay® Hydrating Cream Mask
+    ~ 10160886  name: Mary Kay Micellar Water → Mary Kay Micellar Water - Mary Kay® Micellar Water
+    ~ 10041758  name: Beauty Blotters Oil-Absorbing Tissues → Beauty Blotters Oil-Absorbing Tissues - Beauty Blotters® Oil-Absorbing Tissues
+    ~ 10235072  name: Mary Kay Nourishing Oil → Mary Kay Nourishing Oil - Mary Kay® Nourishing Oil
+    ~ 10072682  name: Mary Kay Extra Emollient Night Cream → Mary Kay Extra Emollient Night Cream - Mary Kay® Extra Emollient Night Cream
+    ~ 10031541  name: Mary Kay Intense Moisturizing Cream (Dry) → Mary Kay Intense Moisturizing Cream (Dry) - Mary Kay® Intense Moisturizing Cream
+    ~ 10197545  name: Mary Kay Oil-Free Hydrating Gel (Normal/Grasa) → Mary Kay Oil-Free Hydrating Gel (Normal/Grasa) - Mary Kay® Oil-Free Hydrating Gel
+    ~ 10135951  name: Mary Kay Mask Applicator → Mary Kay Mask Applicator - Mary Kay® Mask Applicator
+    ~ 10152557  name: Mary Kay Makeup Finishing Spray by Skindinävia → Mary Kay Makeup Finishing Spray by Skindinävia - Mary Kay® Makeup Finishing Spray by Skindinävia
+    ~ 10060182  name: Mary Kay Translucent Loose Powder → Mary Kay Translucent Loose Powder - Mary Kay® Translucent Loose Powder
+    ~ 10233087  name: Mary Kay Foundation Primer Sunscreen Broad Spectrum SPF 15 → Mary Kay Foundation Primer Sunscreen Broad Spectrum SPF 15 - Mary Kay® Foundation Primer Sunscreen Broad Spectrum SPF 15*
+    ~ 10202992  name: Mary Kay Perfect Palette (unfilled) → Mary Kay Perfect Palette (unfilled) - Mary Kay Perfect Palette®
+    ~ 10114610  name: Mary Kay Petite Palette (vacía) → Mary Kay Petite Palette (vacía) - Mary Kay Petite Palette®
+    ~ 10134452  name: Cosmetic Sponges → Cosmetic Sponges - Cosmetic Sponges
+    ~ 10128063  name: Mary Kay Blending Brush → Mary Kay Blending Brush - Mary Kay® Blending Brush
+    ~ 10107305  name: Mary Kay Essential Brush Collection → Mary Kay Essential Brush Collection - Mary Kay® Essential Brush Collection
+    ~ 10122325  name: Mary Kay Liquid Foundation Brush → Mary Kay Liquid Foundation Brush - Mary Kay® Liquid Foundation Brush
+    ~ 10122329  name: Mary Kay Cream Color Brush → Mary Kay Cream Color Brush - Mary Kay® Cream Color Brush
+    ~ 10122328  name: Mary Kay Eyebrow/Eyeliner Brush → Mary Kay Eyebrow/Eyeliner Brush - Mary Kay® Eyebrow/Eyeliner Brush
+    ~ 10122320  name: Mary Kay All-Over Powder Brush → Mary Kay All-Over Powder Brush - Mary Kay® All-Over Powder Brush
+    ~ 10122321  name: Mary Kay Cheek Brush → Mary Kay Cheek Brush - Mary Kay® Cheek Brush
+    ~ 10168938  name: Mary Kay Eye Blending Brush → Mary Kay Eye Blending Brush - Mary Kay® Eye Blending Brush
+    ~ 10122322  name: Mary Kay Eye Crease Brush → Mary Kay Eye Crease Brush - Mary Kay® Eye Crease Brush
+    ~ 10122323  name: Mary Kay All-Over Eye Shadow Brush → Mary Kay All-Over Eye Shadow Brush - Mary Kay® All-Over Eye Shadow Brush
+    ~ 10122324  name: Mary Kay Eye Smudger Brush → Mary Kay Eye Smudger Brush - Mary Kay® Eye Smudger Brush
+    ~ 10143940  name: Mary Kay Travel Roll-Up Bag, (vacío) → Mary Kay Travel Roll-Up Bag, (vacío) - Mary Kay® Travel Roll-Up Bag,
+    ~ 10202993  name: Mary Kay Pro Palette (vacía) → Mary Kay Pro Palette (vacía) - Mary Kay Pro Palette®
+    ~ 10080376  name: Hello, Clean → Hello, Clean - Hello, Clean
+    ~ 10162409  name: Mary Kay Apple & Almond Scented Body Lotion - Apple & Almond → Mary Kay Apple & Almond Scented Body Lotion - Mary Kay® Apple & Almond Scented Body Lotion
+    ~ 10162408  name: Mary Kay Apple & Almond Scented Shower Gel - Apple & Almond → Mary Kay Apple & Almond Scented Shower Gel - Mary Kay® Apple & Almond Scented Shower Gel
+    ~ 10162416  name: Mary Kay Berry & Vanilla Scented Body Lotion - Berry & Vanilla → Mary Kay Berry & Vanilla Scented Body Lotion - Mary Kay® Berry & Vanilla Scented Body Lotion
+    ~ 10162443  name: Mary Kay Berry & Vanilla Scented Shower Gel - Berry & Vanilla → Mary Kay Berry & Vanilla Scented Shower Gel - Mary Kay® Berry & Vanilla Scented Shower Gel
+    ~ 10136769  name: Mary Kay 2-In-1 Body Wash & Shave → Mary Kay 2-In-1 Body Wash & Shave - Mary Kay® 2-In-1 Body Wash & Shave
+    ~ 10073789  name: Mary Kay Hydrating Lotion → Mary Kay Hydrating Lotion - Mary Kay® Hydrating Lotion
+    ~ 10091504  name: White Tea & Citrus Satin Body Revitalizing Shea Scrub → White Tea & Citrus Satin Body Revitalizing Shea Scrub - White Tea & Citrus Satin Body® Revitalizing Shea Scrub
+    ~ 10091502  name: White Tea & Citrus Satin Body Indulgent Shea Wash → White Tea & Citrus Satin Body Indulgent Shea Wash - White Tea & Citrus Satin Body® Indulgent Shea Wash
+    ~ 10091493  name: White Tea & Citrus Satin Body Silkening Shea Lotion → White Tea & Citrus Satin Body Silkening Shea Lotion - White Tea & Citrus Satin Body® Silkening Shea Lotion
+    ~ 10090638  name: White Tea & Citrus Satin Hands Pampering Set - White Tea & Citrus → White Tea & Citrus Satin Hands Pampering Set - White Tea & Citrus Satin Hands® Pampering Set
+    ~ 10088632  name: White Tea & Citrus Satin Hands Nourishing Shea Cream → White Tea & Citrus Satin Hands Nourishing Shea Cream - White Tea & Citrus Satin Hands® Nourishing Shea Cream
+    ~ 10156069  name: Fragrance-Free Satin Hands Nourishing Shea Cream → Fragrance-Free Satin Hands Nourishing Shea Cream - Fragrance-Free Satin Hands® Nourishing Shea Cream
+    ~ 10238148  name: Fragrance-Free Satin Hands Pampering Set → Fragrance-Free Satin Hands Pampering Set - Fragrance-Free Satin Hands® Pampering Set
+    ~ 10223788  name: Mint Bliss Energizing Lotion for Feet & Legs → Mint Bliss Energizing Lotion for Feet & Legs - Mint Bliss™ Energizing Lotion for Feet & Legs
+    ~ 10235051  name: Mary Kay Confidently You Eau de Parfum → Mary Kay Confidently You Eau de Parfum - Mary Kay Confidently You™ Eau de Parfum
+    ~ 10192900  name: Belara Eau de Parfum → Belara Eau de Parfum - Belara® Eau de Parfum
+    ~ 10012512  name: Bella Belara Eau de Parfum → Bella Belara Eau de Parfum - Bella Belara® Eau de Parfum
+    ~ 10095688  name: Enchanted Wish Eau de Toilette → Enchanted Wish Eau de Toilette - Enchanted Wish® Eau de Toilette
+    ~ 10088620  name: Forever Diamonds Eau de Parfum → Forever Diamonds Eau de Parfum - Forever Diamonds® Eau de Parfum
+    ~ 10094305  name: Live Fearlessly Eau de Parfum → Live Fearlessly Eau de Parfum - Live Fearlessly® Eau de Parfum
+    ~ 10141779  name: Mary Kay Illuminea Extrait de Parfum → Mary Kay Illuminea Extrait de Parfum - Mary Kay Illuminea™ Extrait de Parfum
+    ~ 10218635  name: Thinking of You Eau de Parfum → Thinking of You Eau de Parfum - Thinking of You® Eau de Parfum
+    ~ 10028783  name: Domain Cologne Spray → Domain Cologne Spray - Domain® Cologne Spray
+    ~ 10109680  name: MK High Intensity Cologne Spray → MK High Intensity Cologne Spray - MK High Intensity® Cologne Spray
+    ~ 10095123  name: MK High Intensity Ocean Cologne Spray → MK High Intensity Ocean Cologne Spray - MK High Intensity Ocean® Cologne Spray
+    ~ 10075680  name: MK High Intensity Sport Cologne Spray → MK High Intensity Sport Cologne Spray - MK High Intensity® Sport Cologne Spray
+    ~ 10221421  name: Cityscape Cologne Spray → Cityscape Cologne Spray - Cityscape® Cologne Spray
+    ~ 10048515  name: True Original Cologne Spray → True Original Cologne Spray - True Original® Cologne Spray
+    ~ 10237969  name: Mary Kay Lavender & Coconut Body Spray de edición limitada → Mary Kay Lavender & Coconut Body Spray de edición limitada - Mary Kay® Lavender & Coconut Body Spray de edición limitada†
+
+Sending change summary email...
+  Email sent to support@mypinkassistant.com
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.

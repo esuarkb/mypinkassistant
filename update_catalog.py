@@ -112,7 +112,21 @@ def scrape_products(page, opos_url: str) -> list[dict]:
                         variant = variantEl.textContent.trim();
                     }
                 }
-                if (variant) name = name + ' - ' + variant;
+                // MK 2026-08-19: OPOS GTM itemVariantName began carrying the FULL
+                // trademarked product name on single-SKU products (101 products,
+                // EN+ES in one run) — appending it duplicated every name
+                // ("X - Mary Kay® X"). Sanitize the variant exactly like the base
+                // name, then only append when it adds information the name
+                // doesn't already contain (padded-substring check both ways).
+                variant = variant
+                    .replace(/&reg;|&trade;|&#\\d+;/gi, '')
+                    .replace(/®|™|†|[*]+/g, '')
+                    .replace(/,?\\s*pk\\.\\/\\d+\\s*pairs?/gi, '')
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+                const vn = ' ' + variant.toLowerCase() + ' ';
+                const nn = ' ' + name.toLowerCase() + ' ';
+                if (variant && !vn.includes(nn) && !nn.includes(vn)) name = name + ' - ' + variant;
 
                 // Category capture (2026-07-19): MK's own taxonomy, two grains.
                 // mk_sub = gtm category ("mascara", "cleanser", ...);

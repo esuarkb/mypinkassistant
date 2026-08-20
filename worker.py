@@ -572,6 +572,35 @@ def main():
                         payload = json.loads(payload_json)
 
                         # -------------------------
+                        # Demo-account guard (2026-08-20). The demo consultant
+                        # carries REAL InTouch credentials (see demo_accounts.py),
+                        # so demo orders/customers were landing in a real
+                        # MyCustomers account (the Kayla Abernathy incident:
+                        # three test orders appeared on a real consultant's
+                        # Weekly Accomplishment Sheet). Demo write-jobs complete
+                        # here as simulated — InTouch is never touched. Sync-type
+                        # jobs still run (reads are harmless and keep demo data
+                        # fresh).
+                        # -------------------------
+                        from demo_accounts import is_demo_account as _is_demo_acct
+                        if job_type in ("NEW_CUSTOMER", "NEW_ORDER_ROW") and _is_demo_acct(cid):
+                            _demo_job_ids = [job_id]
+                            if job_type == "NEW_ORDER_ROW":
+                                # Consume the whole same-customer batch like the
+                                # real branch would, so no sibling row is left
+                                # queued for a non-demo-aware pickup.
+                                _demo_extra = _claim_more_order_rows_for_same_customer(cid, payload)
+                                _demo_job_ids += [jid for (jid, _p) in _demo_extra]
+                            _demo_name = f"{payload.get('First Name','')} {payload.get('Last Name','')}".strip()
+                            if job_type == "NEW_CUSTOMER":
+                                _demo_msg = f"Customer {_demo_name} complete! ✅ (demo account — not sent to InTouch)"
+                            else:
+                                _demo_msg = f"Order for {_demo_name} complete! ✅ (demo account — not sent to InTouch)"
+                            for _djid in _demo_job_ids:
+                                mark_job_done(_djid, _demo_msg)
+                            continue
+
+                        # -------------------------
                         # NEW_CUSTOMER
                         # -------------------------
                         if job_type == "NEW_CUSTOMER":
@@ -792,6 +821,28 @@ def main():
                                 _alert_report_fetch_errors(cid, _rs)
                             except Exception as _re:
                                 print(f"[FullSync] Report sync failed (non-fatal): {_re}")
+                            # WAS auto-assign (2026-08-20): put tonight's newly imported
+                            # orders on the Weekly Accomplishment Sheet (Type/SCS/NRST +
+                            # Add). Runs AFTER report sync — entry.aspx lives on
+                            # applications.marykayintouch.com, the same domain whose
+                            # visits contaminate the FOReports session (see inventory
+                            # note above). Non-fatal: a WAS hiccup never fails the sync.
+                            try:
+                                from playwright_automation.was_assign import run_was_assign as _run_was
+                                from demo_accounts import is_demo_account as _is_demo
+                                if not _is_demo(cid):
+                                    from db import is_postgres as _isp2
+                                    _wph = "%s" if _isp2() else "?"
+                                    conn = connect()
+                                    try:
+                                        cur = conn.cursor()
+                                        _ws = _run_was(page, cur, cid, ph=_wph)
+                                        conn.commit()
+                                    finally:
+                                        conn.close()
+                                    print(f"[FullSync] WAS assign: {_ws}")
+                            except Exception as _we:
+                                print(f"[FullSync] WAS assign failed (non-fatal): {_we}")
                             # Inventory last (skipped for accounts sharing InTouch creds)
                             if not payload.get("skip_inventory"):
                                 date_range = payload.get("date_range", "days90")

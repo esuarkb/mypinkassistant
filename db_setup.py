@@ -184,6 +184,13 @@ for _ddl in (
     "ALTER TABLE consultants ADD COLUMN invoice_state TEXT",
     "ALTER TABLE consultants ADD COLUMN invoice_zip TEXT",
     "ALTER TABLE consultants ADD COLUMN invoice_email TEXT",
+    # WAS auto-assign (2026-08-20): nightly FULL_SYNC step that assigns new
+    # orders onto the InTouch Weekly Accomplishment Sheet. Default ON
+    # (consultants reach out to disable). start_date is set on the feature's
+    # first run per consultant; rows dated before it are never auto-added
+    # (they may already be on the sheet by hand — double-count risk).
+    "ALTER TABLE consultants ADD COLUMN was_auto_assign INTEGER DEFAULT 1",
+    "ALTER TABLE consultants ADD COLUMN was_assign_start_date TEXT",
 ):
     try:
         cur.execute(_ddl)
