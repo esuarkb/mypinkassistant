@@ -346,6 +346,25 @@ def normalize_city(city: str) -> str:
     return s.title()
 
 
+def strip_name_punct(name: str) -> str:
+    """Remove parentheses/quotation marks from a name field, KEEPING the
+    words — 'Alexia (Lexi)' becomes 'Alexia Lexi', like an extra middle name.
+
+    InTouch rejects parens and quotation marks in name fields with a
+    FIELD-LEVEL error our toast-only check can't see: the basic save looks
+    fine, but the address dialog re-fills the name, sticks open on the
+    invisible error, and blocks the subscriptions step (job 13680,
+    consultant 122's '(nickname)' customer, 2026-08-22; an earlier
+    consultant hit the same wall with a quoted nickname). Apostrophes are
+    always left alone — O'Brien is a legal InTouch name.
+    """
+    s = name or ""
+    if not any(ch in s for ch in '()"“”'):
+        return s.strip()
+    s = re.sub(r'[()"“”]', " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def normalize_birthday(raw: str) -> str:
     s = (raw or "").strip()
     if not s:

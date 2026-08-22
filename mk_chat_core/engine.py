@@ -58,6 +58,7 @@ from .normalize import (
     normalize_phone,
     normalize_state,
     parse_address_line,
+    strip_name_punct,
     _normalize_street,
     _parse_address_line_raw,
     yes,
@@ -4192,6 +4193,17 @@ class MKChatEngine:
             _last = (customer.get("Last Name") or "").strip()
             if not _first and not _last:
                 return ChatReply(ui["need_customer_info"])
+
+            # Nickname punctuation in names — InTouch rejects parens/quotes
+            # with a field-level error the toast check can't see; the stuck
+            # address dialog then blocks the subscription toggle (job 13680,
+            # c122's '(nickname)' customer 2026-08-22 + an earlier quoted
+            # one). Drop the characters, keep the words ('Alexia (Lexi)' →
+            # 'Alexia Lexi') — the confirm card shows the cleaned name.
+            _first = strip_name_punct(_first)
+            _last = strip_name_punct(_last)
+            customer["First Name"] = _first
+            customer["Last Name"] = _last
 
             # Tags: always use our pre-extracted value (authoritative).
             # If we found tag: keyword → use that. If no tag: keyword → clear
