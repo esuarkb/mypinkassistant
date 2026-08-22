@@ -4,3 +4,7 @@
 [Reconcile]   id 75: cancel_at_period_end 0 -> 1 (scheduled cancellation)
 [Reconcile]   id 76: billing_status past_due -> canceled
 [Reconcile] 2026-08-19 06:15 CDT — applied 2 fix(es).
+[Reconcile] 2026-08-20 06:15 CDT — 138 consultants checked, all in sync. No email.
+[Reconcile]   id 87: billing_status past_due -> canceled
+[Reconcile] 2026-08-21 06:15 CDT — applied 1 fix(es).
+[Reconcile] 2026-08-22 06:15 CDT — 139 consultants checked, all in sync. No email.

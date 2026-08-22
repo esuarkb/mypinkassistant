@@ -321,6 +321,26 @@ CASES = [
 # only that the new rule added on 2026-07-03 doesn't steal them.
 # (message, forbidden_intent, note)
 NEGATIVE_GUARD_CASES = [
+    # --- weed-garden 2026-08-22 batch: the new rules must steal nothing ---
+    ("New order for Jane Doe she ordered eye makeup remover", "recent_orders",
+     "order ENTRY with 'she ordered' must not be claimed as order history"),
+    ("referral program cost?", "referral",
+     "referral-program questions keep billing_help, not the link"),
+    ("Referral Jane Smith", "referral",
+     "'referral' + a name is a field edit / lookup, never the bare-word link"),
+    ("phone number for Jane Doe", "product_lookup",
+     "'phone number' must not satisfy the widened product-number rule"),
+    ("New order for Jane sku 10233551", "product_lookup",
+     "sku inside an order command stays order entry (existing guard holds)"),
+    # --- 2026-08-22 second batch: F3 a/n article gate + F2 Option A gate ---
+    ("Do I have a 2-1 bodywash in stock", "unit_query",
+     "the article 'a 2' must not read as activity code a2"),
+    ("what is the total with tax? 8.63%", "customer_info",
+     "tax math is not a customer — the word-salad gate must decline"),
+    ("what is something that costs $2", "customer_info",
+     "price questions must not become fuzzy customer searches"),
+    ("What cleansers has she ordered in the past", "unknown",
+     "pronoun subject may fall through, but must never dead-end as unknown"),
     # --- sell-words in _NOT_INVENTORY (2026-08-13, c126): sales questions
     # must not be claimed as inventory counts (a Go Set was proposed for
     # "how many sales have I had for the year") ---
@@ -471,6 +491,16 @@ NEGATIVE_GUARD_CASES = [
      "a full new-customer entry with verbless fields must reach the parser"),
     ("when is her birthday?", "edit_request",
      "birthday questions are lookups, not edit attempts"),
+    # --- weed-garden 2026-08-22 F8 Tier 1: the terse NAME+PRODUCT rule
+    # (route() section 2c) must steal nothing ---
+    ("customer Jane Doe", "recent_orders",
+     "bare customer+name is a card lookup, not order history (2c needs a tail word)"),
+    ("satin hands products", "recent_orders",
+     "trailing 'products' alone is too product-shaped — stays a product search"),
+    ("satin hands set history", "recent_orders",
+     "all-catalog-word span is a product question (2c catalog guard)"),
+    ("sales history", "recent_orders",
+     "business-vocabulary residuals stay out of the 2c claim"),
 ]
 
 # Cases that depend on conversation state — in production these arrive
@@ -908,6 +938,71 @@ ROUTE_CASES = [
     ("Birthday is 7-10-1972",                    None, "edit_request"),
     ("her email is jane@example.com",            None, "edit_request"),
     ("cumpleaños es 7-10-1972",                  None, "edit_request"),
+
+    # --- "Who ordered between DATE & DATE" is a date-range data_query; the
+    # cbp block used to take the dates as a product term (weed-garden
+    # 2026-08-22 F7, c138) ---
+    ("Who ordered between jan 01 2026 & may 31 2026?", None, "data_query"),
+    # guards: product-scoped cbp phrasings unaffected
+    ("Who ordered satin hands",                  None, "customers_by_product"),
+    ("customers who use repair",                 None, "customers_by_product"),
+
+    # --- "product number" joins part number/item number/sku → product_lookup
+    # (weed-garden 2026-08-22 F2a: c133's ask word-salad'd in customer_info) ---
+    ("What is the product number for beige and 190 luminous foundation?", None, "product_lookup"),
+    ("product number for satin hands",           None, "product_lookup"),
+
+    # --- bare "referral" is a designed funnel (consultants are told to type
+    # it) — common misspellings must land too (weed-garden 2026-08-22 F2b:
+    # c9 "Refferal"/"Referal" + c120 "Referal" 8/04 → nonsense fuzzy pickers) ---
+    ("Refferal",                                 None, "referral"),
+    ("Referal",                                  None, "referral"),
+    ("Referral",                                 None, "referral"),
+
+    # --- "New order for NAME she ordered X" is order ENTRY: the broad
+    # recent_orders rule now yields to _is_order_command (weed-garden
+    # 2026-08-22 F5: a day-one consultant's natural v2t phrasing landed in a
+    # customer-history picker). Genuine lookups keep recent_orders. ---
+    ("New order for Jane Doe she ordered eye makeup remover", None, "new_order"),
+    ("Add an order for Jane Doe she bought satin hands",      None, "new_order"),
+    ("Show me Jane Doe's last order",            None, "recent_orders"),
+    ("Jane Doe order history",                   None, "recent_orders"),
+
+    # --- "Do I have X in stock" reaches inventory_count (weed-garden
+    # 2026-08-22 F3, c110: extractor only knew "how many X" shapes, so the
+    # claim silently declined; "a 2-1 bodywash" then hit the a/n activity-code
+    # article collision). Codes keep claiming; spaced a/n needs unit context. ---
+    ("Do I have two brown eyeliners in stock",   None, "inventory_count"),
+    ("Do I have a 2-1 bodywash in stock",        None, "inventory_count"),
+    ("Do I have a hydrating go set in stock",    None, "inventory_count"),  # 3rd consultant's shape (30-day scan)
+    ("a2",                                       None, "unit_query"),
+    ("n1",                                       None, "unit_query"),
+    ("who is a 3",                               None, "unit_query"),
+    ("a 3 status",                               None, "unit_query"),
+
+    # --- product-BEFORE-verb history questions + temporal tails (weed-garden
+    # 2026-08-22 F6, c129: "in the past" was captured as the product filter →
+    # three dead-ends, gave up; the data existed) ---
+    ("What cleansers has Jane Doe ordered in the past", None, "recent_orders"),
+    ("Which moisturizers has Jane Doe bought",   None, "recent_orders"),
+    ("Has Jane Doe ordered cleansers in the past", None, "recent_orders"),
+    ("Has Jane Doe ordered before?",             None, "recent_orders"),
+
+    # --- customer_info phrase-trigger gate (Option A, weed-garden 2026-08-22
+    # F2 family fix): name lookups keep claiming deterministically ---
+    ("what is jane doe",                         None, "customer_info"),
+    ("lookup jane doe",                          None, "customer_info"),
+    ("what is the email for jane doe",           None, "customer_info"),
+
+    # --- terse NAME+PRODUCT history shapes (route() section 2c, weed-garden
+    # 2026-08-22 F8 Tier 1): signal word = leading customer/client (typos
+    # included) or a trailing history word; the handler splits person vs
+    # product against the customer book ---
+    ("Custumer Jane Doe products",               None, "recent_orders"),  # c114's shape (typo included)
+    ("Jane Doe cleanser history",                None, "recent_orders"),  # c129's shape
+    ("Jane Doe orders",                          None, "recent_orders"),
+    ("Jane Doe purchases",                       None, "recent_orders"),
+    ("client Jane Doe order history",            None, "recent_orders"),
 ]
 
 

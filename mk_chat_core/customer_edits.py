@@ -277,11 +277,24 @@ def apply_customer_edits(customer: dict, message: str, ui: dict | None = None) -
             notes.append(ui["edit_note_failed"].format(raw=raw))
             continue
 
-        # Email guess
+        # Email guess — takes the email, then lets the REMAINDER keep falling
+        # through the chain instead of stopping, so "email phone" typed as one
+        # correction applies BOTH fields. c29's mid-confirm "…@gmail.com
+        # 575-489-9527" applied the email and silently dropped the phone — the
+        # customer landed in InTouch phone-less (weed-garden 2026-08-22 F4).
+        # A bare phone can't false-match the birthday/address guesses below
+        # (verified against parse_address_line / _looks_like_birthday).
         if _looks_like_email(txt):
-            c["Email"] = _extract_email(txt)
+            _em = _extract_email(txt)
+            c["Email"] = _em
             notes.append(ui["edit_note_email"])
-            continue
+            txt = txt.replace(_em, " ").strip()
+            low = txt.lower()
+            # Every other guessable field carries digits; letters-only leftovers
+            # ("It's …") keep the old stop-here behavior instead of producing a
+            # bogus "couldn't apply" note beside the successful email note.
+            if not txt or not any(ch.isdigit() for ch in txt):
+                continue
 
         # Birthday guess
         if _looks_like_birthday(txt):

@@ -9336,3 +9336,366 @@ Logged in.
   No changes.
 
 No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+    Warning: SKU 10257837: ElementHandle.click: Timeout 30000ms exceeded.
+Call log:
+  - attempting click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img itemprop="image" class="slide-img" alt="Miniature bottles of Mary Kay Hydrating Regimen on plain background." title="Miniature bottles of Mary Kay Hydrating Regimen on plain background." sizes="(max-width: 576px) 375px,↵            (max-width: 667px) 637px,↵            (max-width: 767px) 706px,↵            (max-width: 1023px) 517px,↵            671px" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dwa1dd6e9c/hi-res/10000/J20092…/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div data-is-starter-kits="false" data-pid="990321907US10204126" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-variant product-wrapper product-detail product clearfix" data-product-url="/mary-kay-hydrating-go-set-990321907/990321907US10204126.html?lang=en_US" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window.">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 20ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dwa1dd6e9c/hi-res/10000/J2009225-UNL-GB-133-MaryKay-Skin-Care-Hydrating-Go-Set-GREY-2500x2500-HiRes.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  2 × retrying click action
+      - waiting 100ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+  9 × retrying click action
+      - waiting 500ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div data-is-starter-kits="false" data-pid="990321907US10204126" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-variant product-wrapper product-detail product clearfix" data-product-url="/mary-kay-hydrating-go-set-990321907/990321907US10204126.html?lang=en_US" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window.">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+    - retrying click action
+      - waiting 500ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dwa1dd6e9c/hi-res/10000/J2009225-UNL-GB-133-MaryKay-Skin-Care-Hydrating-Go-Set-GREY-2500x2500-HiRes.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+    - retrying click action
+      - waiting 500ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+    - retrying click action
+      - waiting 500ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div data-is-starter-kits="false" data-pid="990321907US10204126" data-disable-view-details="null" data-close-button-text="Close Quickview Dialog" class="product-quickview product-variant product-wrapper product-detail product clearfix" data-product-url="/mary-kay-hydrating-go-set-990321907/990321907US10204126.html?lang=en_US" data-enter-dialog-message="Start of Quickview dialog window. Select Close to cancel and close the window.">…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dwa1dd6e9c/hi-res/10000/J2009225-UNL-GB-133-MaryKay-Skin-Care-Hydrating-Go-Set-GREY-2500x2500-HiRes.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+
+    Warning: SKU 10243384: ElementHandle.click: Timeout 30000ms exceeded.
+Call log:
+  - attempting click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dw55afbd09/hi-res/10005/mkmensregimen2.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <div class="primary-images" data-breakpoints="{"xs":"576px","sm":"667px","md":"767px","lg":"1023px","xl":"1320px"}" data-config-dis="{"viewTypeMapping":{"PDPZoom":"hi-res","PDPHero_xs":"hi-res","PDPHero_sm":"hi-res","PDPHero_md":"hi-res","PDPHero_lg":"hi-res","PDPHero_xl":"hi-res","ProductTile_xs":"hi-res","ProductTile_sm":"hi-res","ProductTile_md":"hi-res","ProductTile_lg":"hi-res","ProductTile_xl":"hi-res","Cart_xs":"hi-res","Cart_sm":"hi-res","Cart_md":"hi-res","Cart_lg":"hi-res","Cart_xl":"hi-r…>…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  - retrying click action
+    - waiting 20ms
+    - waiting for element to be visible, enabled and stable
+    - element is visible, enabled and stable
+    - scrolling into view if needed
+    - done scrolling
+    - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dw55afbd09/hi-res/10005/mkmensregimen2.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+  2 × retrying click action
+      - waiting 100ms
+      - waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+  10 × retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div class="primary-images" data-breakpoints="{"xs":"576px","sm":"667px","md":"767px","lg":"1023px","xl":"1320px"}" data-config-dis="{"viewTypeMapping":{"PDPZoom":"hi-res","PDPHero_xs":"hi-res","PDPHero_sm":"hi-res","PDPHero_md":"hi-res","PDPHero_lg":"hi-res","PDPHero_xl":"hi-res","ProductTile_xs":"hi-res","ProductTile_sm":"hi-res","ProductTile_md":"hi-res","ProductTile_lg":"hi-res","ProductTile_xl":"hi-res","Cart_xs":"hi-res","Cart_sm":"hi-res","Cart_md":"hi-res","Cart_lg":"hi-res","Cart_xl":"hi-r…>…</div> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <img alt="" class="zoomImg" role="presentation" src="https://order.marykayintouch.com/dw/image/v2/BCLX_PRD/on/demandware.static/-/Sites-us-master-catalog/default/dw55afbd09/hi-res/10005/mkmensregimen2.jpg?sw=2000&sh=2000&sm=fit"/> from <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+       - waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <div role="dialog" tabindex="-1" aria-modal="true" id="quickViewModal" class="modal fade show">…</div> intercepts pointer events
+  - retrying click action
+    - waiting 500ms
+
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 572 products.
+  Scraping PDF links for 42 products (first-run may take several minutes)...
+  Found PDF links for 0 of 42 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 572 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 572 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 571 products.
+  Scraping PDF links for 41 products (first-run may take several minutes)...
+  Found PDF links for 5 of 41 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 571 products.
+  Extracting use-up rates from 6 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 5 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 571 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 571 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 571 products.
+  Scraping PDF links for 36 products (first-run may take several minutes)...
+  Found PDF links for 0 of 36 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 571 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 571 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 571 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 571 products.
+  Scraping PDF links for 36 products (first-run may take several minutes)...
+  Found PDF links for 0 of 36 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 571 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 571 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 571 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.
+Logged in.
+
+[EN]
+  Loading https://order.marykayintouch.com/opos?lang=en_US ...
+  Clicking Expand All...
+  Extracting products...
+  Found 571 products.
+  Scraping PDF links for 36 products (first-run may take several minutes)...
+  Found PDF links for 0 of 36 products.
+
+[ES]
+  Loading https://order.marykayintouch.com/opos?lang=es_US ...
+  Extracting products...
+  Found 571 products.
+  Extracting use-up rates from 1 fact sheet PDFs...
+    Warning: SKU 10088632: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'nar1uat-mknar-marykayintouch.cs1.force.com'. (_ssl.c:1081)>
+  Found use-up rates for 0 products, 0 confirmed none, 1 skipped (will retry).
+
+[EN] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 571 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/en.csv
+  No changes.
+
+[ES] Done.
+  Catalog before : 520 SKUs
+  Scraped        : 571 products
+  Total now      : 520 SKUs
+  Saved to       : /Users/desktop/Documents/Brian's Folder/Python Projects/MK Automation/catalog/es.csv
+  No changes.
+
+No changes — skipping email.

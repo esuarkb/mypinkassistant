@@ -230,7 +230,8 @@ def _is_plausible_name_guess(guess: str) -> bool:
     return not all(w in _NAME_GUESS_BLOCKLIST for w in words)
 
 
-def _best_name_span(cur, consultant_id: int, tokens: list, fallback_guess: str):
+def _best_name_span(cur, consultant_id: int, tokens: list, fallback_guess: str,
+                    leftmost: bool = False):
     """Find the customer name inside leftover message tokens.
 
     The old heuristic was a blind ``" ".join(tokens[-2:])`` — any stray word
@@ -262,7 +263,14 @@ def _best_name_span(cur, consultant_id: int, tokens: list, fallback_guess: str):
     for size in (2, 3, 1):
         if len(toks) < size:
             continue
-        for i in range(len(toks) - size, -1, -1):
+        # rightmost-first by default (names trail commands: "show me X").
+        # leftmost=True for the terse NAME+PRODUCT shape (route() 2c,
+        # weed-garden 2026-08-22 F8), where the name LEADS and product words
+        # trail — rightmost-first let "doe cleanser" fuzzy-claim Jane Doe
+        # (exact-surname 80 floor) and made "jane" the product filter.
+        _order = (range(0, len(toks) - size + 1) if leftmost
+                  else range(len(toks) - size, -1, -1))
+        for i in _order:
             span = " ".join(toks[i:i + size])
             if not _is_plausible_name_guess(span):
                 continue
@@ -2144,6 +2152,10 @@ class MKChatEngine:
                     # route() captured the name directly ("Has NAME ever ordered X?"
                     # — weed-garden 2026-07-28 F7); trust it over the token heuristic
                     _cg = (intent_result.slots or {}).get("customer_guess")
+                    # terse NAME+PRODUCT shape (route() section 2c, weed-garden
+                    # 2026-08-22 F8): the span may still contain product words —
+                    # split against the customer book below, after the name is found
+                    _np_split = bool((intent_result.slots or {}).get("split_tail"))
                     if _cg:
                         _msg_for_name = _cg
                     elif _m_use:
@@ -2222,7 +2234,25 @@ class MKChatEngine:
                             # span search over the leftover tokens — the
                             # last-2 grab alone mangles junk-suffixed and
                             # three-part names (2026-08-13 F2)
-                            guess, matches, _archived = _best_name_span(cur, consultant_id, tokens, guess)
+                            guess, matches, _archived = _best_name_span(
+                                cur, consultant_id, tokens, guess, leftmost=_np_split)
+                            if _np_split and matches and guess and not _pf_terms:
+                                # NAME+PRODUCT terse shape: tokens the name span
+                                # did NOT consume are the product filter
+                                # ("Abigail Carlson cleanser history" → span
+                                # "Abigail Carlson", filter "cleanser"). Generic
+                                # leftovers drop via _PF_GENERIC, so "Custumer
+                                # NAME products" stays a plain last-3 lookup.
+                                # Rightmost occurrence, matching _best_name_span's
+                                # own rightmost-first search order.
+                                _sp = [w.lower() for w in guess.split()]
+                                _tl = [t.lower() for t in tokens]
+                                for _i in range(len(_tl) - len(_sp), -1, -1):
+                                    if _tl[_i:_i + len(_sp)] == _sp:
+                                        for _w in _tl[:_i] + _tl[_i + len(_sp):]:
+                                            if _w not in _PF_GENERIC:
+                                                _pf_terms.append(_PF_SINGULAR.get(_w, _w))
+                                        break
                         else:
                             # pronoun / last-referenced-customer path: the
                             # guess didn't come from these tokens
@@ -2761,21 +2791,60 @@ class MKChatEngine:
                     choice = choice.rstrip(".!").strip()
 
                 if not choice.isdigit():
-                    # A non-digit reply that reads like a real request means the
-                    # consultant has moved on — don't trap them in the picker
-                    # (weed-garden 2026-08-20 F1a: c122 asked about a different
-                    # customer mid-picker and got the "reply 1-3" nag twice).
-                    # Deterministic-only probe (no_llm skips the OpenAI
-                    # fallback): re-route ONLY when a keyword rule confidently
-                    # claims the message on its own, exactly like the
-                    # "team member " escape above. stray_digit stays excluded
-                    # so odd numeric shapes still get the nag below.
-                    _probe = route(msg, {"pending": None}, catalog, no_llm=True)
-                    if _probe.confidence >= 0.85 and _probe.intent not in ("unknown", "stray_digit"):
-                        state["pending"] = None
-                        save_session_state(state, session_id=sid)
-                        return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
-                    return ChatReply(ui["multiple_matches"])
+                    # 1) Answer-by-NAME: a reply that names one of the picker's
+                    # own candidates IS a selection, not a new request
+                    # (weed-garden 2026-08-22 F1: c60 answered an order picker
+                    # with the customer's full name; the escape below re-routed
+                    # it to customer_info and destroyed her order draft).
+                    # WRatio ≥90 (strong_enough_match precedent) + unique
+                    # winner; ties (bare "Brenda" against two Brendas) fall
+                    # through to the nag, where picking by number is right.
+                    _cands = pending.get("candidates") or []
+                    _reply_name = choice.rstrip(" ?.!,").lower()
+                    _named = []
+                    for _ci, _cc in enumerate(_cands, start=1):
+                        _cn = f"{(_cc.get('first_name') or '').strip()} {(_cc.get('last_name') or '').strip()}".strip().lower()
+                        if _cn and fuzz.WRatio(_reply_name, _cn) >= 90:
+                            _named.append(_ci)
+                    if len(_named) == 1:
+                        choice = str(_named[0])
+                    elif len(_named) >= 2:
+                        # Ambiguous ANSWER (reply matches 2+ candidates, e.g.
+                        # bare "Allred" against two Allreds): they're answering
+                        # the picker, not moving on — nag for the number rather
+                        # than escape (an escape would destroy an in-progress
+                        # order draft on order_customer_pick pickers).
+                        return ChatReply(ui["multiple_matches"])
+                    else:
+                        # 2) Command escape: the outer route (ctx.intent_result,
+                        # LLM included) already classified this message — an
+                        # explicit command ("New customer …", "Add new order
+                        # for …") means the consultant has moved on. The 8/20
+                        # no_llm probe missed these (LLM-only classifications
+                        # probed as unknown 0.0 → bare nag; weed-garden
+                        # 2026-08-22 F1, c114 + c141). customer_info is
+                        # excluded HERE because the catch-all claims stray
+                        # "yes"/"no" at 0.85 when pending is set; bare-name
+                        # escapes belong to the probe below, whose no-pending
+                        # stray-yes guard returns unknown for those.
+                        _res = getattr(ctx, "intent_result", None)
+                        if (_res is not None and _res.confidence >= 0.85
+                                and _res.intent not in ("unknown", "stray_digit", "customer_info")):
+                            state["pending"] = None
+                            save_session_state(state, session_id=sid)
+                            return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
+                        # 3) Deterministic-only probe (weed-garden 2026-08-20
+                        # F1a), kept for bare-name/keyword escapes: re-route
+                        # ONLY when a keyword rule confidently claims the
+                        # message on its own, exactly like the "team member "
+                        # escape above. stray_digit stays excluded so odd
+                        # numeric shapes still get the nag below.
+                        _probe = route(msg, {"pending": None}, catalog, no_llm=True)
+                        if _probe.confidence >= 0.85 and _probe.intent not in ("unknown", "stray_digit"):
+                            state["pending"] = None
+                            save_session_state(state, session_id=sid)
+                            return self.handle_message(msg, consultant_id=consultant_id, session_id=sid)
+                        return ChatReply(ui["multiple_matches"])
 
                 idx = int(choice)
                 candidates = pending.get("candidates") or []

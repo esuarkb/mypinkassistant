@@ -1098,6 +1098,19 @@ def _parse_inventory_lookup_text(msg: str) -> str:
     if m:
         return m.group(1).strip()
 
+    # "Do I have (two brown eyeliners|a 2-1 bodywash) in stock" — the detector
+    # accepted this shape since 2026-07-03 but nothing here extracted it, so
+    # the inventory_count claim silently declined and the message fell to the
+    # LLM / activity-code regex (weed-garden 2026-08-22 F3, c110 — three tries
+    # to count her eyeliners). A leading article/count word is stripped so the
+    # remainder fuzzy-matches the catalog cleanly.
+    m = re.match(
+        r"^\s*do\s+i\s+have\s+(?:(?:a|an|any|some|one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+)?"
+        r"(.+?)\s+in\s+stock\s*\??$",
+        s, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
     m = re.match(r"^\s*is\s+(?:the\s+)?(.+?)\s+in\s+(?:my\s+)?inventory\s*\??$", s, re.IGNORECASE)
     if m:
         return m.group(1).strip()
@@ -1367,6 +1380,10 @@ _DQ_TIMEFRAME_TRIGGERS = (
     "ordered last month",
     "ordered this week",
     "ordered last week",
+    # "ordered between jan 01 2026 & may 31 2026" — date-range asks are
+    # data_query's; without this the cbp block took the dates as a product
+    # term (weed-garden 2026-08-22, c138).
+    "ordered between",
     "orders in ",
     "orders last ",
     "orders this ",
@@ -1427,7 +1444,16 @@ def parse_intent(message: str, state: Optional[dict] = None, no_llm: bool = Fals
     # c126's director retention check, 2026-08-07. T/I only: "a status" is an
     # everyday article collision ("can I get a status"), and A-people say
     # "active status", covered in _unit_triggers below.
-    if re.search(r'\b[aAiItTnN]\s?[1-7]\b', msg) or re.search(r'\b[ti]\s+status\b', lowered):
+    # i/t codes claim in both forms ("i3", "t 6"); a/n codes only claim
+    # UNSPACED ("a2", "n1") — the spaced form is an English-article collision:
+    # "Do I have a 2-1 bodywash in stock" routed unit_query 0.95 via "a 2"
+    # (weed-garden 2026-08-22 F3, c110). Spaced a/n still claims when the
+    # message carries unit context ("who is a 3", "a 3 status").
+    if (re.search(r'\b[iItT]\s?[1-7]\b', msg)
+            or re.search(r'\b[aAnN][1-7]\b', msg)
+            or (re.search(r'\b[aAnN]\s[1-7]\b', msg)
+                and any(w in lowered for w in ("who", "show", "list", "status", "consultant")))
+            or re.search(r'\b[ti]\s+status\b', lowered)):
         return IntentResult(intent="unit_query", confidence=0.95, raw_text=msg)
 
     # unit_query — questions about the consultant's team/unit members
@@ -1634,6 +1660,24 @@ def parse_intent(message: str, state: Optional[dict] = None, no_llm: bool = Fals
     if re.search(r"\b(?:what|which)\b.*\bdoes\s+\w+(?:\s+\w+)?\s+(?:use|wear|buy|order)\b", lowered):
         return IntentResult(intent="recent_orders", confidence=0.95, raw_text=msg)
 
+    # Perfect-tense sibling of the rule above: "What cleansers HAS Abby Carlson
+    # ordered (in the past)" — product BEFORE the verb. The has-NAME-ordered
+    # rule below expects the product AFTER "ordered" and captured "in the past"
+    # as the filter → "I don't see any *in the past* in her order history"
+    # (weed-garden 2026-08-22 F6, c129 — three dead-ends, gave up).
+    _m_has_lead = re.search(
+        r"\b(?:what|which)\s+(.+?)\s+has\s+([a-z]+(?:\s+[a-z]+)?)\s+(?:ever\s+)?(?:ordered|bought|purchased)\b",
+        lowered,
+    )
+    if _m_has_lead:
+        _hl_prod = _m_has_lead.group(1).strip()
+        _hl_name = _m_has_lead.group(2).strip()
+        _HL_PRONOUNS = {"she", "he", "they", "anyone", "any", "it", "this", "that"}
+        if _hl_name.split()[0] not in _HL_PRONOUNS and _hl_prod:
+            return IntentResult(intent="recent_orders", confidence=0.95,
+                                slots={"product_filter": _hl_prod, "customer_guess": _hl_name},
+                                raw_text=msg)
+
     # "Has NAME (ever) ordered PRODUCT (before)?" → that customer's history
     # filtered to the product (weed-garden 2026-07-28 F7, promoted at the 2nd
     # consultant: c114 "Has Kitty ever ordered CC cream?" 7/19 + c60 7/28 —
@@ -1647,11 +1691,19 @@ def parse_intent(message: str, state: Optional[dict] = None, no_llm: bool = Fals
     if _m_has_ordered:
         _ho_name = _m_has_ordered.group(1).strip()
         _ho_prod = _m_has_ordered.group(2).strip()
+        # Temporal tails are timeframe words, not products: "Has NAME ordered
+        # cleansers in the past" must filter on "cleansers", and a bare
+        # "Has NAME ordered in the past?" is a full-history question, not a
+        # search for the product "in the past" (weed-garden 2026-08-22 F6).
+        _ho_prod = re.sub(r"\s*\b(?:in\s+the\s+past|recently|lately|before|ever|yet)\s*$",
+                          "", _ho_prod).strip()
         _HO_PRONOUNS = {"she", "he", "they", "anyone", "any", "it", "this", "that"}
-        if _ho_name.split()[0] not in _HO_PRONOUNS and _ho_prod:
+        if _ho_name.split()[0] not in _HO_PRONOUNS:
+            _ho_slots = {"customer_guess": _ho_name}
+            if _ho_prod:
+                _ho_slots["product_filter"] = _ho_prod
             return IntentResult(intent="recent_orders", confidence=0.95,
-                                slots={"product_filter": _ho_prod, "customer_guess": _ho_name},
-                                raw_text=msg)
+                                slots=_ho_slots, raw_text=msg)
 
     # Shade/color questions → the customer's order history filtered to that
     # product type: "What color foundation is Cynthia Evans?", "Kim smith
@@ -1681,9 +1733,14 @@ def parse_intent(message: str, state: Optional[dict] = None, no_llm: bool = Fals
     if re.search(r"\bhow many\b", lowered) and re.search(r"\border(?:s|ed)?\b", lowered):
         return IntentResult(intent="data_query", confidence=0.95, raw_text=msg)
 
-    # recent orders
+    # recent orders. _is_order_command guard: "New order for Janet Long she
+    # ordered oil free eye makeup remover" is order ENTRY — "order for" +
+    # "ordered" satisfied this rule and sent a day-one consultant to a
+    # customer-history picker (weed-garden 2026-08-22, c141). Same guard
+    # already protects unit_query (2026-07-28 F5).
     if (
-        ("order" in lowered or "orders" in lowered or "ordered" in lowered)
+        not _is_order_command
+        and ("order" in lowered or "orders" in lowered or "ordered" in lowered)
         and any(
             k in lowered
             for k in (
@@ -1899,10 +1956,12 @@ def parse_intent(message: str, state: Optional[dict] = None, no_llm: bool = Fals
     # part/item/sku so "phone number" does NOT trigger this (must stay customer_info).
     # Order-context guard: "New order for Jane sku 10233551" / mid-flow "add sku …"
     # are order entry, not lookups — leave them to the order rules/pending flow.
-    if (re.search(r"\b(?:part\s*(?:number|no\.?|#)|item\s+number|sku)\b", lowered)
+    # "product number" added 2026-08-22 (c133 "What is the product number for
+    # beige and 190 luminous foundation?" word-salad'd in customer_info).
+    if (re.search(r"\b(?:part\s*(?:number|no\.?|#)|item\s+number|product\s+number|sku)\b", lowered)
             and not re.search(r"\b(?:order|add|remove)\b", lowered)):
         _part_tail_m = re.search(
-            r"\b(?:part\s*(?:number|no\.?|#)|item\s+number|sku)\b\s*(?:of|for|on)?\s*(.+)$",
+            r"\b(?:part\s*(?:number|no\.?|#)|item\s+number|product\s+number|sku)\b\s*(?:of|for|on)?\s*(.+)$",
             lowered,
         )
         _part_tail = _part_tail_m.group(1).strip().rstrip(" ?.!,") if _part_tail_m else ""
@@ -1932,8 +1991,37 @@ def parse_intent(message: str, state: Optional[dict] = None, no_llm: bool = Fals
         and (re.search(r"\w's\b", lowered)
              or re.search(r"\b(customer|client|clienta|contact|info|information|details?|email|phone|address|birthday)\b", lowered))
     )
+    # Phrase triggers ("what is …", "lookup …") only claim when what follows
+    # could actually BE a person: strip the trigger + filler, then require 1-3
+    # leftover tokens, all name-shaped (alphabetic/'-), none a known feature
+    # word. Without this gate any "what is X" question surviving the rules
+    # above became a fuzzy customer search — "what is the total with tax?
+    # 8.63%" → "I couldn't find *with tax* in your saved customers" (c124;
+    # 7 consultants hit the word-salad family in 4 days — weed-garden
+    # 2026-08-22 F2; the "show" half of this Option A item shipped 2026-07-11).
+    # Possessive / contact-word / bare-name paths are untouched — they carry
+    # their own person signal (and bare-name's mid-flow decline is pinned).
+    _ci_phrase_hit = any(t in lowered for t in ("what's", "whats", "what is", "lookup", "info on", "information for"))
+    if _ci_phrase_hit and not (looks_like_possessive_info or looks_like_name_info or _show_person):
+        _ci_resid = lowered
+        for _t in ("what's", "whats", "what is", "look up", "lookup", "info on", "information for"):
+            _ci_resid = _ci_resid.replace(_t, " ")
+        _CI_FILLER = {"the", "a", "an", "my", "me", "for", "of", "is", "please",
+                      "customer", "client", "tell", "about"}
+        _CI_NON_NAME = {"total", "tax", "price", "cost", "sale", "sales", "discount",
+                        "shipping", "inventory", "invoice", "report", "team", "unit",
+                        "units", "personal", "consultant", "consultants", "active",
+                        "inactive", "number", "product", "products", "item", "items",
+                        "balance", "commission", "revenue", "birthdays", "today",
+                        "week", "month", "year"}
+        _ci_toks = [w for w in re.findall(r"[a-z0-9'.%$-]+", _ci_resid) if w not in _CI_FILLER]
+        _ci_phrase_hit = (
+            1 <= len(_ci_toks) <= 3
+            and all(re.fullmatch(r"[a-z'-]+", w) for w in _ci_toks)
+            and not any(w in _CI_NON_NAME for w in _ci_toks)
+        )
     if (
-        any(t in lowered for t in ("what's", "whats", "what is", "lookup", "info on", "information for"))
+        _ci_phrase_hit
         or _show_person
         or looks_like_possessive_info
         or looks_like_name_info
@@ -2113,6 +2201,28 @@ def _phrase_is_all_product_words(phrase: str, catalog: Optional[List[dict]]) -> 
     return bool(toks) and all(t in vocab for t in toks)
 
 
+# Residual-token blocklist for the terse NAME+PRODUCT rule (route() section
+# 2c). Any of these words in the candidate span means it isn't a bare
+# person+product string — it's a command, a pronoun reference, or another
+# feature's vocabulary — so the rule stays out and today's routing stands.
+_NP_RESID_BLOCK = {
+    "my", "me", "our", "your", "his", "her", "their", "the", "a", "an",
+    "this", "that", "these", "those", "all", "any", "some", "more",
+    "show", "see", "view", "list", "find", "get", "give", "lookup", "look",
+    "pull", "check", "what", "whats", "who", "whos", "when", "whens", "how",
+    "please", "and",
+    "team", "unit", "consultant", "consultants", "customer", "customers",
+    "client", "clients", "inventory", "stock", "sales", "sale", "revenue",
+    "top", "best", "biggest", "recent", "last", "latest", "new", "pending",
+    "open", "past", "previous", "old", "full", "complete", "entire",
+    "today", "todays", "yesterday", "day", "days", "week", "weeks",
+    "month", "months", "year", "years",
+    "email", "emails", "phone", "address", "number", "birthday", "birthdays",
+    "note", "notes", "info", "information", "order", "orders", "ordered",
+    "purchase", "purchases", "purchased", "history", "for", "of", "with",
+}
+
+
 def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dict]] = None, no_llm: bool = False) -> IntentResult:
     """
     Classify a chat message into the intent that will handle it.
@@ -2165,6 +2275,38 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
                 and _wpi_word in _catalog_vocab(catalog)
                 and not _phrase_is_all_product_words(_wpi_tail, catalog)):
             return _claim("recent_orders", {"product_filter": _wpi_word})
+
+    # ---- 2c. Terse NAME+PRODUCT history shapes — "Custumer Catie Riley
+    # products" (drafted a phantom ORDER, goal never met), "NAME cleanser
+    # history" (bare product card) — weed-garden 2026-08-22 F8, promoted:
+    # c114 + c129, earlier c114 ×2 + c39. A verbless noun string is ambiguous
+    # in form, so claim only with an explicit signal word: a leading
+    # customer/client word (typos included — c114 typed "Custumer") or a
+    # trailing history word (bare trailing "products" is too product-shaped
+    # to count on its own — "satin hands products" must stay a product
+    # search). The residual span rides in customer_guess; the recent_orders
+    # handler splits person-vs-product against the actual customer book
+    # (_best_name_span) and turns the tokens the name span did not consume
+    # into the product filter. Catalog-aware guard (why this lives here and
+    # not in parse_intent): an all-product-word residual ("vitamin c squares
+    # history") is a product question and is left alone.
+    if not pending:
+        _np_low = msg.lower()
+        _m_np_lead = re.match(r"^\s*(?:customer|custumer|costumer|client)s?\s+(.+)$", _np_low)
+        _m_np = re.match(
+            r"^\s*(.+?)\s+((?:order|purchase|product)\s+history|history|orders|purchases|products?)\s*[?.!]*\s*$",
+            _m_np_lead.group(1) if _m_np_lead else _np_low)
+        if (_m_np
+                and (_m_np_lead or _m_np.group(2) not in ("product", "products"))
+                and not _looks_like_new_order_entry(msg)):
+            _np_resid = _m_np.group(1).strip()
+            _np_toks = _np_resid.split()
+            if (1 <= len(_np_toks) <= 4
+                    and all(re.fullmatch(r"[a-z][a-z'.-]*", t) for t in _np_toks)
+                    and not any(t.strip("'.-") in _NP_RESID_BLOCK for t in _np_toks)
+                    and not _phrase_is_all_product_words(_np_resid, catalog)):
+                return _claim("recent_orders",
+                              {"customer_guess": _np_resid, "split_tail": True})
 
     # ---- 3. Classify: keyword rules, then LLM fallback (skipped when the
     # caller asked for a deterministic-only probe; weed-garden 2026-08-20 F1a) ----
@@ -2394,9 +2536,13 @@ def route(message: str, state: Optional[dict] = None, catalog: Optional[List[dic
     # QR push — it routed to customer lookup as a fuzzy name). Exact word only,
     # NOT a substring: "referral program" questions stay with billing_help and
     # "referral from Jane"-style field edits stay untouched.
+    # Typo-tolerant since 2026-08-22: this word is a designed funnel (consultants
+    # are TOLD to type "referral"), so common misspellings ("Refferal",
+    # "Referal" → a nonsense fuzzy customer picker, c9) must land too. Still a
+    # fullmatch — bare word only, doubled f/r/l tolerated.
     if not pending and (
         any(t in lowered for t in ("referral code", "referral link", "my referral", "refer a friend", "refer someone"))
-        or re.fullmatch(r"referrals?\s*[?!.]*", lowered.strip())
+        or re.fullmatch(r"reff?err?al+s?\s*[?!.]*", lowered.strip())
     ):
         return _claim("referral")
 
